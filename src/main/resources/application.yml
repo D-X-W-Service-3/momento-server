@@ -1,0 +1,70 @@
+spring:
+  application:
+    name: momento-server
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:local}
+
+  servlet:
+    multipart:
+      max-file-size: 100MB
+      max-request-size: 200MB
+      resolve-lazily: true
+
+  jpa:
+    open-in-view: false
+    properties:
+      hibernate:
+        format_sql: true
+    show-sql: true
+
+  security:
+    oauth2:
+      client:
+        registration:
+          kakao:
+            client-id: ${OAUTH2_KAKAO_CLIENT_ID:kakao-client-id}
+            client-secret: ${OAUTH2_KAKAO_CLIENT_SECRET:kakao-client-secret}
+            redirect-uri: ${API_URI:http://localhost:8080}/{action}/oauth2/code/{registrationId}
+            authorization-grant-type: authorization_code
+            client-authentication-method: client_secret_post
+            client-name: kakao
+            scope:
+              - profile_nickname
+              - account_email
+        provider:
+          kakao:
+            authorization-uri: https://kauth.kakao.com/oauth/authorize
+            token-uri: https://kauth.kakao.com/oauth/token
+            user-info-uri: https://kapi.kakao.com/v2/user/me
+            user-name-attribute: id
+
+jwt:
+  # Base64 인코딩된 시크릿 (로컬 기본값은 개발용 더미)
+  secret-key: ${JWT_SECRET_KEY:bW9tZW50by1sb2NhbC1kZXYtc2VjcmV0LWtleS1jaGFuZ2UtbWU=}
+  issuer: ${JWT_ISSUER:momento}
+
+cloud:
+  aws:
+    s3:
+      bucket: ${S3_BUCKET:momento-bucket}
+      base-url: ${S3_BASE_URL:https://momento-bucket.s3.ap-northeast-2.amazonaws.com}
+    credentials:
+      access-key: ${S3_ACCESS_KEY:local-access-key}
+      secret-key: ${S3_SECRET_KEY:local-secret-key}
+    region:
+      static: ap-northeast-2
+    stack:
+      auto: false
+
+cors:
+  allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000}
+
+service:
+  oauth:
+    # 로그인 성공 후 토큰을 붙여 리다이렉트할 프론트엔드 주소
+    redirect-uri: ${SERVICE_OAUTH_REDIRECT_URI:http://localhost:3000/login/callback}
+
+external:
+  api-url:
+    # 별도 AI 서버 (이미지 생성 등) 연동 주소
+    ai: ${EXTERNAL_API_URL_AI:http://localhost:8000}

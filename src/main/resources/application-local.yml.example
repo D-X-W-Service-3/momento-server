@@ -1,0 +1,24 @@
+# 로컬 개발용 설정 예시. 복사해서 application-local.yml 로 사용하세요.
+#   cp application-local.yml.example application-local.yml
+# application-local.yml 은 .gitignore 로 커밋 대상에서 제외됩니다.
+#
+# 아래 datasource 를 주석 해제하지 않으면 H2 인메모리 DB 로 자동 구동됩니다.
+
+spring:
+  # --- H2 인메모리 (기본값, 별도 설정 불필요) ---
+  h2:
+    console:
+      enabled: true
+
+  # --- 로컬 MySQL 을 쓰려면 아래 주석 해제 ---
+  # datasource:
+  #   url: jdbc:mysql://localhost:3306/momento?serverTimezone=Asia/Seoul&characterEncoding=UTF-8
+  #   driver-class-name: com.mysql.cj.jdbc.Driver
+  #   username: root
+  #   password: password
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+
+# 실제 카카오 로그인 테스트 시 아래 값을 채우세요.
+# OAUTH2_KAKAO_CLIENT_ID / OAUTH2_KAKAO_CLIENT_SECRET 는 환경변수로 주입 권장
