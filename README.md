@@ -88,5 +88,5 @@ git config commit.template .gitmessage.txt
 
 ## 개발 인원
 
-- Backend 4 · Frontend 3 · AI 3
+- Backend 4 · Frontend 3 · AI 4
 - AI 서버는 별도 개발되며 본 서버에서 OpenFeign 으로 외부 API 연동
