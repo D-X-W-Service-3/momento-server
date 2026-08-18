@@ -42,3 +42,6 @@ out/
 ### Env / Secrets ###
 .env
 application-local.yml
+
+### Claude Code ###
+.claude/
