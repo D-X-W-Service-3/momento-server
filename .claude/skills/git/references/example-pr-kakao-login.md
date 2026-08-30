@@ -134,9 +134,15 @@ Redis 가 들어오는 시점에 재검토한다.
 
 ## 🧪 검증
 
-- `KakaoLoginIntegrationTest` — 카카오 응답을 스텁으로 두고 신규 가입 / 기존 로그인 /
-  탈퇴 회원 복구 / 잘못된 토큰(401) 경로를 확인
-- 수동: Swagger 에서 실제 카카오 SDK 토큰으로 `POST /v1/auth/kakao` 호출 → JWT 로 인증 API 접근
+`./gradlew build` 통과. `KakaoLoginIntegrationTest` 6개 — 카카오 API 만 스텁으로 두고
+실제 필터·시큐리티까지 태운다.
+
+- [x] 첫 로그인이 회원을 만들고, 발급된 토큰으로 인증된 요청을 보낼 수 있다
+- [x] 같은 카카오 계정으로 다시 로그인해도 회원이 하나다
+- [x] 탈퇴한 회원이 다시 로그인하면 복구된다
+- [x] 액세스 토큰이 비어 있으면 400 `INVALID_INPUT_VALUE`
+- [x] 카카오가 토큰을 거부하면 401 `INVALID_KAKAO_TOKEN` 이고 회원을 만들지 않는다
+- [x] 카카오 서버 오류는 502 `KAKAO_SERVER_ERROR` 로 인증 실패와 구분된다
 
 ## 💡 짚고 갈 것
 
