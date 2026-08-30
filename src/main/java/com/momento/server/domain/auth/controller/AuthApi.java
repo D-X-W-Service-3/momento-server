@@ -14,7 +14,7 @@ public interface AuthApi {
   @Operation(
       summary = "카카오 로그인",
       description =
-          "프론트에서 카카오 SDK 로 받은 액세스 토큰을 넘기면 카카오 사용자 정보를 조회해 가입/로그인 처리하고 서비스 액세스 토큰을 발급한다. 인증 없이 호출한다.")
+          "프론트에서 Kakao.Auth.authorize 로 받은 인가 코드를 넘기면 서버가 카카오 토큰으로 교환해 사용자 정보를 조회하고, 가입/로그인 처리 후 서비스 액세스 토큰을 발급한다. 인증 없이 호출한다.")
   @SecurityRequirements
   CommonResponse<UserLoginResponse> loginWithKakao(@Valid UserLoginRequest request);
 

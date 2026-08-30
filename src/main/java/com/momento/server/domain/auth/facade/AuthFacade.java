@@ -21,9 +21,9 @@ public class AuthFacade {
   private final UserService userService;
   private final TokenProvider tokenProvider;
 
-  /** 카카오 액세스 토큰으로 회원을 조회·가입시키고 서비스 액세스 토큰을 발급한다. */
-  public UserLoginResponse loginWithKakao(String kakaoAccessToken) {
-    KakaoUserInfo kakaoUser = kakaoOAuthService.getUserInfo(kakaoAccessToken);
+  /** 카카오 인가 코드로 회원을 조회·가입시키고 서비스 액세스 토큰을 발급한다. */
+  public UserLoginResponse loginWithKakao(String authorizationCode) {
+    KakaoUserInfo kakaoUser = kakaoOAuthService.getUserInfo(authorizationCode);
     Optional<User> found = userService.findByKakaoId(kakaoUser.kakaoId());
 
     User user =

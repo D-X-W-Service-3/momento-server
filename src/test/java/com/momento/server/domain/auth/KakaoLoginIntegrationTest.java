@@ -1,6 +1,7 @@
 package com.momento.server.domain.auth;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.BDDMockito.given;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -10,6 +11,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.momento.server.domain.auth.external.KakaoApiClient;
+import com.momento.server.domain.auth.external.KakaoAuthClient;
+import com.momento.server.domain.auth.external.dto.KakaoTokenResponse;
 import com.momento.server.domain.auth.external.dto.KakaoUserResponse;
 import com.momento.server.domain.user.entity.User;
 import com.momento.server.domain.user.repository.UserRepository;
@@ -36,17 +39,20 @@ class KakaoLoginIntegrationTest {
   private static final long KAKAO_ID = 1234567890L;
   private static final String NICKNAME = "모모";
   private static final String PROFILE_IMAGE_URL = "https://k.kakaocdn.net/dn/profile.jpg";
-  private static final String LOGIN_BODY = "{\"accessToken\":\"kakao-access-token\"}";
+  private static final String LOGIN_BODY = "{\"code\":\"kakao-authorization-code\"}";
 
   @Autowired private MockMvc mockMvc;
   @Autowired private ObjectMapper objectMapper;
   @Autowired private UserRepository userRepository;
 
+  @MockitoBean private KakaoAuthClient kakaoAuthClient;
   @MockitoBean private KakaoApiClient kakaoApiClient;
 
   @BeforeEach
   void setUp() {
     userRepository.deleteAll();
+    given(kakaoAuthClient.issueToken(any()))
+        .willReturn(new KakaoTokenResponse("kakao-access-token"));
     given(kakaoApiClient.getUserInfo(anyString()))
         .willReturn(
             new KakaoUserResponse(
@@ -122,19 +128,33 @@ class KakaoLoginIntegrationTest {
   }
 
   @Test
-  @DisplayName("카카오 액세스 토큰이 비어 있으면 400 으로 응답한다")
-  void blankAccessTokenIsRejected() throws Exception {
+  @DisplayName("카카오 인가 코드가 비어 있으면 400 으로 응답한다")
+  void blankAuthorizationCodeIsRejected() throws Exception {
     mockMvc
         .perform(
             post("/v1/auth/kakao")
                 .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"accessToken\":\"\"}"))
+                .content("{\"code\":\"\"}"))
         .andExpect(status().isBadRequest())
         .andExpect(jsonPath("$.code").value("INVALID_INPUT_VALUE"));
   }
 
   @Test
-  @DisplayName("카카오가 토큰을 거부하면 401 로 응답하고 회원을 만들지 않는다")
+  @DisplayName("카카오가 인가 코드를 거부하면 401 로 응답하고 회원을 만들지 않는다")
+  void invalidAuthorizationCodeIsRejected() throws Exception {
+    given(kakaoAuthClient.issueToken(any()))
+        .willThrow(new FeignException.BadRequest("invalid_grant", kakaoRequest(), null, Map.of()));
+
+    mockMvc
+        .perform(post("/v1/auth/kakao").contentType(MediaType.APPLICATION_JSON).content(LOGIN_BODY))
+        .andExpect(status().isUnauthorized())
+        .andExpect(jsonPath("$.code").value("INVALID_KAKAO_CODE"));
+
+    assertThat(userRepository.count()).isZero();
+  }
+
+  @Test
+  @DisplayName("교환한 토큰을 카카오가 거부하면 401 로 응답하고 회원을 만들지 않는다")
   void invalidKakaoTokenIsRejected() throws Exception {
     given(kakaoApiClient.getUserInfo(anyString()))
         .willThrow(new FeignException.Unauthorized("unauthorized", kakaoRequest(), null, Map.of()));
@@ -150,7 +170,7 @@ class KakaoLoginIntegrationTest {
   @Test
   @DisplayName("카카오 서버 오류는 인증 실패와 구분해 502 로 응답한다")
   void kakaoServerErrorIsNotTreatedAsAuthFailure() throws Exception {
-    given(kakaoApiClient.getUserInfo(anyString()))
+    given(kakaoAuthClient.issueToken(any()))
         .willThrow(
             new FeignException.InternalServerError("kakao down", kakaoRequest(), null, Map.of()));
 

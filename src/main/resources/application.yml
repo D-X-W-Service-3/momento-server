@@ -44,3 +44,13 @@ external:
     ai: ${EXTERNAL_API_URL_AI:http://localhost:8000}
     # 카카오 API 서버 (액세스 토큰으로 사용자 정보 조회)
     kakao: ${EXTERNAL_API_URL_KAKAO:https://kapi.kakao.com}
+    # 카카오 인증 서버 (인가 코드를 액세스 토큰으로 교환)
+    kakao-auth: ${EXTERNAL_API_URL_KAKAO_AUTH:https://kauth.kakao.com}
+
+kakao:
+  # REST API 키 (프론트가 쓰는 JavaScript 키와 다르다. 로컬 기본값은 개발용 더미)
+  client-id: ${KAKAO_CLIENT_ID:local-kakao-rest-api-key}
+  # 보안 설정에서 활성화한 경우에만 값을 넣는다
+  client-secret: ${KAKAO_CLIENT_SECRET:}
+  # 프론트가 인가 코드를 받는 주소. 카카오에 등록된 값과 정확히 같아야 한다
+  redirect-uri: ${KAKAO_REDIRECT_URI:http://localhost:3000/auth/kakao/callback}

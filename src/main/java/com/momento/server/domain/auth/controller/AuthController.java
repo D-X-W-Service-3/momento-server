@@ -20,7 +20,7 @@ public class AuthController implements AuthApi {
   @PostMapping("/kakao")
   public CommonResponse<UserLoginResponse> loginWithKakao(
       @Valid @RequestBody UserLoginRequest request) {
-    return CommonResponse.ok(authFacade.loginWithKakao(request.accessToken()));
+    return CommonResponse.ok(authFacade.loginWithKakao(request.code()));
   }
 
   @Override
