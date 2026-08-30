@@ -46,7 +46,7 @@ Momento — 타임캡슐·추억 아카이빙 서비스의 백엔드(Spring Boot
 
 - 컨벤션은 [CONTRIBUTING.md](./CONTRIBUTING.md) 참고. 형식: `<type>: <제목>`
 - type: `init` `feat` `fix` `build` `chore` `ci` `docs` `style` `refactor` `test` `perf`
-- `main` 직접 push 금지 — `feature/#이슈-설명` 브랜치에서 작업 후 PR.
+- 기본 브랜치는 `develop`. `main`/`develop` 직접 push 금지 — `feat/#이슈-설명` 브랜치에서 작업 후 `develop` 으로 PR.
 
 ## 주의점
 

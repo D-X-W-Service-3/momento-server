@@ -44,4 +44,6 @@ out/
 application-local.yml
 
 ### Claude Code ###
-.claude/
+# 팀 공용 스킬은 공유하고 개인 설정은 제외한다
+.claude/*
+!.claude/skills/

@@ -52,13 +52,15 @@ git config commit.template .gitmessage.txt
 ## 브랜치 전략
 
 ```
-main            # 배포 가능한 안정 브랜치 (직접 push 금지, PR 로만 병합)
-└─ feature/#12-kakao-login   # 기능 단위 브랜치
-   fix/#20-token-expiry      # 버그 수정
+main                          # 배포 브랜치 (develop 에서만 병합, 직접 push 금지)
+└─ develop                    # 기본 브랜치, 기능 브랜치가 모이는 곳 (직접 push 금지, PR 로만 병합)
+   ├─ feat/#12-kakao-login    # 기능 단위 브랜치
+   └─ fix/#20-token-expiry    # 버그 수정
 ```
 
 - 브랜치명: `type/#이슈번호-간단설명` (kebab-case)
-- 작업은 반드시 `feature`/`fix` 브랜치에서 하고 `main` 으로 PR
+- 작업은 반드시 `feat`/`fix` 브랜치에서 하고 **`develop` 으로 PR** 한다
+- 배포할 때만 `develop` → `main` PR 로 병합한다
 - PR 은 리뷰 1인 이상 승인 후 병합
 
 ## PR / 이슈
