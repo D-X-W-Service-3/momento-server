@@ -107,6 +107,21 @@ class KakaoLoginIntegrationTest {
   }
 
   @Test
+  @DisplayName("탈퇴한 회원의 토큰은 서명이 유효해도 401 로 거절된다")
+  void withdrawnUserTokenIsRejected() throws Exception {
+    String accessToken = login(true);
+
+    User user = userRepository.findByKakaoId(String.valueOf(KAKAO_ID)).orElseThrow();
+    user.withdraw();
+    userRepository.saveAndFlush(user);
+
+    mockMvc
+        .perform(post("/v1/auth/logout").header("Authorization", "Bearer " + accessToken))
+        .andExpect(status().isUnauthorized())
+        .andExpect(jsonPath("$.code").value("INVALID_ACCESS_TOKEN"));
+  }
+
+  @Test
   @DisplayName("카카오 액세스 토큰이 비어 있으면 400 으로 응답한다")
   void blankAccessTokenIsRejected() throws Exception {
     mockMvc
