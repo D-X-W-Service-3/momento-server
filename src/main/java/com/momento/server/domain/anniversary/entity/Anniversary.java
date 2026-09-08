@@ -19,6 +19,8 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 /** 회원이 등록한 기념일. 캘린더 표시와 알림의 기준이 된다. */
 @Entity
@@ -46,6 +48,7 @@ public class Anniversary extends BaseTimeEntity {
 
   @Builder.Default
   @Enumerated(EnumType.STRING)
+  @JdbcTypeCode(SqlTypes.VARCHAR)
   @Column(name = "repeat_type", nullable = false, length = 20)
   private RepeatType repeatType = RepeatType.NONE;
 }

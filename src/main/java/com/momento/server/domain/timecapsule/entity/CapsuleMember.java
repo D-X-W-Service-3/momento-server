@@ -19,6 +19,8 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 /** 타임캡슐에 참여한 회원. 역할에 따라 볼 수 있는 범위가 달라진다. */
 @Entity
@@ -43,11 +45,13 @@ public class CapsuleMember extends BaseTimeEntity {
   private User user;
 
   @Enumerated(EnumType.STRING)
+  @JdbcTypeCode(SqlTypes.VARCHAR)
   @Column(name = "role", nullable = false, length = 20)
   private MemberRole role;
 
   @Builder.Default
   @Enumerated(EnumType.STRING)
+  @JdbcTypeCode(SqlTypes.VARCHAR)
   @Column(name = "status", nullable = false, length = 20)
   private MemberStatus status = MemberStatus.ACTIVE;
 

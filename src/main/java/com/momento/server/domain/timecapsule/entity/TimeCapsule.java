@@ -20,6 +20,8 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 /** 정해진 시각에 열리는 타임캡슐. 삭제는 {@code deletedAt} 을 채우는 소프트 삭제로 처리한다. */
 @Entity
@@ -51,15 +53,18 @@ public class TimeCapsule extends BaseTimeEntity {
   private String description;
 
   @Enumerated(EnumType.STRING)
+  @JdbcTypeCode(SqlTypes.VARCHAR)
   @Column(name = "capsule_type", nullable = false, length = 20)
   private CapsuleType capsuleType;
 
   @Enumerated(EnumType.STRING)
+  @JdbcTypeCode(SqlTypes.VARCHAR)
   @Column(name = "visibility_type", nullable = false, length = 30)
   private VisibilityType visibilityType;
 
   @Builder.Default
   @Enumerated(EnumType.STRING)
+  @JdbcTypeCode(SqlTypes.VARCHAR)
   @Column(name = "status", nullable = false, length = 20)
   private CapsuleStatus status = CapsuleStatus.WRITING;
 

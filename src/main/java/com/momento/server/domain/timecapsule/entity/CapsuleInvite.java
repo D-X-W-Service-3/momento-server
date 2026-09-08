@@ -19,6 +19,8 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 /**
  * 타임캡슐 초대 링크.
@@ -52,11 +54,13 @@ public class CapsuleInvite extends BaseTimeEntity {
 
   @Builder.Default
   @Enumerated(EnumType.STRING)
+  @JdbcTypeCode(SqlTypes.VARCHAR)
   @Column(name = "target_role", nullable = false, length = 20)
   private MemberRole targetRole = MemberRole.PARTICIPANT;
 
   @Builder.Default
   @Enumerated(EnumType.STRING)
+  @JdbcTypeCode(SqlTypes.VARCHAR)
   @Column(name = "status", nullable = false, length = 20)
   private InviteStatus status = InviteStatus.ACTIVE;
 
