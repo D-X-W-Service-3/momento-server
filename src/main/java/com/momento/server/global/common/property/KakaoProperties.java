@@ -17,7 +17,4 @@ public class KakaoProperties {
 
   /** 보안 설정에서 활성화한 경우에만 필요하다. 비활성이면 비워 둔다. */
   private String clientSecret;
-
-  /** 프론트가 인가 코드를 받은 주소. 카카오에 등록된 값과 정확히 같아야 한다. */
-  private String redirectUri;
 }

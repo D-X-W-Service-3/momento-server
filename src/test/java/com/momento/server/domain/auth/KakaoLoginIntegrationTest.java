@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.verify;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -24,12 +25,14 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.util.MultiValueMap;
 
 /** 카카오 API 만 대체하고 로그인 흐름을 실제 필터/시큐리티까지 태워 검증한다. */
 @SpringBootTest
@@ -39,7 +42,9 @@ class KakaoLoginIntegrationTest {
   private static final long KAKAO_ID = 1234567890L;
   private static final String NICKNAME = "모모";
   private static final String PROFILE_IMAGE_URL = "https://k.kakaocdn.net/dn/profile.jpg";
-  private static final String LOGIN_BODY = "{\"code\":\"kakao-authorization-code\"}";
+  private static final String REDIRECT_URI = "http://localhost:3000/auth/kakao/callback";
+  private static final String LOGIN_BODY =
+      "{\"code\":\"kakao-authorization-code\",\"redirectUri\":\"" + REDIRECT_URI + "\"}";
 
   @Autowired private MockMvc mockMvc;
   @Autowired private ObjectMapper objectMapper;
@@ -134,9 +139,42 @@ class KakaoLoginIntegrationTest {
         .perform(
             post("/v1/auth/kakao")
                 .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"code\":\"\"}"))
+                .content("{\"code\":\"\",\"redirectUri\":\"" + REDIRECT_URI + "\"}"))
         .andExpect(status().isBadRequest())
         .andExpect(jsonPath("$.code").value("INVALID_INPUT_VALUE"));
+  }
+
+  @Test
+  @DisplayName("Redirect URI 가 비어 있으면 400 으로 응답한다")
+  void blankRedirectUriIsRejected() throws Exception {
+    mockMvc
+        .perform(
+            post("/v1/auth/kakao")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"code\":\"kakao-authorization-code\",\"redirectUri\":\"\"}"))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.code").value("INVALID_INPUT_VALUE"));
+  }
+
+  @Test
+  @DisplayName("요청으로 받은 Redirect URI 를 그대로 카카오 토큰 교환에 사용한다")
+  void redirectUriFromRequestIsForwardedToKakao() throws Exception {
+    String frontRedirectUri = "https://momento.app/auth/kakao/callback";
+
+    mockMvc
+        .perform(
+            post("/v1/auth/kakao")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(
+                    "{\"code\":\"kakao-authorization-code\",\"redirectUri\":\""
+                        + frontRedirectUri
+                        + "\"}"))
+        .andExpect(status().isOk());
+
+    ArgumentCaptor<MultiValueMap<String, String>> captor =
+        ArgumentCaptor.forClass(MultiValueMap.class);
+    verify(kakaoAuthClient).issueToken(captor.capture());
+    assertThat(captor.getValue().getFirst("redirect_uri")).isEqualTo(frontRedirectUri);
   }
 
   @Test

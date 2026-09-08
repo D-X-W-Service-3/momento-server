@@ -19,6 +19,9 @@ import org.springframework.util.MultiValueMap;
  * 프론트가 카카오에서 받은 인가 코드로 사용자 정보를 조회한다.
  *
  * <p>카카오 JavaScript SDK v2 는 클라이언트에 액세스 토큰을 주지 않고 인가 코드만 주므로, 토큰 교환은 REST API 키를 가진 서버가 한다.
+ *
+ * <p>Redirect URI 는 인가 코드를 받을 때 쓴 값과 문자열까지 같아야 토큰 교환이 성공하므로, 서버가 고정하지 않고 요청으로 받는다. 등록되지 않은 주소는 카카오가
+ * 인가 단계에서 막는다.
  */
 @Slf4j
 @Service
@@ -32,8 +35,8 @@ public class KakaoOAuthService {
   private final KakaoApiClient kakaoApiClient;
   private final KakaoProperties kakaoProperties;
 
-  public KakaoUserInfo getUserInfo(String authorizationCode) {
-    String kakaoAccessToken = exchangeToken(authorizationCode);
+  public KakaoUserInfo getUserInfo(String authorizationCode, String redirectUri) {
+    String kakaoAccessToken = exchangeToken(authorizationCode, redirectUri);
     KakaoUserResponse response = requestUserInfo(kakaoAccessToken);
 
     if (response == null || response.id() == null) {
@@ -43,10 +46,10 @@ public class KakaoOAuthService {
     return KakaoUserInfo.from(response);
   }
 
-  private String exchangeToken(String authorizationCode) {
+  private String exchangeToken(String authorizationCode, String redirectUri) {
     KakaoTokenResponse response;
     try {
-      response = kakaoAuthClient.issueToken(tokenRequestForm(authorizationCode));
+      response = kakaoAuthClient.issueToken(tokenRequestForm(authorizationCode, redirectUri));
     } catch (FeignException.BadRequest | FeignException.Unauthorized exception) {
       throw new ApiException(AuthErrorCode.INVALID_KAKAO_CODE, exception);
     } catch (FeignException exception) {
@@ -61,11 +64,12 @@ public class KakaoOAuthService {
     return response.accessToken();
   }
 
-  private MultiValueMap<String, String> tokenRequestForm(String authorizationCode) {
+  private MultiValueMap<String, String> tokenRequestForm(
+      String authorizationCode, String redirectUri) {
     MultiValueMap<String, String> form = new LinkedMultiValueMap<>();
     form.add("grant_type", GRANT_TYPE);
     form.add("client_id", kakaoProperties.getClientId());
-    form.add("redirect_uri", kakaoProperties.getRedirectUri());
+    form.add("redirect_uri", redirectUri);
     form.add("code", authorizationCode);
 
     String clientSecret = kakaoProperties.getClientSecret();
