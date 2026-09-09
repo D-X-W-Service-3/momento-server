@@ -7,8 +7,8 @@ CREATE TABLE `generated_images` (
 	`image_url`	VARCHAR(500)	NULL	COMMENT '생성 이미지 URL',
 	`is_selected`	BOOLEAN	NOT NULL	DEFAULT FALSE	COMMENT '최종 선택 여부',
 	`generation_status`	VARCHAR(20)	NOT NULL	DEFAULT 'PENDING'	COMMENT '생성 상태: PENDING, COMPLETED, FAILED',
-	`created_at`	DATETIME	NOT NULL	COMMENT '생성 요청 일시',
-	`updated_at`	DATETIME	NOT NULL	COMMENT '수정 일시'
+	`created_at`	DATETIME(6)	NOT NULL	COMMENT '생성 요청 일시',
+	`updated_at`	DATETIME(6)	NOT NULL	COMMENT '수정 일시'
 );
 
 CREATE TABLE `memory_images` (
@@ -16,7 +16,7 @@ CREATE TABLE `memory_images` (
 	`memory_id`	BIGINT	NOT NULL	COMMENT '추억 기록 ID',
 	`image_url`	VARCHAR(500)	NOT NULL	COMMENT '추억 이미지 URL',
 	`display_order`	INT	NOT NULL	DEFAULT 0	COMMENT '이미지 표시 순서',
-	`created_at`	DATETIME	NOT NULL	COMMENT '생성 일시'
+	`created_at`	DATETIME(6)	NOT NULL	COMMENT '생성 일시'
 );
 
 CREATE TABLE `time_capsules` (
@@ -28,11 +28,11 @@ CREATE TABLE `time_capsules` (
 	`capsule_type`	VARCHAR(20)	NOT NULL	COMMENT '캡슐 유형: SELF, FRIEND, GROUP',
 	`visibility_type`	VARCHAR(30)	NOT NULL	COMMENT '공개 범위: RECIPIENT_ONLY, PARTICIPANTS_ONLY, ALL',
 	`status`	VARCHAR(20)	NOT NULL	DEFAULT 'WRITING'	COMMENT '상태: WRITING, CLOSED, OPENED',
-	`open_at`	DATETIME	NOT NULL	COMMENT '공개 예정 일시',
-	`letter_deadline_at`	DATETIME	NULL	COMMENT '편지 작성 마감 일시',
-	`created_at`	DATETIME	NOT NULL	COMMENT '생성 일시',
-	`updated_at`	DATETIME	NOT NULL	COMMENT '수정 일시',
-	`deleted_at`	DATETIME	NULL	COMMENT '삭제 일시'
+	`open_at`	DATETIME(6)	NOT NULL	COMMENT '공개 예정 일시',
+	`letter_deadline_at`	DATETIME(6)	NULL	COMMENT '편지 작성 마감 일시',
+	`created_at`	DATETIME(6)	NOT NULL	COMMENT '생성 일시',
+	`updated_at`	DATETIME(6)	NOT NULL	COMMENT '수정 일시',
+	`deleted_at`	DATETIME(6)	NULL	COMMENT '삭제 일시'
 );
 
 CREATE TABLE `anniversaries` (
@@ -41,8 +41,8 @@ CREATE TABLE `anniversaries` (
 	`title`	VARCHAR(50)	NOT NULL	COMMENT '기념일 제목',
 	`anniversary_date`	DATE	NOT NULL	COMMENT '기념일 날짜',
 	`repeat_type`	VARCHAR(20)	NOT NULL	DEFAULT 'NONE'	COMMENT '반복 유형: NONE, YEARLY',
-	`created_at`	DATETIME	NOT NULL	COMMENT '생성 일시',
-	`updated_at`	DATETIME	NOT NULL	COMMENT '수정 일시'
+	`created_at`	DATETIME(6)	NOT NULL	COMMENT '생성 일시',
+	`updated_at`	DATETIME(6)	NOT NULL	COMMENT '수정 일시'
 );
 
 CREATE TABLE `capsule_members` (
@@ -51,9 +51,9 @@ CREATE TABLE `capsule_members` (
 	`user_id`	BIGINT	NOT NULL	COMMENT '회원 ID',
 	`role`	VARCHAR(20)	NOT NULL	COMMENT '참여 역할: OWNER, RECIPIENT, PARTICIPANT',
 	`status`	VARCHAR(20)	NOT NULL	DEFAULT 'ACTIVE'	COMMENT '참여 상태: ACTIVE, LEFT, REMOVED',
-	`joined_at`	DATETIME	NULL	COMMENT '참여 일시',
-	`created_at`	DATETIME	NOT NULL	COMMENT '생성 일시',
-	`updated_at`	DATETIME	NOT NULL	COMMENT '수정 일시'
+	`joined_at`	DATETIME(6)	NULL	COMMENT '참여 일시',
+	`created_at`	DATETIME(6)	NOT NULL	COMMENT '생성 일시',
+	`updated_at`	DATETIME(6)	NOT NULL	COMMENT '수정 일시'
 );
 
 CREATE TABLE `capsule_invites` (
@@ -65,9 +65,9 @@ CREATE TABLE `capsule_invites` (
 	`status`	VARCHAR(20)	NOT NULL	DEFAULT 'ACTIVE'	COMMENT '초대 링크 상태: ACTIVE, EXPIRED, REVOKED',
 	`max_uses`	INT	NULL	COMMENT '최대 사용 횟수, NULL이면 제한 없음',
 	`used_count`	INT	NOT NULL	DEFAULT 0	COMMENT '현재 사용 횟수',
-	`expires_at`	DATETIME	NULL	COMMENT '초대 링크 만료 일시',
-	`created_at`	DATETIME	NOT NULL	COMMENT '생성 일시',
-	`updated_at`	DATETIME	NOT NULL	COMMENT '수정 일시'
+	`expires_at`	DATETIME(6)	NULL	COMMENT '초대 링크 만료 일시',
+	`created_at`	DATETIME(6)	NOT NULL	COMMENT '생성 일시',
+	`updated_at`	DATETIME(6)	NOT NULL	COMMENT '수정 일시'
 );
 
 CREATE TABLE `notifications` (
@@ -79,8 +79,8 @@ CAPSULE_OPENED, IMAGE_GENERATED, ANNIVERSARY_REMINDER',
 	`title`	VARCHAR(100)	NOT NULL	COMMENT '알림 제목',
 	`content`	VARCHAR(500)	NULL	COMMENT '알림 내용',
 	`is_read`	BOOLEAN	NOT NULL	DEFAULT FALSE	COMMENT '알림 읽음 여부',
-	`read_at`	DATETIME	NULL	COMMENT '알림 확인 일시',
-	`created_at`	DATETIME	NOT NULL	COMMENT '알림 생성 일시'
+	`read_at`	DATETIME(6)	NULL	COMMENT '알림 확인 일시',
+	`created_at`	DATETIME(6)	NOT NULL	COMMENT '알림 생성 일시'
 );
 
 CREATE TABLE `memories` (
@@ -92,20 +92,20 @@ CREATE TABLE `memories` (
 	`memory_date`	DATE	NULL	COMMENT '추억이 발생한 날짜',
 	`visibility_type`	VARCHAR(30)	NOT NULL	DEFAULT 'PRIVATE'	COMMENT '공개 범위: PRIVATE, LINK',
 	`share_token`	VARCHAR(255)	NULL	UNIQUE	COMMENT '추억 공유 링크 토큰',
-	`created_at`	DATETIME	NOT NULL	COMMENT '생성 일시',
-	`updated_at`	DATETIME	NOT NULL	COMMENT '수정 일시',
-	`deleted_at`	DATETIME	NULL	COMMENT '삭제 일시'
+	`created_at`	DATETIME(6)	NOT NULL	COMMENT '생성 일시',
+	`updated_at`	DATETIME(6)	NOT NULL	COMMENT '수정 일시',
+	`deleted_at`	DATETIME(6)	NULL	COMMENT '삭제 일시'
 );
 
 CREATE TABLE `users` (
 	`id`	BIGINT	NOT NULL	AUTO_INCREMENT	COMMENT '회원 ID',
-	`kakao_id`	VARCHAR(100)	NOT NULL	COMMENT '카카오 회원 고유 ID',
+	`kakao_id`	VARCHAR(100)	NOT NULL	UNIQUE	COMMENT '카카오 회원 고유 ID',
 	`nickname`	VARCHAR(30)	NOT NULL	COMMENT '닉네임',
 	`profile_image_url`	VARCHAR(500)	NULL	COMMENT '프로필 이미지 URL',
 	`notification_enabled`	BOOLEAN	NOT NULL	DEFAULT TRUE	COMMENT '알림 수신 여부',
-	`created_at`	DATETIME	NOT NULL	COMMENT '생성 일시',
-	`updated_at`	DATETIME	NOT NULL	COMMENT '수정 일시',
-	`deleted_at`	DATETIME	NULL	COMMENT '탈퇴 일시'
+	`created_at`	DATETIME(6)	NOT NULL	COMMENT '생성 일시',
+	`updated_at`	DATETIME(6)	NOT NULL	COMMENT '수정 일시',
+	`deleted_at`	DATETIME(6)	NULL	COMMENT '탈퇴 일시'
 );
 
 CREATE TABLE `letters` (
@@ -115,10 +115,10 @@ CREATE TABLE `letters` (
 	`content`	TEXT	NOT NULL	COMMENT '편지 내용',
 	`theme_type`	VARCHAR(20)	NULL,
 	`status`	VARCHAR(20)	NOT NULL	DEFAULT 'DRAFT'	COMMENT '작성 상태: DRAFT, SUBMITTED',
-	`submitted_at`	DATETIME	NULL	COMMENT '편지 제출 일시',
-	`created_at`	DATETIME	NOT NULL	COMMENT '생성 일시',
-	`updated_at`	DATETIME	NOT NULL	COMMENT '수정 일시',
-	`deleted_at`	DATETIME	NULL	COMMENT '삭제 일시'
+	`submitted_at`	DATETIME(6)	NULL	COMMENT '편지 제출 일시',
+	`created_at`	DATETIME(6)	NOT NULL	COMMENT '생성 일시',
+	`updated_at`	DATETIME(6)	NOT NULL	COMMENT '수정 일시',
+	`deleted_at`	DATETIME(6)	NULL	COMMENT '삭제 일시'
 );
 
 ALTER TABLE `generated_images` ADD CONSTRAINT `PK_GENERATED_IMAGES` PRIMARY KEY (
