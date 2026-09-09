@@ -5,6 +5,7 @@ import com.momento.server.global.common.auth.service.TokenProvider;
 import com.momento.server.global.common.code.ErrorCode;
 import com.momento.server.global.common.code.GlobalErrorCode;
 import com.momento.server.global.common.dto.CommonResponse;
+import com.momento.server.global.common.exception.ApiException;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -21,6 +22,9 @@ public class TokenAuthenticationFilter extends OncePerRequestFilter {
 
   private static final String HEADER_AUTHORIZATION = "Authorization";
   private static final String BEARER_AUTH = "Bearer ";
+  private static final String[] EXCLUDED_PATHS = {
+    "/health-check", "/v1/auth/kakao", "/swagger-ui", "/v3/api-docs", "/api-docs"
+  };
 
   private final TokenProvider tokenProvider;
   private final ObjectMapper objectMapper;
@@ -42,7 +46,15 @@ public class TokenAuthenticationFilter extends OncePerRequestFilter {
       return;
     }
 
-    Authentication authentication = tokenProvider.getAuthentication(accessToken);
+    Authentication authentication;
+    try {
+      authentication = tokenProvider.getAuthentication(accessToken);
+    } catch (ApiException exception) {
+      // 서명은 유효하지만 회원이 없거나 탈퇴한 경우
+      sendUnauthorizedResponse(response);
+      return;
+    }
+
     SecurityContextHolder.getContext().setAuthentication(authentication);
 
     filterChain.doFilter(request, response);
@@ -66,11 +78,8 @@ public class TokenAuthenticationFilter extends OncePerRequestFilter {
 
   @Override
   protected boolean shouldNotFilter(HttpServletRequest request) throws ServletException {
-    String[] excludes = {
-      "/health-check", "/oauth2/", "/login/", "/swagger-ui/", "/v3/api-docs", "/api-docs/"
-    };
     String path = request.getRequestURI();
 
-    return Arrays.stream(excludes).anyMatch(path::startsWith);
+    return Arrays.stream(EXCLUDED_PATHS).anyMatch(path::startsWith);
   }
 }

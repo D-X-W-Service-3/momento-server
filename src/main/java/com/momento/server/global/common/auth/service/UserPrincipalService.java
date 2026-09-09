@@ -11,19 +11,24 @@ import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
 
+/** JWT 의 subject(회원 ID)로 principal 을 만든다. 탈퇴한 회원의 토큰은 인증되지 않는다. */
 @Service
 @RequiredArgsConstructor
 public class UserPrincipalService implements UserDetailsService {
 
   private final UserRepository userRepository;
 
-  @Override
-  public UserDetails loadUserByUsername(String email) throws UsernameNotFoundException {
+  public UserPrincipal loadByUserId(Long userId) {
     User user =
         userRepository
-            .findByEmail(email)
+            .findByIdAndDeletedAtIsNull(userId)
             .orElseThrow(() -> new ApiException(UserErrorCode.USER_NOT_FOUND));
 
     return UserPrincipal.fromEntity(user);
+  }
+
+  @Override
+  public UserDetails loadUserByUsername(String userId) throws UsernameNotFoundException {
+    return loadByUserId(Long.valueOf(userId));
   }
 }
