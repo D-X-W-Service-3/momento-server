@@ -4,5 +4,5 @@ package com.momento.server.domain.timecapsule.entity;
 public enum VisibilityType {
   RECIPIENT_ONLY,
   PARTICIPANTS_ONLY,
-  ALL
+  ALL_MEMBERS
 }
