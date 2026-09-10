@@ -1,6 +1,5 @@
 package com.momento.server.domain.notification.entity;
 
-import com.momento.server.domain.timecapsule.entity.TimeCapsule;
 import com.momento.server.domain.user.entity.User;
 import com.momento.server.global.common.entity.BaseCreatedTimeEntity;
 import jakarta.persistence.Column;
@@ -41,10 +40,13 @@ public class Notification extends BaseCreatedTimeEntity {
   @JoinColumn(name = "user_id", nullable = false)
   private User user;
 
-  /** 기념일 알림처럼 캡슐과 무관한 알림이면 비어 있다. */
-  @ManyToOne(fetch = FetchType.LAZY)
-  @JoinColumn(name = "time_capsule_id")
-  private TimeCapsule timeCapsule;
+  /** 알림을 눌렀을 때 이동할 리소스의 종류. 값 목록이 명세서에 없어 문자열로 둔다. 프론트와 맞춰 확정되면 알림 API 이슈에서 enum 으로 전환한다. */
+  @Column(name = "reference_type", length = 30)
+  private String referenceType;
+
+  /** {@link #referenceType} 이 가리키는 리소스의 ID. */
+  @Column(name = "reference_id")
+  private Long referenceId;
 
   @Enumerated(EnumType.STRING)
   @JdbcTypeCode(SqlTypes.VARCHAR)

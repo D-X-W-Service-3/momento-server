@@ -73,7 +73,8 @@ CREATE TABLE `capsule_invites` (
 CREATE TABLE `notifications` (
 	`id`	BIGINT	NOT NULL	AUTO_INCREMENT	COMMENT '알림 ID',
 	`user_id`	BIGINT	NOT NULL	COMMENT '알림 수신 회원 ID',
-	`time_capsule_id`	BIGINT	NULL	COMMENT '관련 타임캡슐 ID',
+	`reference_type`	VARCHAR(30)	NULL	COMMENT '알림이 가리키는 리소스 종류',
+	`reference_id`	BIGINT	NULL	COMMENT '알림이 가리키는 리소스 ID',
 	`notification_type`	VARCHAR(30)	NOT NULL	COMMENT '알림 유형: CAPSULE_INVITE, CAPSULE_RECEIVED , LETTER_MILESTONE,  LETTER_DEADLINE,
 CAPSULE_OPENED, IMAGE_GENERATED, ANNIVERSARY_REMINDER',
 	`title`	VARCHAR(100)	NOT NULL	COMMENT '알림 제목',
