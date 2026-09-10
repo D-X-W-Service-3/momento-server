@@ -52,8 +52,9 @@ Momento — 타임캡슐·추억 아카이빙 서비스의 백엔드(Spring Boot
 
 ## 주의점
 
+- **받은 명세서를 그대로 믿지 말 것**: 팀원이 주는 API 명세서는 빠르게 작성된 문서라 빠진 것과 틀린 것이 실제로 나온다(경로 중복, 같은 경로가 두 기능에 배정, enum 값 이름이 엔티티와 불일치 등). 코드와 어긋나거나 이상하면 **임의로 한쪽을 고르지 말고 작성자에게 확인**한다. 값 목록이 확정되지 않은 필드는 enum 대신 `String` 으로 두고 확정 후 전환한다. ERD(`docs/Momento.sql`)도 마찬가지다.
 - **스키마 기준은 ERD**: 확정된 ERD 는 [docs/Momento.sql](./docs/Momento.sql) 이고, 10개 테이블의 엔티티는 이미 등록돼 있다. 컬럼 추가·타입 변경이 필요하면 임의로 고치지 말고 ERD 부터 합의한 뒤 별도 이슈로 반영한다(여러 도메인이 동시에 작업 중이라 충돌 위험).
-- **미확정 값**: `letters.theme_type` 은 값이 정해지지 않아 `String` 이다. 테마 값 확정 후 편지 API 작업에서 enum 으로 전환한다.
+- **미확정 값**: `letters.theme_type`(편지지 테마)과 `notifications.reference_type`(알림이 가리키는 리소스 종류)은 값 목록이 정해지지 않아 `String` 이다. 각각 편지 API·알림 API 작업에서 값을 확정한 뒤 enum 으로 전환한다.
 - **DB 설정 건드리지 말 것**: 로컬은 H2 자동 구동, 운영은 `application-prod.yml`(MySQL, `ddl-auto: validate`). 명시적 요청 없이 datasource/ddl 설정을 바꾸지 않는다.
 - **시크릿**: 카카오/JWT/AWS 값은 환경변수 주입(로컬 기본값은 개발용 더미). 실제 키를 코드/`application.yml` 에 하드코딩하지 않는다. `application-local.yml` 은 gitignore 대상.
 - **AI 서버 연동**: FeignClient 는 `domain/{도메인}/external` 에 두고 URL 은 `${external.api-url.ai}` 사용. 엔드포인트는 AI 팀과 확정 후 작성한다.
