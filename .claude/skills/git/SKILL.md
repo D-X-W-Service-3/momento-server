@@ -178,7 +178,11 @@ gh pr edit <번호> --body-file <초안>
 
 ## 형식 규칙
 
-- 한국어, `~다` 체. 제목은 커밋 컨벤션과 같은 `<type>: <제목>` (`CONTRIBUTING.md`)
+- **본문**은 한국어 `~다` 체
+- **제목**은 커밋 컨벤션과 같은 `<type>: <제목>` (`CONTRIBUTING.md`) 이되 **명사형으로 끝낸다.**
+  `~다` 체를 제목까지 끌고 가지 않는다
+  - ✕ `fix: 명세서와 어긋난 엔티티를 맞춘다` · `feat: 카카오 로그인을 구현한다`
+  - ○ `fix: 명세서 v2 와 어긋난 엔티티 5건 정합성 정리` · `feat: ERD 기반 엔티티 클래스 선등록`
 - 저장소의 `.github/pull_request_template.md`, `.github/ISSUE_TEMPLATE/` 섹션은 유지하고
   그 위에 섹션을 덧붙인다. 기존 템플릿을 지우지 않는다
 - 코드 위치는 `AuthController.java:22`, 문서는 절 번호로 짚는다
