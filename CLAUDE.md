@@ -25,7 +25,8 @@ Momento — 타임캡슐·추억 아카이빙 서비스의 백엔드(Spring Boot
 패키지 루트: `com.momento.server`
 
 - `domain/{도메인}/` — 기능별 패키지. 하위: `controller`(`{Domain}Api` 인터페이스 + `{Domain}Controller`), `dto/{request,response}`, `entity`, `repository`, `service`, `facade`, `exception`, 필요 시 `external`(FeignClient)
-- `global/common/` — `annotation`, `auth`(카카오 OAuth2 + JWT), `code`(ErrorCode 체계), `config`, `dto`(CommonResponse), `entity`(BaseTimeEntity), `exception`, `property`
+- 현재 도메인: `user` `timecapsule` `letter` `memory` `anniversary` `notification` `image`
+- `global/common/` — `annotation`, `auth`(카카오 OAuth2 + JWT), `code`(ErrorCode 체계), `config`, `dto`(CommonResponse), `entity`(BaseTimeEntity, BaseCreatedTimeEntity), `exception`, `property`
 - `global/controller/` — HealthCheck 등 도메인 무관 컨트롤러
 
 ## 코드 컨벤션 (반드시 준수)
@@ -34,7 +35,8 @@ Momento — 타임캡슐·추억 아카이빙 서비스의 백엔드(Spring Boot
 - **컨트롤러**: `@RestController` 대신 `@RestApiController("/v1/...")` 사용. 컨트롤러는 `{Domain}Api` 인터페이스(Swagger 문서 애노테이션 위치)를 구현한다.
 - **계층 흐름**: `Controller → Facade → Service → Repository`. 컨트롤러는 얇게 유지하고 조합 로직은 Facade 에 둔다.
 - **예외**: 도메인별 `XxxErrorCode implements ErrorCode` enum 을 만들고 `throw new ApiException(XxxErrorCode.SOMETHING)` 로 던진다. `GlobalExceptionHandler` 가 `CommonResponse` 형태로 변환한다. 컨트롤러/서비스에서 try-catch 로 응답을 직접 만들지 않는다.
-- **엔티티**: 생성/수정 시각이 필요하면 `BaseTimeEntity` 상속. 기본 생성자는 `@NoArgsConstructor(access = AccessLevel.PROTECTED)`, 생성은 `@Builder` 사용.
+- **엔티티**: 생성·수정 시각이 필요하면 `BaseTimeEntity`, 생성 후 시각이 바뀌지 않으면 `BaseCreatedTimeEntity` 상속. 기본 생성자는 `@NoArgsConstructor(access = AccessLevel.PROTECTED)`, 생성은 `@Builder` 사용.
+- **엔티티 매핑**: 연관관계는 전부 `@ManyToOne(fetch = FetchType.LAZY)`. enum 컬럼은 `@Enumerated(EnumType.STRING)` + `@JdbcTypeCode(SqlTypes.VARCHAR)` 를 같이 붙인다(안 붙이면 네이티브 ENUM 으로 생성됨). 소프트 삭제 테이블은 `deletedAt` 을 채우는 방식.
 - **인증**: 컨트롤러에서 로그인 사용자는 `@AuthenticationPrincipal UserPrincipal principal` 로 받고 `principal.getUserId()` 사용.
 
 ## 포맷 / 스타일
@@ -50,7 +52,8 @@ Momento — 타임캡슐·추억 아카이빙 서비스의 백엔드(Spring Boot
 
 ## 주의점
 
-- **ERD 미확정**: `domain/user/User` 는 카카오 로그인에 필요한 최소 필드(email, socialProvider, socialId, nickname)만 있다. 도메인 엔티티/연관관계는 ERD 확정 후 추가한다. 지금 임의로 스키마를 설계하지 말 것.
+- **스키마 기준은 ERD**: 확정된 ERD 는 [docs/Momento.sql](./docs/Momento.sql) 이고, 10개 테이블의 엔티티는 이미 등록돼 있다. 컬럼 추가·타입 변경이 필요하면 임의로 고치지 말고 ERD 부터 합의한 뒤 별도 이슈로 반영한다(여러 도메인이 동시에 작업 중이라 충돌 위험).
+- **미확정 값**: `letters.theme_type` 은 값이 정해지지 않아 `String` 이다. 테마 값 확정 후 편지 API 작업에서 enum 으로 전환한다.
 - **DB 설정 건드리지 말 것**: 로컬은 H2 자동 구동, 운영은 `application-prod.yml`(MySQL, `ddl-auto: validate`). 명시적 요청 없이 datasource/ddl 설정을 바꾸지 않는다.
 - **시크릿**: 카카오/JWT/AWS 값은 환경변수 주입(로컬 기본값은 개발용 더미). 실제 키를 코드/`application.yml` 에 하드코딩하지 않는다. `application-local.yml` 은 gitignore 대상.
 - **AI 서버 연동**: FeignClient 는 `domain/{도메인}/external` 에 두고 URL 은 `${external.api-url.ai}` 사용. 엔드포인트는 AI 팀과 확정 후 작성한다.
