@@ -27,7 +27,7 @@ CREATE TABLE `time_capsules` (
 	`description`	TEXT	NULL	COMMENT '타임캡슐 설명',
 	`capsule_type`	VARCHAR(20)	NOT NULL	COMMENT '캡슐 유형: SELF, FRIEND, GROUP',
 	`visibility_type`	VARCHAR(30)	NOT NULL	COMMENT '공개 범위: RECIPIENT_ONLY, PARTICIPANTS_ONLY, ALL_MEMBERS',
-	`status`	VARCHAR(20)	NOT NULL	DEFAULT 'WRITING'	COMMENT '상태: WRITING, CLOSED, OPENED',
+	`status`	VARCHAR(20)	NOT NULL	DEFAULT 'WRITING'	COMMENT '상태: WRITING, LOCKED, OPENED',
 	`open_at`	DATETIME(6)	NOT NULL	COMMENT '공개 예정 일시',
 	`letter_deadline_at`	DATETIME(6)	NULL	COMMENT '편지 작성 마감 일시',
 	`created_at`	DATETIME(6)	NOT NULL	COMMENT '생성 일시',
