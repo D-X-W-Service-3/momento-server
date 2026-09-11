@@ -1,6 +1,7 @@
 package com.momento.server.domain.timecapsule.facade;
 
 import com.momento.server.domain.timecapsule.dto.request.TimeCapsuleCreateRequest;
+import com.momento.server.domain.timecapsule.dto.response.TimeCapsuleDetailResponse;
 import com.momento.server.domain.timecapsule.dto.response.TimeCapsuleResponse;
 import com.momento.server.domain.timecapsule.service.TimeCapsuleService;
 import com.momento.server.domain.user.entity.User;
@@ -19,5 +20,9 @@ public class TimeCapsuleFacade {
     User creator = userService.getActiveUser(userId);
 
     return TimeCapsuleResponse.from(timeCapsuleService.create(creator, request));
+  }
+
+  public TimeCapsuleDetailResponse getDetail(Long capsuleId, Long userId) {
+    return timeCapsuleService.getDetail(capsuleId, userId);
   }
 }

@@ -2,20 +2,29 @@ package com.momento.server.domain.timecapsule;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.http.HttpHeaders.AUTHORIZATION;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.momento.server.domain.letter.entity.Letter;
+import com.momento.server.domain.letter.entity.LetterStatus;
 import com.momento.server.domain.timecapsule.entity.CapsuleMember;
+import com.momento.server.domain.timecapsule.entity.CapsuleStatus;
+import com.momento.server.domain.timecapsule.entity.CapsuleType;
 import com.momento.server.domain.timecapsule.entity.MemberRole;
 import com.momento.server.domain.timecapsule.entity.MemberStatus;
+import com.momento.server.domain.timecapsule.entity.TimeCapsule;
+import com.momento.server.domain.timecapsule.entity.VisibilityType;
 import com.momento.server.domain.timecapsule.repository.CapsuleMemberRepository;
 import com.momento.server.domain.timecapsule.repository.TimeCapsuleRepository;
 import com.momento.server.domain.user.entity.User;
 import com.momento.server.domain.user.repository.UserRepository;
 import com.momento.server.global.common.auth.service.TokenProvider;
+import jakarta.persistence.EntityManager;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -29,12 +38,14 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * 캡슐 API 를 실제 필터·시큐리티·트랜잭션까지 태워 검증한다.
@@ -55,6 +66,8 @@ class TimeCapsuleIntegrationTest {
   @Autowired private UserRepository userRepository;
   @Autowired private TimeCapsuleRepository timeCapsuleRepository;
   @Autowired private CapsuleMemberRepository capsuleMemberRepository;
+  @Autowired private EntityManager entityManager;
+  @Autowired private TransactionTemplate transactionTemplate;
 
   private User owner;
   private String ownerToken;
@@ -70,6 +83,8 @@ class TimeCapsuleIntegrationTest {
   void tearDown() {
     cleanUp();
   }
+
+  // ---------- 생성 ----------
 
   @Test
   @DisplayName("캡슐을 만들면 201 과 함께 편지를 쓸 수 있는 WRITING 상태로 생성된다")
@@ -153,6 +168,129 @@ class TimeCapsuleIntegrationTest {
     assertThat(timeCapsuleRepository.count()).isZero();
   }
 
+  // ---------- 상세 조회 ----------
+
+  @Test
+  @DisplayName("OWNER 가 상세를 조회하면 내 역할과 볼 수 있는 범위를 함께 받는다")
+  void ownerGetsDetail() throws Exception {
+    Long capsuleId = createCapsule(ownerToken);
+
+    mockMvc
+        .perform(
+            get("/v1/time-capsules/{capsuleId}", capsuleId)
+                .header(AUTHORIZATION, bearer(ownerToken)))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.data.capsuleId").value(capsuleId))
+        .andExpect(jsonPath("$.data.status").value("WRITING"))
+        .andExpect(jsonPath("$.data.myRole").value("OWNER"))
+        .andExpect(jsonPath("$.data.memberCount").value(1))
+        .andExpect(jsonPath("$.data.letterCount").value(0))
+        .andExpect(jsonPath("$.data.canViewMemberList").value(true))
+        .andExpect(jsonPath("$.data.canViewLetters").value(false));
+  }
+
+  @Test
+  @DisplayName("참여자 수는 ACTIVE 만, 편지 수는 제출됐고 삭제되지 않은 것만 센다")
+  void countsOnlyActiveMembersAndSubmittedLetters() throws Exception {
+    TimeCapsule capsule = saveCapsule(CapsuleStatus.WRITING, VisibilityType.ALL_MEMBERS, null);
+    User participant = saveUser("participant-kakao-id", "민수");
+    User leaver = saveUser("leaver-kakao-id", "지수");
+    saveMember(capsule, owner, MemberRole.OWNER, MemberStatus.ACTIVE);
+    saveMember(capsule, participant, MemberRole.PARTICIPANT, MemberStatus.ACTIVE);
+    saveMember(capsule, leaver, MemberRole.PARTICIPANT, MemberStatus.LEFT);
+    saveLetter(capsule, owner, LetterStatus.SUBMITTED, null);
+    saveLetter(capsule, participant, LetterStatus.DRAFT, null);
+    saveLetter(capsule, leaver, LetterStatus.SUBMITTED, LocalDateTime.now());
+
+    mockMvc
+        .perform(
+            get("/v1/time-capsules/{capsuleId}", capsule.getId())
+                .header(AUTHORIZATION, bearer(ownerToken)))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.data.memberCount").value(2))
+        .andExpect(jsonPath("$.data.letterCount").value(1));
+  }
+
+  @Test
+  @DisplayName("참여하지 않은 캡슐, 없는 캡슐, 삭제된 캡슐은 서로 구분할 수 없는 같은 404 를 받는다")
+  void inaccessibleCapsulesLookTheSame() throws Exception {
+    Long capsuleId = createCapsule(ownerToken);
+    TimeCapsule deleted =
+        saveCapsule(CapsuleStatus.WRITING, VisibilityType.ALL_MEMBERS, LocalDateTime.now());
+    saveMember(deleted, owner, MemberRole.OWNER, MemberStatus.ACTIVE);
+    String strangerToken = tokenOf(saveUser("stranger-kakao-id", "민수"));
+
+    String notMember = notFoundBody(capsuleId, strangerToken);
+    String missing = notFoundBody(Long.MAX_VALUE, ownerToken);
+    String deletedCapsule = notFoundBody(deleted.getId(), ownerToken);
+
+    assertThat(JSON.readTree(notMember).path("code").asText()).isEqualTo("CAPSULE_NOT_FOUND");
+    assertThat(missing).isEqualTo(notMember);
+    assertThat(deletedCapsule).isEqualTo(notMember);
+  }
+
+  @Test
+  @DisplayName("캡슐에서 나간 회원은 더 이상 상세를 볼 수 없다")
+  void leftMemberCannotSeeDetail() throws Exception {
+    TimeCapsule capsule = saveCapsule(CapsuleStatus.WRITING, VisibilityType.ALL_MEMBERS, null);
+    User leaver = saveUser("leaver-kakao-id", "지수");
+    saveMember(capsule, leaver, MemberRole.PARTICIPANT, MemberStatus.LEFT);
+
+    String body = notFoundBody(capsule.getId(), tokenOf(leaver));
+
+    assertThat(JSON.readTree(body).path("code").asText()).isEqualTo("CAPSULE_NOT_FOUND");
+  }
+
+  @ParameterizedTest(name = "{0} 캡슐의 {1} → {2}")
+  @CsvSource({
+    "RECIPIENT_ONLY,    RECIPIENT,   true",
+    "RECIPIENT_ONLY,    PARTICIPANT, false",
+    "RECIPIENT_ONLY,    OWNER,       true",
+    "PARTICIPANTS_ONLY, PARTICIPANT, true",
+    "PARTICIPANTS_ONLY, RECIPIENT,   false",
+    "PARTICIPANTS_ONLY, OWNER,       true",
+    "ALL_MEMBERS,       RECIPIENT,   true",
+    "ALL_MEMBERS,       PARTICIPANT, true"
+  })
+  @DisplayName("열린 캡슐의 편지는 공개 범위에 든 역할만 볼 수 있고, 참여자 목록은 OWNER 만 볼 수 있다")
+  void openedCapsuleVisibilityFollowsRole(
+      VisibilityType visibility, MemberRole role, boolean canViewLetters) throws Exception {
+    TimeCapsule capsule = saveCapsule(CapsuleStatus.OPENED, visibility, null);
+    User viewer = role == MemberRole.OWNER ? owner : saveUser("viewer-kakao-id", "민수");
+    saveMember(capsule, viewer, role, MemberStatus.ACTIVE);
+
+    mockMvc
+        .perform(
+            get("/v1/time-capsules/{capsuleId}", capsule.getId())
+                .header(AUTHORIZATION, bearer(tokenOf(viewer))))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.data.myRole").value(role.name()))
+        .andExpect(jsonPath("$.data.canViewLetters").value(canViewLetters))
+        .andExpect(jsonPath("$.data.canViewMemberList").value(role == MemberRole.OWNER));
+  }
+
+  @Test
+  @DisplayName("경로의 캡슐 ID 가 숫자가 아니면 500 이 아니라 400 으로 응답한다")
+  void nonNumericCapsuleIdIsBadRequest() throws Exception {
+    mockMvc
+        .perform(get("/v1/time-capsules/abc").header(AUTHORIZATION, bearer(ownerToken)))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.code").value("INVALID_INPUT_VALUE"));
+  }
+
+  @Test
+  @DisplayName("인증 없이 상세를 조회할 수 없다")
+  void detailRequiresAuthentication() throws Exception {
+    Long capsuleId = createCapsule(ownerToken);
+
+    mockMvc
+        .perform(get("/v1/time-capsules/{capsuleId}", capsuleId))
+        .andExpect(status().isUnauthorized())
+        .andExpect(jsonPath("$.code").value("INVALID_ACCESS_TOKEN"));
+  }
+
+  // ---------- 도우미 ----------
+
   private Long createCapsule(String token) throws Exception {
     String response =
         mockMvc
@@ -167,6 +305,16 @@ class TimeCapsuleIntegrationTest {
             .getContentAsString();
 
     return JSON.readTree(response).path("data").path("capsuleId").asLong();
+  }
+
+  private String notFoundBody(Long capsuleId, String token) throws Exception {
+    return mockMvc
+        .perform(
+            get("/v1/time-capsules/{capsuleId}", capsuleId).header(AUTHORIZATION, bearer(token)))
+        .andExpect(status().isNotFound())
+        .andReturn()
+        .getResponse()
+        .getContentAsString(StandardCharsets.UTF_8);
   }
 
   private static String createBody(
@@ -190,6 +338,46 @@ class TimeCapsuleIntegrationTest {
     return userRepository.save(User.builder().kakaoId(kakaoId).nickname(nickname).build());
   }
 
+  private TimeCapsule saveCapsule(
+      CapsuleStatus status, VisibilityType visibility, LocalDateTime deletedAt) {
+    return timeCapsuleRepository.save(
+        TimeCapsule.builder()
+            .creator(owner)
+            .title("캡슐")
+            .capsuleType(CapsuleType.GROUP)
+            .visibilityType(visibility)
+            .status(status)
+            .openAt(LocalDateTime.now().plusDays(30))
+            .deletedAt(deletedAt)
+            .build());
+  }
+
+  private void saveMember(TimeCapsule capsule, User user, MemberRole role, MemberStatus status) {
+    capsuleMemberRepository.save(
+        CapsuleMember.builder()
+            .timeCapsule(capsule)
+            .user(user)
+            .role(role)
+            .status(status)
+            .joinedAt(LocalDateTime.now())
+            .build());
+  }
+
+  /** 편지 도메인에는 아직 Repository 가 없어 EntityManager 로 직접 넣는다. */
+  private void saveLetter(
+      TimeCapsule capsule, User author, LetterStatus status, LocalDateTime deletedAt) {
+    transactionTemplate.executeWithoutResult(
+        tx ->
+            entityManager.persist(
+                Letter.builder()
+                    .timeCapsule(capsule)
+                    .author(author)
+                    .content("편지")
+                    .status(status)
+                    .deletedAt(deletedAt)
+                    .build()));
+  }
+
   private String tokenOf(User user) {
     return tokenProvider.generateToken(user, Duration.ofHours(1));
   }
@@ -199,6 +387,8 @@ class TimeCapsuleIntegrationTest {
   }
 
   private void cleanUp() {
+    transactionTemplate.executeWithoutResult(
+        tx -> entityManager.createQuery("delete from Letter").executeUpdate());
     capsuleMemberRepository.deleteAllInBatch();
     timeCapsuleRepository.deleteAllInBatch();
     userRepository.deleteAllInBatch();

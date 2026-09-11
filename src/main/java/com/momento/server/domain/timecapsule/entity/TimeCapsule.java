@@ -77,4 +77,22 @@ public class TimeCapsule extends BaseTimeEntity {
 
   @Column(name = "deleted_at")
   private LocalDateTime deletedAt;
+
+  /**
+   * 이 역할의 참여자가 편지를 볼 수 있는지. 캡슐이 열려야 하고, OWNER 는 공개 범위와 상관없이 볼 수 있다. 공개 범위와 역할의 대응은 명세서에 없어 이름에서 추론한
+   * 해석이라 확정되면 바뀔 수 있다. 편지 목록 API 도 같은 판정을 써야 하므로 여기 둔다.
+   */
+  public boolean canViewLetters(MemberRole role) {
+    if (status != CapsuleStatus.OPENED) {
+      return false;
+    }
+    if (role == MemberRole.OWNER) {
+      return true;
+    }
+    return switch (visibilityType) {
+      case RECIPIENT_ONLY -> role == MemberRole.RECIPIENT;
+      case PARTICIPANTS_ONLY -> role == MemberRole.PARTICIPANT;
+      case ALL_MEMBERS -> true;
+    };
+  }
 }

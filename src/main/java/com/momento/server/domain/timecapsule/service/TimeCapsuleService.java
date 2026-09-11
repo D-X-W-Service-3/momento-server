@@ -1,12 +1,17 @@
 package com.momento.server.domain.timecapsule.service;
 
+import com.momento.server.domain.letter.entity.LetterStatus;
 import com.momento.server.domain.timecapsule.dto.request.TimeCapsuleCreateRequest;
+import com.momento.server.domain.timecapsule.dto.response.TimeCapsuleDetailResponse;
 import com.momento.server.domain.timecapsule.entity.CapsuleMember;
 import com.momento.server.domain.timecapsule.entity.MemberRole;
+import com.momento.server.domain.timecapsule.entity.MemberStatus;
 import com.momento.server.domain.timecapsule.entity.TimeCapsule;
+import com.momento.server.domain.timecapsule.exception.CapsuleErrorCode;
 import com.momento.server.domain.timecapsule.repository.CapsuleMemberRepository;
 import com.momento.server.domain.timecapsule.repository.TimeCapsuleRepository;
 import com.momento.server.domain.user.entity.User;
+import com.momento.server.global.common.exception.ApiException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -45,5 +50,28 @@ public class TimeCapsuleService {
             .build());
 
     return capsule;
+  }
+
+  /**
+   * 참여 중인 회원에게만 상세를 보여준다. 없는 캡슐, 삭제된 캡슐, 참여하지 않았거나 나간 캡슐을 모두 같은 404 로 돌려준다 — 구분하면 순번 ID 를 대입하는 것만으로
+   * 캡슐 존재 여부가 드러난다.
+   */
+  public TimeCapsuleDetailResponse getDetail(Long capsuleId, Long userId) {
+    TimeCapsule capsule =
+        timeCapsuleRepository
+            .findByIdAndDeletedAtIsNull(capsuleId)
+            .orElseThrow(() -> new ApiException(CapsuleErrorCode.CAPSULE_NOT_FOUND));
+
+    CapsuleMember me =
+        capsuleMemberRepository
+            .findByTimeCapsuleIdAndUserIdAndStatus(capsuleId, userId, MemberStatus.ACTIVE)
+            .orElseThrow(() -> new ApiException(CapsuleErrorCode.CAPSULE_NOT_FOUND));
+
+    long memberCount =
+        capsuleMemberRepository.countByTimeCapsuleIdAndStatus(capsuleId, MemberStatus.ACTIVE);
+    long letterCount =
+        timeCapsuleRepository.countLettersByStatus(capsuleId, LetterStatus.SUBMITTED);
+
+    return TimeCapsuleDetailResponse.of(capsule, me.getRole(), memberCount, letterCount);
   }
 }
