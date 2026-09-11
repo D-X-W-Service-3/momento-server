@@ -18,7 +18,9 @@ public record TimeCapsuleCreateRequest(
         @NotBlank(message = "타임캡슐 제목은 필수입니다.")
         @Size(max = 50, message = "타임캡슐 제목은 50자 이하여야 합니다.")
         String title,
-    @Schema(description = "타임캡슐 설명", example = "졸업을 기념해서 함께 남기는 편지") String description,
+    @Schema(description = "타임캡슐 설명. 1000자 이하.", example = "졸업을 기념해서 함께 남기는 편지")
+        @Size(max = 1000, message = "타임캡슐 설명은 1000자 이하여야 합니다.")
+        String description,
     @Schema(description = "캡슐 유형", example = "GROUP", requiredMode = Schema.RequiredMode.REQUIRED)
         @NotNull(message = "캡슐 유형은 필수입니다.")
         CapsuleType capsuleType,

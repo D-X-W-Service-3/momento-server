@@ -108,6 +108,18 @@ class TimeCapsuleIntegrationTest {
   }
 
   @Test
+  @DisplayName("설명은 1000자까지 받는다")
+  void descriptionUpTo1000CharsIsAccepted() throws Exception {
+    mockMvc
+        .perform(
+            post("/v1/time-capsules")
+                .header(AUTHORIZATION, bearer(ownerToken))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(createBodyWithDescription("가".repeat(1000))))
+        .andExpect(status().isCreated());
+  }
+
+  @Test
   @DisplayName("캡슐을 만들면 생성자가 OWNER 로 참여자에 함께 등록된다")
   void creatorBecomesOwnerMember() throws Exception {
     Long capsuleId = createCapsule(ownerToken);
@@ -151,6 +163,7 @@ class TimeCapsuleIntegrationTest {
         Arguments.of("캡슐 유형이 빠짐", createBody("캡슐", null, "ALL_MEMBERS", future())),
         Arguments.of("공개 범위가 빠짐", createBody("캡슐", "GROUP", null, future())),
         Arguments.of("enum 에 없는 캡슐 유형", createBody("캡슐", "TEAM", "ALL_MEMBERS", future())),
+        Arguments.of("설명이 1000자를 넘음", createBodyWithDescription("가".repeat(1001))),
         Arguments.of("JSON 이 깨짐", "{\"title\":"));
   }
 
@@ -326,6 +339,18 @@ class TimeCapsuleIntegrationTest {
     body.put("capsuleType", capsuleType);
     body.put("visibilityType", visibilityType);
     body.put("openAt", openAt);
+
+    return JSON.writeValueAsString(body);
+  }
+
+  private static String createBodyWithDescription(String description)
+      throws JsonProcessingException {
+    Map<String, Object> body = new HashMap<>();
+    body.put("title", "캡슐");
+    body.put("description", description);
+    body.put("capsuleType", "GROUP");
+    body.put("visibilityType", "ALL_MEMBERS");
+    body.put("openAt", future());
 
     return JSON.writeValueAsString(body);
   }
