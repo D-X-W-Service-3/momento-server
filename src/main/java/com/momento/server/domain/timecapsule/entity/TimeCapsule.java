@@ -77,4 +77,11 @@ public class TimeCapsule extends BaseTimeEntity {
 
   @Column(name = "deleted_at")
   private LocalDateTime deletedAt;
+
+  /** WRITING 중이며 공개 시각과 작성 마감 모두 지나지 않았을 때만 생성한다. 경계 시각은 마감이다. */
+  public boolean canWriteLetter(LocalDateTime now) {
+    return status == CapsuleStatus.WRITING
+        && now.isBefore(openAt)
+        && (letterDeadlineAt == null || now.isBefore(letterDeadlineAt));
+  }
 }
