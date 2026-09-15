@@ -258,14 +258,15 @@ class TimeCapsuleIntegrationTest {
   @CsvSource({
     "RECIPIENT_ONLY,    RECIPIENT,   true",
     "RECIPIENT_ONLY,    PARTICIPANT, false",
-    "RECIPIENT_ONLY,    OWNER,       true",
+    "RECIPIENT_ONLY,    OWNER,       false",
+    "PARTICIPANTS_ONLY, RECIPIENT,   true",
     "PARTICIPANTS_ONLY, PARTICIPANT, true",
-    "PARTICIPANTS_ONLY, RECIPIENT,   false",
     "PARTICIPANTS_ONLY, OWNER,       true",
     "ALL_MEMBERS,       RECIPIENT,   true",
-    "ALL_MEMBERS,       PARTICIPANT, true"
+    "ALL_MEMBERS,       PARTICIPANT, true",
+    "ALL_MEMBERS,       OWNER,       true"
   })
-  @DisplayName("열린 캡슐의 편지는 공개 범위에 든 역할만 볼 수 있고, 참여자 목록은 OWNER 만 볼 수 있다")
+  @DisplayName("열린 캡슐의 편지함은 수신자만 공개일 때만 수신자로 제한되고, 참여자 목록은 OWNER 만 볼 수 있다")
   void openedCapsuleVisibilityFollowsRole(
       VisibilityType visibility, MemberRole role, boolean canViewLetters) throws Exception {
     TimeCapsule capsule = saveCapsule(CapsuleStatus.OPENED, visibility, null);

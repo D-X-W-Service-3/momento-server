@@ -22,7 +22,10 @@ public record TimeCapsuleDetailResponse(
     @Schema(description = "이 캡슐에서 내 역할", example = "PARTICIPANT") MemberRole myRole,
     @Schema(description = "참여자 목록을 볼 수 있는지. OWNER 만 true 다.", example = "false")
         boolean canViewMemberList,
-    @Schema(description = "편지를 볼 수 있는지. 캡슐이 열렸고 공개 범위에 내 역할이 들어 있을 때 true 다.", example = "false")
+    @Schema(
+            description =
+                "편지함에 들어갈 수 있는지. 캡슐이 열렸을 때 true 이고, 수신자만 공개인 캡슐이면 수신자만 true 다. 어떤 편지가 보이는지는 편지 목록에서 한 통씩 정해진다.",
+            example = "false")
         boolean canViewLetters,
     @Schema(description = "생성 일시", example = "2026-08-14T15:30:00") LocalDateTime createdAt) {
 
