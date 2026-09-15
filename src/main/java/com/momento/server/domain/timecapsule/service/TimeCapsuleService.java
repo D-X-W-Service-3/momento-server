@@ -2,7 +2,6 @@ package com.momento.server.domain.timecapsule.service;
 
 import com.momento.server.domain.letter.entity.LetterStatus;
 import com.momento.server.domain.timecapsule.dto.request.TimeCapsuleCreateRequest;
-import com.momento.server.domain.timecapsule.dto.response.TimeCapsuleDetailResponse;
 import com.momento.server.domain.timecapsule.entity.CapsuleMember;
 import com.momento.server.domain.timecapsule.entity.MemberRole;
 import com.momento.server.domain.timecapsule.entity.MemberStatus;
@@ -56,7 +55,7 @@ public class TimeCapsuleService {
    * 참여 중인 회원에게만 상세를 보여준다. 없는 캡슐, 삭제된 캡슐, 참여하지 않았거나 나간 캡슐을 모두 같은 404 로 돌려준다 — 구분하면 순번 ID 를 대입하는 것만으로
    * 캡슐 존재 여부가 드러난다.
    */
-  public TimeCapsuleDetailResponse getDetail(Long capsuleId, Long userId) {
+  public TimeCapsuleDetail getDetail(Long capsuleId, Long userId) {
     TimeCapsule capsule =
         timeCapsuleRepository
             .findByIdAndDeletedAtIsNull(capsuleId)
@@ -72,6 +71,6 @@ public class TimeCapsuleService {
     long letterCount =
         timeCapsuleRepository.countLettersByStatus(capsuleId, LetterStatus.SUBMITTED);
 
-    return TimeCapsuleDetailResponse.of(capsule, me.getRole(), memberCount, letterCount);
+    return new TimeCapsuleDetail(capsule, me.getRole(), memberCount, letterCount);
   }
 }
