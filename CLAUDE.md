@@ -38,6 +38,7 @@ Momento — 타임캡슐·추억 아카이빙 서비스의 백엔드(Spring Boot
 - **엔티티**: 생성·수정 시각이 필요하면 `BaseTimeEntity`, 생성 후 시각이 바뀌지 않으면 `BaseCreatedTimeEntity` 상속. 기본 생성자는 `@NoArgsConstructor(access = AccessLevel.PROTECTED)`, 생성은 `@Builder` 사용.
 - **엔티티 매핑**: 연관관계는 전부 `@ManyToOne(fetch = FetchType.LAZY)`. enum 컬럼은 `@Enumerated(EnumType.STRING)` + `@JdbcTypeCode(SqlTypes.VARCHAR)` 를 같이 붙인다(안 붙이면 네이티브 ENUM 으로 생성됨). 소프트 삭제 테이블은 `deletedAt` 을 채우는 방식.
 - **인증**: 컨트롤러에서 로그인 사용자는 `@AuthenticationPrincipal UserPrincipal principal` 로 받고 `principal.getUserId()` 사용.
+- **현재 시각**: 마감 · 공개 · 만료처럼 현재 시각에 따라 성공과 실패가 갈리는 로직은 `LocalDateTime.now()` 를 직접 부르지 않는다. `java.time.Clock` 빈을 주입받아 `LocalDateTime.now(clock)` 으로 읽는다. 테스트에서 시각을 고정해 경계(마감 1초 전 · 정각)를 검증하기 위해서다.
 
 ## 포맷 / 스타일
 
