@@ -12,10 +12,10 @@ public class LetterFacade {
   private final LetterService letterService;
 
   public LetterResponse create(Long capsuleId, Long userId, LetterCreateRequest request) {
-    return letterService.create(capsuleId, userId, request);
+    return LetterResponse.from(letterService.create(capsuleId, userId, request));
   }
 
   public LetterResponse getMine(Long capsuleId, Long userId) {
-    return letterService.getMine(capsuleId, userId);
+    return LetterResponse.from(letterService.getMine(capsuleId, userId));
   }
 }

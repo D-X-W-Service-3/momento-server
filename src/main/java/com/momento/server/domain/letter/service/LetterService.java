@@ -1,7 +1,6 @@
 package com.momento.server.domain.letter.service;
 
 import com.momento.server.domain.letter.dto.request.LetterCreateRequest;
-import com.momento.server.domain.letter.dto.response.LetterResponse;
 import com.momento.server.domain.letter.entity.Letter;
 import com.momento.server.domain.letter.exception.LetterErrorCode;
 import com.momento.server.domain.letter.repository.LetterRepository;
@@ -24,7 +23,7 @@ public class LetterService {
   private final Clock clock;
 
   @Transactional
-  public LetterResponse create(Long capsuleId, Long userId, LetterCreateRequest request) {
+  public Letter create(Long capsuleId, Long userId, LetterCreateRequest request) {
     // 편지가 아직 없는 경우에도 잠글 수 있는 부모 행을 사용한다. JVM 안의 synchronized는 여러 서버를 보호하지 못한다.
     TimeCapsule capsule = timeCapsuleService.getActiveCapsuleForUpdate(capsuleId);
     CapsuleMember member = timeCapsuleService.requireActiveMember(capsuleId, userId);
@@ -35,24 +34,21 @@ public class LetterService {
     if (!capsule.canWriteLetter(LocalDateTime.now(clock))) {
       throw new ApiException(LetterErrorCode.LETTER_WRITING_CLOSED);
     }
-    Letter letter =
-        letterRepository.save(
-            Letter.builder()
-                .timeCapsule(capsule)
-                .author(member.getUser())
-                .content(request.content())
-                .themeType(request.themeType())
-                .build());
-    return LetterResponse.from(letter);
+    return letterRepository.save(
+        Letter.builder()
+            .timeCapsule(capsule)
+            .author(member.getUser())
+            .content(request.content())
+            .themeType(request.themeType())
+            .build());
   }
 
-  public LetterResponse getMine(Long capsuleId, Long userId) {
+  public Letter getMine(Long capsuleId, Long userId) {
     timeCapsuleService.getActiveCapsule(capsuleId);
     timeCapsuleService.requireActiveMember(capsuleId, userId);
     // 본인 초안/제출 편지는 캡슐 공개 여부나 마감과 무관하게 조회한다.
     return letterRepository
         .findByTimeCapsuleIdAndAuthorIdAndDeletedAtIsNull(capsuleId, userId)
-        .map(LetterResponse::from)
         .orElseThrow(() -> new ApiException(LetterErrorCode.LETTER_NOT_FOUND));
   }
 }
