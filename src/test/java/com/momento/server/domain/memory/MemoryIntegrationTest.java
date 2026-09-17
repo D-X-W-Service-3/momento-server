@@ -87,9 +87,12 @@ class MemoryIntegrationTest {
                 .content(body))
         .andExpect(status().isCreated())
         .andExpect(jsonPath("$.data.title").value("제주도 여행"))
-        .andExpect(jsonPath("$.data.visibilityType").value("PRIVATE"))
-        .andExpect(jsonPath("$.data.imageUrls[0]").value("https://cdn.test/a.jpg"))
-        .andExpect(jsonPath("$.data.imageUrls[1]").value("https://cdn.test/b.jpg"));
+        .andExpect(jsonPath("$.data.isShared").value(false))
+        .andExpect(jsonPath("$.data.images[0].imageId").isNumber())
+        .andExpect(jsonPath("$.data.images[0].imageUrl").value("https://cdn.test/a.jpg"))
+        .andExpect(jsonPath("$.data.images[0].displayOrder").value(0))
+        .andExpect(jsonPath("$.data.images[1].imageUrl").value("https://cdn.test/b.jpg"))
+        .andExpect(jsonPath("$.data.images[1].displayOrder").value(1));
 
     Memory saved = memoryRepository.findAll().get(0);
     assertThat(saved.getVisibilityType()).isEqualTo(MemoryVisibilityType.PRIVATE);
@@ -117,7 +120,7 @@ class MemoryIntegrationTest {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(body))
         .andExpect(status().isCreated())
-        .andExpect(jsonPath("$.data.imageUrls").isEmpty());
+        .andExpect(jsonPath("$.data.images").isEmpty());
   }
 
   @Test
@@ -200,7 +203,9 @@ class MemoryIntegrationTest {
         .andExpect(jsonPath("$.data.memories[0].title").value("제주도 여행"))
         .andExpect(jsonPath("$.data.memories[0].thumbnailUrl").value("https://cdn.test/first.jpg"))
         .andExpect(jsonPath("$.data.memories[1].title").value("생일 파티"))
-        .andExpect(jsonPath("$.data.memories[1].thumbnailUrl").isEmpty());
+        .andExpect(jsonPath("$.data.memories[1].thumbnailUrl").isEmpty())
+        .andExpect(jsonPath("$.data.memories[0].imageCount").value(2))
+        .andExpect(jsonPath("$.data.memories[1].imageCount").value(0));
   }
 
   @Test

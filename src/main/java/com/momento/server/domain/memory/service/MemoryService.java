@@ -15,9 +15,9 @@ import com.momento.server.global.common.code.GlobalErrorCode;
 import com.momento.server.global.common.exception.ApiException;
 import java.time.LocalDate;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -55,14 +55,13 @@ public class MemoryService {
                 .memoryDate(request.memoryDate())
                 .build());
 
-    List<String> imageUrls = request.imageUrlsOrEmpty();
-    saveImages(memory, imageUrls);
+    List<MemoryImage> images = saveImages(memory, request.imageUrlsOrEmpty());
 
-    return MemoryResponse.of(memory, imageUrls);
+    return MemoryResponse.of(memory, images);
   }
 
   /** 보낸 순서를 display_order 0, 1, 2... 로 저장한다. 0번이 목록의 대표 이미지가 된다. */
-  private void saveImages(Memory memory, List<String> imageUrls) {
+  private List<MemoryImage> saveImages(Memory memory, List<String> imageUrls) {
     List<MemoryImage> images = new ArrayList<>();
 
     for (int order = 0; order < imageUrls.size(); order++) {
@@ -74,7 +73,7 @@ public class MemoryService {
               .build());
     }
 
-    memoryImageRepository.saveAll(images);
+    return memoryImageRepository.saveAll(images);
   }
 
   /** 아카이브 탭 목록. 연도는 그 해의 1월 1일 ~ 12월 31일 범위로 바꿔 넘긴다. */
@@ -95,10 +94,13 @@ public class MemoryService {
     Page<Memory> memories =
         memoryRepository.findMyMemories(userId, keyword, startDate, endDate, pageable);
 
-    Map<Long, String> thumbnails = findThumbnails(memories.getContent());
+    Map<Long, List<MemoryImage>> imagesByMemory = findImagesByMemory(memories.getContent());
     List<MemorySummary> summaries =
         memories.getContent().stream()
-            .map(memory -> MemorySummary.of(memory, thumbnails.get(memory.getId())))
+            .map(
+                memory ->
+                    MemorySummary.of(
+                        memory, imagesByMemory.getOrDefault(memory.getId(), List.of())))
             .toList();
 
     return MemoryListResponse.of(memories, summaries);
@@ -118,21 +120,15 @@ public class MemoryService {
     return Math.min(size, MAX_PAGE_SIZE);
   }
 
-  /** 추억 여러 건의 대표 이미지를 쿼리 한 번으로 모아 온다. 이미지가 없는 추억은 Map 에 들어가지 않는다. */
-  private Map<Long, String> findThumbnails(List<Memory> memories) {
+  /** 추억 여러 건의 이미지를 쿼리 한 번으로 모아 온다. display_order 오름차순이라 각 목록의 첫 번째가 대표 이미지다. */
+  private Map<Long, List<MemoryImage>> findImagesByMemory(List<Memory> memories) {
     if (memories.isEmpty()) {
       return Map.of();
     }
 
     List<Long> memoryIds = memories.stream().map(Memory::getId).toList();
-    List<MemoryImage> images =
-        memoryImageRepository.findByMemoryIdInOrderByDisplayOrderAsc(memoryIds);
 
-    Map<Long, String> thumbnails = new HashMap<>();
-    for (MemoryImage image : images) {
-      thumbnails.putIfAbsent(image.getMemory().getId(), image.getImageUrl());
-    }
-
-    return thumbnails;
+    return memoryImageRepository.findByMemoryIdInOrderByDisplayOrderAsc(memoryIds).stream()
+        .collect(Collectors.groupingBy(image -> image.getMemory().getId()));
   }
 }
