@@ -229,4 +229,34 @@ class MemoryIntegrationTest {
         .andExpect(jsonPath("$.data.totalElements").value(1))
         .andExpect(jsonPath("$.data.memories[0].title").value("제주도 여행"));
   }
+
+  @Test
+  @DisplayName("이미지 URL 이 비어 있거나 500자를 넘으면 400 을 반환한다")
+  void imageUrlElementsAreValidated() throws Exception {
+    String blank =
+        """
+        {"title": "빈 URL", "memoryDate": "2026-08-15", "imageUrls": [""]}
+        """;
+    String nullUrl =
+        """
+        {"title": "null URL", "memoryDate": "2026-08-15", "imageUrls": [null]}
+        """;
+    String tooLong =
+        "{\"title\":\"긴 URL\",\"memoryDate\":\"2026-08-15\",\"imageUrls\":[\"https://cdn.test/"
+            + "a".repeat(600)
+            + ".jpg\"]}";
+
+    for (String body : List.of(blank, nullUrl, tooLong)) {
+      mockMvc
+          .perform(
+              post("/v1/memories")
+                  .header("Authorization", "Bearer " + token)
+                  .contentType(MediaType.APPLICATION_JSON)
+                  .content(body))
+          .andExpect(status().isBadRequest());
+    }
+
+    assertThat(memoryRepository.count()).isZero();
+    assertThat(memoryImageRepository.count()).isZero();
+  }
 }

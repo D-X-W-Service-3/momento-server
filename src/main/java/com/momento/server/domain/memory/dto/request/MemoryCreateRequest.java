@@ -22,7 +22,10 @@ public record MemoryCreateRequest(
         LocalDate memoryDate,
     @Schema(description = "이미 업로드해 확보한 이미지 URL 목록. 최대 10장이며, 없으면 생략하거나 빈 배열로 보낸다.")
         @Size(max = 10, message = "이미지는 최대 10장까지 등록할 수 있습니다.")
-        List<String> imageUrls) {
+        List<
+                @NotBlank(message = "이미지 URL 은 비어 있을 수 없습니다.")
+                @Size(max = 500, message = "이미지 URL 은 500자를 넘을 수 없습니다.") String>
+            imageUrls) {
 
   /** imageUrls 를 아예 안 보낸 경우 null 이 되므로, 서비스가 쓰기 편하게 빈 목록으로 바꿔 준다. */
   public List<String> imageUrlsOrEmpty() {
