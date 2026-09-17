@@ -7,10 +7,12 @@ import jakarta.servlet.http.HttpServletRequest;
 import java.util.Optional;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
 @Slf4j
 @RestControllerAdvice
@@ -36,6 +38,22 @@ public class GlobalExceptionHandler {
     log.warn("요청 값 검증 실패: {}", message);
 
     return new CommonResponse<>(errorCode.getStatus().value(), errorCode.name(), message, null);
+  }
+
+  /**
+   * 깨진 JSON, enum 에 없는 값, 타입이 맞지 않는 경로 변수처럼 요청을 읽는 단계에서 실패한 경우. 클라이언트 입력 문제이므로 500 이 아니라 400 으로
+   * 응답한다. 예외 메시지에는 내부 클래스명이 섞여 있어 응답에는 싣지 않는다.
+   */
+  @ExceptionHandler({
+    HttpMessageNotReadableException.class,
+    MethodArgumentTypeMismatchException.class
+  })
+  public CommonResponse<?> handleUnreadableRequest(Exception exception) {
+    ErrorCode errorCode = GlobalErrorCode.INVALID_INPUT_VALUE;
+
+    log.warn("요청을 읽을 수 없음: {}", exception.getMessage());
+
+    return CommonResponse.error(errorCode);
   }
 
   @ExceptionHandler(Exception.class)
