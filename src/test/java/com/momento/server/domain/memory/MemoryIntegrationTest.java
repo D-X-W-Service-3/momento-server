@@ -259,4 +259,16 @@ class MemoryIntegrationTest {
     assertThat(memoryRepository.count()).isZero();
     assertThat(memoryImageRepository.count()).isZero();
   }
+
+  @Test
+  @DisplayName("허용 범위를 벗어난 연도가 오면 400 을 반환한다")
+  void yearRangeIsValidated() throws Exception {
+    for (String year : List.of("1000000000", "1899", "2101")) {
+      mockMvc
+          .perform(
+              get("/v1/memories").param("year", year).header("Authorization", "Bearer " + token))
+          .andExpect(status().isBadRequest())
+          .andExpect(jsonPath("$.code").value("INVALID_INPUT_VALUE"));
+    }
+  }
 }

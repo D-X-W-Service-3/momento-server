@@ -11,6 +11,7 @@ import com.momento.server.domain.memory.repository.MemoryRepository;
 import com.momento.server.domain.user.entity.User;
 import com.momento.server.domain.user.exception.UserErrorCode;
 import com.momento.server.domain.user.repository.UserRepository;
+import com.momento.server.global.common.code.GlobalErrorCode;
 import com.momento.server.global.common.exception.ApiException;
 import java.time.LocalDate;
 import java.util.ArrayList;
@@ -30,6 +31,8 @@ import org.springframework.transaction.annotation.Transactional;
 public class MemoryService {
 
   private static final int MAX_PAGE_SIZE = 100;
+  private static final int MIN_YEAR = 1900;
+  private static final int MAX_YEAR = 2100;
 
   private final MemoryRepository memoryRepository;
   private final MemoryImageRepository memoryImageRepository;
@@ -79,8 +82,14 @@ public class MemoryService {
       Long userId, String title, Integer year, int page, int size) {
 
     String keyword = (title == null || title.isBlank()) ? null : title.trim();
-    LocalDate startDate = (year == null) ? null : LocalDate.of(year, 1, 1);
-    LocalDate endDate = (year == null) ? null : LocalDate.of(year, 12, 31);
+    LocalDate startDate = null;
+    LocalDate endDate = null;
+
+    if (year != null) {
+      validateYear(year);
+      startDate = LocalDate.of(year, 1, 1);
+      endDate = LocalDate.of(year, 12, 31);
+    }
 
     Pageable pageable = PageRequest.of(Math.max(page, 0), clampSize(size));
     Page<Memory> memories =
@@ -93,6 +102,13 @@ public class MemoryService {
             .toList();
 
     return MemoryListResponse.of(memories, summaries);
+  }
+
+  /** 추억은 사람이 겪은 일이라 1900~2100 밖의 연도는 오타로 본다. LocalDate.of() 예외로 500 이 나는 것도 함께 막는다. */
+  private void validateYear(int year) {
+    if (year < MIN_YEAR || year > MAX_YEAR) {
+      throw new ApiException(GlobalErrorCode.INVALID_INPUT_VALUE);
+    }
   }
 
   private int clampSize(int size) {
