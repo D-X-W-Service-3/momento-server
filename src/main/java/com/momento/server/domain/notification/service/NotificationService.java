@@ -4,6 +4,7 @@ import com.momento.server.domain.notification.entity.Notification;
 import com.momento.server.domain.notification.exception.NotificationErrorCode;
 import com.momento.server.domain.notification.repository.NotificationRepository;
 import com.momento.server.global.common.exception.ApiException;
+import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -20,6 +21,7 @@ public class NotificationService {
   private static final int PAGE_SIZE = 20;
 
   private final NotificationRepository notificationRepository;
+  private final Clock clock;
 
   public NotificationPage getNotifications(Long userId, Long cursor) {
     List<Notification> fetched =
@@ -36,7 +38,7 @@ public class NotificationService {
     return notificationRepository.countByUserIdAndReadFalse(userId);
   }
 
-  /** 타 회원 알림·존재하지 않는 알림은 구분 없이 404 다. 이미 읽은 알림이면 재호출해도 읽은 시각을 보존한 채 성공 처리한다. */
+  /** 타 회원 알림·존재하지 않는 알림은 구분 없이 404 다. 멱등 처리(이미 읽었으면 유지)는 {@link Notification#markAsRead} 책임이다. */
   @Transactional
   public void markAsRead(Long userId, Long notificationId) {
     Notification notification =
@@ -44,9 +46,7 @@ public class NotificationService {
             .findByIdAndUserId(notificationId, userId)
             .orElseThrow(() -> new ApiException(NotificationErrorCode.NOTIFICATION_NOT_FOUND));
 
-    if (!notification.isRead()) {
-      notification.markAsRead(LocalDateTime.now());
-    }
+    notification.markAsRead(LocalDateTime.now(clock));
   }
 
   public record NotificationPage(
