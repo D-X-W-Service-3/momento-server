@@ -20,6 +20,13 @@ public class UserService {
     return userRepository.findByKakaoId(kakaoId);
   }
 
+  /** 탈퇴하지 않은 회원을 조회한다. 인증 필터를 통과한 요청이라도 다른 도메인이 회원 엔티티를 쓸 때는 이걸로 가져온다. */
+  public User getActiveUser(Long userId) {
+    return userRepository
+        .findByIdAndDeletedAtIsNull(userId)
+        .orElseThrow(() -> new ApiException(UserErrorCode.USER_NOT_FOUND));
+  }
+
   @Transactional
   public User register(String kakaoId, String nickname, String profileImageUrl) {
     return userRepository.save(
