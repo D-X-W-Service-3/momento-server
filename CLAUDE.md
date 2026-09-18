@@ -38,6 +38,7 @@ Momento — 타임캡슐·추억 아카이빙 서비스의 백엔드(Spring Boot
 - **엔티티**: 생성·수정 시각이 필요하면 `BaseTimeEntity`, 생성 후 시각이 바뀌지 않으면 `BaseCreatedTimeEntity` 상속. 기본 생성자는 `@NoArgsConstructor(access = AccessLevel.PROTECTED)`, 생성은 `@Builder` 사용.
 - **엔티티 매핑**: 연관관계는 전부 `@ManyToOne(fetch = FetchType.LAZY)`. enum 컬럼은 `@Enumerated(EnumType.STRING)` + `@JdbcTypeCode(SqlTypes.VARCHAR)` 를 같이 붙인다(안 붙이면 네이티브 ENUM 으로 생성됨). 소프트 삭제 테이블은 `deletedAt` 을 채우는 방식.
 - **인증**: 컨트롤러에서 로그인 사용자는 `@AuthenticationPrincipal UserPrincipal principal` 로 받고 `principal.getUserId()` 사용.
+- **현재 시각**: 마감 · 공개 · 만료처럼 현재 시각에 따라 성공과 실패가 갈리는 로직은 `LocalDateTime.now()` 를 직접 부르지 않는다. `java.time.Clock` 빈을 주입받아 `LocalDateTime.now(clock)` 으로 읽는다. 테스트에서 시각을 고정해 경계(마감 1초 전 · 정각)를 검증하기 위해서다.
 
 ## 포맷 / 스타일
 
@@ -49,6 +50,23 @@ Momento — 타임캡슐·추억 아카이빙 서비스의 백엔드(Spring Boot
 - 컨벤션은 [CONTRIBUTING.md](./CONTRIBUTING.md) 참고. 형식: `<type>: <제목>`
 - type: `init` `feat` `fix` `build` `chore` `ci` `docs` `style` `refactor` `test` `perf`
 - 기본 브랜치는 `develop`. `main`/`develop` 직접 push 금지 — `feat/#이슈-설명` 브랜치에서 작업 후 `develop` 으로 PR.
+- **제목은 명사형으로 끝낸다** (`추가한다` ✕ → `추가` ○). CONTRIBUTING.md 규칙이다.
+
+### 커밋 나누기 (리뷰 단위)
+
+리뷰어가 커밋 하나를 열었을 때 "무엇을 왜 바꿨는지" 한 번에 읽히는 크기로 나눈다. 기능 전체를 한 커밋에 몰지 않는다.
+
+- **새 API 는 아래 순서로 나눈다.** 해당 없는 단계는 건너뛴다. API 가 둘 이상이면 API 마다 3~6 을 반복한다.
+  1. 공통(`global/`) 수정 — 다른 도메인에도 영향이 가므로 항상 따로
+  2. 엔티티 도메인 메서드 · 에러 코드 (도메인 규칙이면 단위 테스트를 같은 커밋에)
+  3. Repository — 쿼리
+  4. 요청 · 응답 DTO — 검증 규칙 포함
+  5. Service — 비즈니스 로직과 트랜잭션 경계
+  6. Facade · `{Domain}Api` · Controller — 엔드포인트 노출, **통합 테스트를 같은 커밋에**
+- **모든 커밋은 그 시점에 `./gradlew build` 가 통과해야 한다.** 중간 커밋이 깨지면 되돌리기와 원인 추적이 안 된다. `spotlessApply` 는 커밋마다 돌리고 `style: spotless 적용` 같은 포맷 전용 커밋을 따로 만들지 않는다.
+- **동작 변경과 이름 변경 · 파일 이동 · 정리를 한 커밋에 섞지 않는다.** 섞이면 리뷰어가 무엇이 동작을 바꿨는지 가려내야 한다.
+- **리뷰 반영은 새 커밋으로 올린다.** 무엇을 고쳤는지 PR 에서 따로 보이게 한다. (squash 머지라 develop 이력은 PR 하나로 합쳐진다.)
+- 테스트를 제외한 변경이 대략 200줄이나 파일 5개를 넘으면 더 나눌 수 있는지 먼저 본다.
 
 ## 주의점
 
