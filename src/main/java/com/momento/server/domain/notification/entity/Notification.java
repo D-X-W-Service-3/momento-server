@@ -66,8 +66,11 @@ public class Notification extends BaseCreatedTimeEntity {
   @Column(name = "read_at")
   private LocalDateTime readAt;
 
-  /** 읽음 처리. 멱등 보장(이미 읽었으면 다시 호출하지 않기)은 서비스 계층 책임이다. */
+  /** 읽음 처리. 이미 읽은 알림이면 아무것도 하지 않아 최초 읽은 시각을 보존한다(멱등). */
   public void markAsRead(LocalDateTime readAt) {
+    if (this.read) {
+      return;
+    }
     this.read = true;
     this.readAt = readAt;
   }
