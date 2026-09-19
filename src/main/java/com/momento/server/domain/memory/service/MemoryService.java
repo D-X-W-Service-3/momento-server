@@ -1,16 +1,11 @@
 package com.momento.server.domain.memory.service;
 
 import com.momento.server.domain.memory.dto.request.MemoryCreateRequest;
-import com.momento.server.domain.memory.dto.response.MemoryListResponse;
-import com.momento.server.domain.memory.dto.response.MemoryResponse;
-import com.momento.server.domain.memory.dto.response.MemorySummary;
 import com.momento.server.domain.memory.entity.Memory;
 import com.momento.server.domain.memory.entity.MemoryImage;
 import com.momento.server.domain.memory.repository.MemoryImageRepository;
 import com.momento.server.domain.memory.repository.MemoryRepository;
 import com.momento.server.domain.user.entity.User;
-import com.momento.server.domain.user.exception.UserErrorCode;
-import com.momento.server.domain.user.repository.UserRepository;
 import com.momento.server.global.common.code.GlobalErrorCode;
 import com.momento.server.global.common.exception.ApiException;
 import java.time.LocalDate;
@@ -36,16 +31,10 @@ public class MemoryService {
 
   private final MemoryRepository memoryRepository;
   private final MemoryImageRepository memoryImageRepository;
-  private final UserRepository userRepository;
 
   /** 추억 하나와 첨부 이미지를 저장한다. 공개 범위는 요청으로 받지 않고 엔티티 기본값(PRIVATE)을 쓴다. */
   @Transactional
-  public MemoryResponse create(Long userId, MemoryCreateRequest request) {
-    User user =
-        userRepository
-            .findByIdAndDeletedAtIsNull(userId)
-            .orElseThrow(() -> new ApiException(UserErrorCode.USER_NOT_FOUND));
-
+  public MemoryDetail create(User user, MemoryCreateRequest request) {
     Memory memory =
         memoryRepository.save(
             Memory.builder()
@@ -57,7 +46,7 @@ public class MemoryService {
 
     List<MemoryImage> images = saveImages(memory, request.imageUrlsOrEmpty());
 
-    return MemoryResponse.of(memory, images);
+    return new MemoryDetail(memory, images);
   }
 
   /** 보낸 순서를 display_order 0, 1, 2... 로 저장한다. 0번이 목록의 대표 이미지가 된다. */
@@ -77,9 +66,7 @@ public class MemoryService {
   }
 
   /** 아카이브 탭 목록. 연도는 그 해의 1월 1일 ~ 12월 31일 범위로 바꿔 넘긴다. */
-  public MemoryListResponse findMyMemories(
-      Long userId, String title, Integer year, int page, int size) {
-
+  public MemoryPage findMyMemories(Long userId, String title, Integer year, int page, int size) {
     String keyword = (title == null || title.isBlank()) ? null : title.trim();
     LocalDate startDate = null;
     LocalDate endDate = null;
@@ -94,16 +81,7 @@ public class MemoryService {
     Page<Memory> memories =
         memoryRepository.findMyMemories(userId, keyword, startDate, endDate, pageable);
 
-    Map<Long, List<MemoryImage>> imagesByMemory = findImagesByMemory(memories.getContent());
-    List<MemorySummary> summaries =
-        memories.getContent().stream()
-            .map(
-                memory ->
-                    MemorySummary.of(
-                        memory, imagesByMemory.getOrDefault(memory.getId(), List.of())))
-            .toList();
-
-    return MemoryListResponse.of(memories, summaries);
+    return new MemoryPage(memories, findImagesByMemory(memories.getContent()));
   }
 
   /** 추억은 사람이 겪은 일이라 1900~2100 밖의 연도는 오타로 본다. LocalDate.of() 예외로 500 이 나는 것도 함께 막는다. */
