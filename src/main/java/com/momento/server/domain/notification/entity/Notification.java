@@ -65,4 +65,13 @@ public class Notification extends BaseCreatedTimeEntity {
 
   @Column(name = "read_at")
   private LocalDateTime readAt;
+
+  /** 읽음 처리. 이미 읽은 알림이면 아무것도 하지 않아 최초 읽은 시각을 보존한다(멱등). */
+  public void markAsRead(LocalDateTime readAt) {
+    if (this.read) {
+      return;
+    }
+    this.read = true;
+    this.readAt = readAt;
+  }
 }
