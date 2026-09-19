@@ -90,7 +90,7 @@ CREATE TABLE `memories` (
 	`time_capsule_id`	BIGINT	NULL	COMMENT '원본 타임캡슐 ID, 직접 등록한 추억이면 NULL',
 	`title`	VARCHAR(100)	NOT NULL	COMMENT '추억 제목',
 	`content`	TEXT	NULL	COMMENT '추억 내용',
-	`memory_date`	DATE	NULL	COMMENT '추억이 발생한 날짜',
+	`memory_date`	DATE	NOT NULL	COMMENT '추억이 발생한 날짜',
 	`visibility_type`	VARCHAR(30)	NOT NULL	DEFAULT 'PRIVATE'	COMMENT '공개 범위: PRIVATE, LINK',
 	`share_token`	VARCHAR(255)	NULL	UNIQUE	COMMENT '추억 공유 링크 토큰',
 	`created_at`	DATETIME(6)	NOT NULL	COMMENT '생성 일시',
