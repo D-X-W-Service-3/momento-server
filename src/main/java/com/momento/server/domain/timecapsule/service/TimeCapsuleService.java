@@ -3,9 +3,11 @@ package com.momento.server.domain.timecapsule.service;
 import com.momento.server.domain.letter.entity.LetterStatus;
 import com.momento.server.domain.timecapsule.dto.request.TimeCapsuleCreateRequest;
 import com.momento.server.domain.timecapsule.entity.CapsuleMember;
+import com.momento.server.domain.timecapsule.entity.CapsuleType;
 import com.momento.server.domain.timecapsule.entity.MemberRole;
 import com.momento.server.domain.timecapsule.entity.MemberStatus;
 import com.momento.server.domain.timecapsule.entity.TimeCapsule;
+import com.momento.server.domain.timecapsule.entity.VisibilityType;
 import com.momento.server.domain.timecapsule.exception.CapsuleErrorCode;
 import com.momento.server.domain.timecapsule.repository.CapsuleMemberRepository;
 import com.momento.server.domain.timecapsule.repository.TimeCapsuleRepository;
@@ -29,6 +31,8 @@ public class TimeCapsuleService {
    */
   @Transactional
   public TimeCapsule create(User creator, TimeCapsuleCreateRequest request) {
+    validateVisibility(request.capsuleType(), request.visibilityType());
+
     TimeCapsule capsule =
         timeCapsuleRepository.save(
             TimeCapsule.builder()
@@ -49,6 +53,17 @@ public class TimeCapsuleService {
             .build());
 
     return capsule;
+  }
+
+  /**
+   * 나에게 쓰는 캡슐은 생성자가 OWNER 로만 들어가 수신자가 없다. {@code RECIPIENT_ONLY} 를 고르면 편지를 볼 수 있는 사람이 0 명이 되고,
+   * {@code RECIPIENT_AND_AUTHOR} 는 결과가 {@code ALL_MEMBERS} 와 같다. 고를 의미가 없는데 허용하면 같은 캡슐이 두 값으로 저장돼
+   * 통계·필터에서 갈리므로 하나만 받는다. 조용히 바꿔 저장하지 않고 400 으로 거절해 계약을 분명히 한다.
+   */
+  private void validateVisibility(CapsuleType capsuleType, VisibilityType visibilityType) {
+    if (capsuleType == CapsuleType.SELF && visibilityType != VisibilityType.ALL_MEMBERS) {
+      throw new ApiException(CapsuleErrorCode.INVALID_SELF_CAPSULE_VISIBILITY);
+    }
   }
 
   /**

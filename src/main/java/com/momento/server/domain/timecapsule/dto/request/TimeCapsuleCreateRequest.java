@@ -25,7 +25,9 @@ public record TimeCapsuleCreateRequest(
         @NotNull(message = "캡슐 유형은 필수입니다.")
         CapsuleType capsuleType,
     @Schema(
-            description = "편지 공개 범위",
+            description =
+                "편지 공개 범위. RECIPIENT_ONLY 는 수신자만, RECIPIENT_AND_AUTHOR 는 수신자가 모든 편지를·그 밖의 참여자는 자기가 쓴 편지만,"
+                    + " ALL_MEMBERS 는 참여자 전원이 모든 편지를 본다. SELF 캡슐은 ALL_MEMBERS 만 받는다.",
             example = "ALL_MEMBERS",
             requiredMode = Schema.RequiredMode.REQUIRED)
         @NotNull(message = "공개 범위는 필수입니다.")
