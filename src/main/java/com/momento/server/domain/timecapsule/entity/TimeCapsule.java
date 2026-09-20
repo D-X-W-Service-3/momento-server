@@ -88,13 +88,12 @@ public class TimeCapsule extends BaseTimeEntity {
     }
     return switch (visibilityType) {
       case RECIPIENT_ONLY -> role == MemberRole.RECIPIENT;
-      case PARTICIPANTS_ONLY, ALL_MEMBERS -> true;
+      case RECIPIENT_AND_AUTHOR, ALL_MEMBERS -> true;
     };
   }
 
   /**
-   * 이 역할의 참여자가 편지 한 통을 볼 수 있는지. {@code PARTICIPANTS_ONLY} 는 이름과 달리 "수신자는 전부, 작성자는 자기가 쓴 편지만" 을 뜻한다.
-   * 이름이 뜻과 어긋나 있어 별도 작업에서 바꾼다.
+   * 이 역할의 참여자가 편지 한 통을 볼 수 있는지. 공개 범위의 값 이름이 그대로 "볼 수 있는 사람" 이다.
    *
    * @param isAuthor 이 편지를 조회하는 회원이 쓴 편지인지
    */
@@ -104,7 +103,7 @@ public class TimeCapsule extends BaseTimeEntity {
     }
     return switch (visibilityType) {
       case RECIPIENT_ONLY, ALL_MEMBERS -> true;
-      case PARTICIPANTS_ONLY -> role == MemberRole.RECIPIENT || isAuthor;
+      case RECIPIENT_AND_AUTHOR -> role == MemberRole.RECIPIENT || isAuthor;
     };
   }
 }

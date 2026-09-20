@@ -120,6 +120,21 @@ class TimeCapsuleIntegrationTest {
   }
 
   @Test
+  @DisplayName("옛 이름 PARTICIPANTS_ONLY 로는 캡슐을 만들 수 없다")
+  void oldVisibilityNameIsRejected() throws Exception {
+    mockMvc
+        .perform(
+            post("/v1/time-capsules")
+                .header(AUTHORIZATION, bearer(ownerToken))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(createBody("캡슐", "GROUP", "PARTICIPANTS_ONLY", future())))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.code").value("INVALID_INPUT_VALUE"));
+
+    assertThat(timeCapsuleRepository.findAll()).isEmpty();
+  }
+
+  @Test
   @DisplayName("캡슐을 만들면 생성자가 OWNER 로 참여자에 함께 등록된다")
   void creatorBecomesOwnerMember() throws Exception {
     Long capsuleId = createCapsule(ownerToken);
@@ -259,9 +274,9 @@ class TimeCapsuleIntegrationTest {
     "RECIPIENT_ONLY,    RECIPIENT,   true",
     "RECIPIENT_ONLY,    PARTICIPANT, false",
     "RECIPIENT_ONLY,    OWNER,       false",
-    "PARTICIPANTS_ONLY, RECIPIENT,   true",
-    "PARTICIPANTS_ONLY, PARTICIPANT, true",
-    "PARTICIPANTS_ONLY, OWNER,       true",
+    "RECIPIENT_AND_AUTHOR, RECIPIENT,   true",
+    "RECIPIENT_AND_AUTHOR, PARTICIPANT, true",
+    "RECIPIENT_AND_AUTHOR, OWNER,       true",
     "ALL_MEMBERS,       RECIPIENT,   true",
     "ALL_MEMBERS,       PARTICIPANT, true",
     "ALL_MEMBERS,       OWNER,       true"
