@@ -53,7 +53,7 @@ public class Memory extends BaseTimeEntity {
   @Column(name = "content", columnDefinition = "TEXT")
   private String content;
 
-  @Column(name = "memory_date")
+  @Column(name = "memory_date", nullable = false)
   private LocalDate memoryDate;
 
   @Builder.Default
