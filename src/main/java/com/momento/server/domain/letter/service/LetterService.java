@@ -31,8 +31,12 @@ public class LetterService {
       throw new ApiException(LetterErrorCode.LETTER_ALREADY_EXISTS);
     }
     // 잠금 대기 중 마감될 수 있으므로 시간은 잠금을 얻은 뒤 읽는다.
-    if (!capsule.canWriteLetter(LocalDateTime.now(clock))) {
-      throw new ApiException(LetterErrorCode.LETTER_WRITING_CLOSED);
+    switch (capsule.getLetterWritingEligibility(member.getRole(), LocalDateTime.now(clock))) {
+      case NOT_ALLOWED -> throw new ApiException(LetterErrorCode.LETTER_WRITING_NOT_ALLOWED);
+      case CLOSED -> throw new ApiException(LetterErrorCode.LETTER_WRITING_CLOSED);
+      case ALLOWED -> {
+        // 작성 가능한 경우에만 아래 저장을 진행한다.
+      }
     }
     return letterRepository.save(
         Letter.builder()

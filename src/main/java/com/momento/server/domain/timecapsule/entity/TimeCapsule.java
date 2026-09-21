@@ -108,10 +108,16 @@ public class TimeCapsule extends BaseTimeEntity {
     };
   }
 
-  /** WRITING 중이며 공개 시각과 작성 마감 모두 지나지 않았을 때만 생성한다. 경계 시각은 마감이다. */
-  public boolean canWriteLetter(LocalDateTime now) {
-    return status == CapsuleStatus.WRITING
-        && now.isBefore(openAt)
-        && (letterDeadlineAt == null || now.isBefore(letterDeadlineAt));
+  /** 역할·공개 범위와 작성 시간을 함께 판정한다. 권한이 없으면 시간 조건보다 먼저 거절한다. */
+  public LetterWritingEligibility getLetterWritingEligibility(MemberRole role, LocalDateTime now) {
+    if (role == MemberRole.RECIPIENT && visibilityType != VisibilityType.ALL_MEMBERS) {
+      return LetterWritingEligibility.NOT_ALLOWED;
+    }
+    if (status != CapsuleStatus.WRITING
+        || !now.isBefore(openAt)
+        || (letterDeadlineAt != null && !now.isBefore(letterDeadlineAt))) {
+      return LetterWritingEligibility.CLOSED;
+    }
+    return LetterWritingEligibility.ALLOWED;
   }
 }

@@ -14,7 +14,11 @@ public interface LetterApi {
   @Operation(
       summary = "편지 초안 생성",
       description =
-          "ACTIVE 참여자는 역할과 무관하게 작성할 수 있다. WRITING 상태에서 공개일 및 편지 마감 전까지 DRAFT를 생성한다. 삭제되지 않은 내 편지가 있으면 409다. 생성 성공은 201이다.")
+          "ACTIVE 참여자만 작성할 수 있으며 수신자는 ALL_MEMBERS 공개 범위에서만 작성할 수 있다. "
+              + "WRITING 상태에서 공개일 및 편지 마감 전까지 DRAFT를 생성한다. "
+              + "삭제되지 않은 내 편지가 있으면 409 LETTER_ALREADY_EXISTS다. "
+              + "중복이 없을 때 수신자의 작성 권한이 없으면 403 LETTER_WRITING_NOT_ALLOWED, "
+              + "작성 상태나 시간 조건을 충족하지 못하면 409 LETTER_WRITING_CLOSED다. 생성 성공은 201이다.")
   CommonResponse<LetterResponse> create(
       @Parameter(hidden = true) UserPrincipal principal,
       Long capsuleId,

@@ -10,6 +10,7 @@ import org.springframework.http.HttpStatus;
 public enum LetterErrorCode implements ErrorCode {
   LETTER_NOT_FOUND("작성한 편지를 찾을 수 없습니다.", HttpStatus.NOT_FOUND),
   LETTER_ALREADY_EXISTS("이미 작성한 편지가 있습니다.", HttpStatus.CONFLICT),
+  LETTER_WRITING_NOT_ALLOWED("이 캡슐에서는 수신자가 편지를 작성할 수 없습니다.", HttpStatus.FORBIDDEN),
   LETTER_WRITING_CLOSED("편지를 작성할 수 있는 기간이 아닙니다.", HttpStatus.CONFLICT);
 
   private final String message;

@@ -270,14 +270,34 @@ class LetterIntegrationTest {
   }
 
   @ParameterizedTest
-  @EnumSource(MemberRole.class)
-  void allActiveRolesCanWrite(MemberRole role) throws Exception {
+  @CsvSource({
+    "OWNER,RECIPIENT_ONLY,201",
+    "OWNER,PARTICIPANTS_ONLY,201",
+    "OWNER,ALL_MEMBERS,201",
+    "PARTICIPANT,RECIPIENT_ONLY,201",
+    "PARTICIPANT,PARTICIPANTS_ONLY,201",
+    "PARTICIPANT,ALL_MEMBERS,201",
+    "RECIPIENT,RECIPIENT_ONLY,403",
+    "RECIPIENT,PARTICIPANTS_ONLY,403",
+    "RECIPIENT,ALL_MEMBERS,201"
+  })
+  void creationChecksRoleAndVisibility(
+      MemberRole role, VisibilityType visibility, int expectedStatus) throws Exception {
     jdbc.update(
         "update capsule_members set role = ? where time_capsule_id = ?",
         role.name(),
         capsule.getId());
-    create(token, BODY).andExpect(status().isCreated());
-    assertThat(letters.count()).isEqualTo(1);
+    jdbc.update(
+        "update time_capsules set visibility_type = ? where id = ?",
+        visibility.name(),
+        capsule.getId());
+    ResultActions result = create(token, BODY).andExpect(status().is(expectedStatus));
+    if (expectedStatus == 403) {
+      result.andExpect(jsonPath("$.code").value("LETTER_WRITING_NOT_ALLOWED"));
+      assertThat(letters.count()).isZero();
+    } else {
+      assertThat(letters.count()).isEqualTo(1);
+    }
   }
 
   @ParameterizedTest
@@ -413,6 +433,41 @@ class LetterIntegrationTest {
             letters.findByTimeCapsuleIdAndAuthorIdAndDeletedAtIsNull(
                 capsule.getId(), owner.getId()))
         .isEmpty();
+  }
+
+  @ParameterizedTest
+  @CsvSource({
+    "RECIPIENT_ONLY,403,LETTER_WRITING_NOT_ALLOWED",
+    "ALL_MEMBERS,409,LETTER_WRITING_CLOSED"
+  })
+  void recipientDenialDistinguishesPermissionFromDeadline(
+      VisibilityType visibility, int expectedStatus, String expectedCode) throws Exception {
+    jdbc.update(
+        "update capsule_members set role = 'RECIPIENT' where time_capsule_id = ?", capsule.getId());
+    jdbc.update(
+        "update time_capsules set visibility_type = ?, open_at = ? where id = ?",
+        visibility.name(),
+        LocalDateTime.ofInstant(NOW, ZoneOffset.UTC),
+        capsule.getId());
+    create(token, BODY)
+        .andExpect(status().is(expectedStatus))
+        .andExpect(jsonPath("$.code").value(expectedCode));
+    assertThat(letters.count()).isZero();
+  }
+
+  @Test
+  void recipientCanReadExistingOwnLetterWithoutCreationPermission() throws Exception {
+    create(token, BODY).andExpect(status().isCreated());
+    jdbc.update(
+        "update capsule_members set role = 'RECIPIENT' where time_capsule_id = ?", capsule.getId());
+    jdbc.update(
+        "update time_capsules set visibility_type = 'RECIPIENT_ONLY' where id = ?",
+        capsule.getId());
+    read(token).andExpect(status().isOk()).andExpect(jsonPath("$.data.content").value("내 편지"));
+    create(token, BODY)
+        .andExpect(status().isConflict())
+        .andExpect(jsonPath("$.code").value("LETTER_ALREADY_EXISTS"));
+    assertThat(letters.count()).isEqualTo(1);
   }
 
   private String path() {
