@@ -150,6 +150,12 @@ ALTER TABLE `notifications` ADD CONSTRAINT `PK_NOTIFICATIONS` PRIMARY KEY (
 	`id`
 );
 
+-- 알림 목록 조회(cursor keyset)·안읽음 개수 조회가 PK 외 인덱스 없이 회원별 스캔을 하던 것을 막는다 (PR #20 리뷰, 이슈 #23)
+ALTER TABLE `notifications` ADD INDEX `IDX_NOTIFICATIONS_USER_ID_ID` (
+	`user_id`,
+	`id`
+);
+
 ALTER TABLE `memories` ADD CONSTRAINT `PK_MEMORIES` PRIMARY KEY (
 	`id`
 );
