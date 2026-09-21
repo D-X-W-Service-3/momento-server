@@ -78,6 +78,36 @@ public class TimeCapsule extends BaseTimeEntity {
   @Column(name = "deleted_at")
   private LocalDateTime deletedAt;
 
+  /**
+   * 이 역할의 참여자가 편지함에 들어갈 수 있는지. 캡슐이 열려야 하고, 수신자만 공개인 캡슐이면 수신자만 들어갈 수 있다. 그 밖의 범위에서는 참여자 전원이 들어가되, 어떤
+   * 편지가 보이는지는 {@link #canViewLetter} 로 한 통씩 정한다. OWNER 도 예외 없이 편지를 쓴 참여자로 취급한다.
+   */
+  public boolean canViewLetters(MemberRole role) {
+    if (status != CapsuleStatus.OPENED) {
+      return false;
+    }
+    return switch (visibilityType) {
+      case RECIPIENT_ONLY -> role == MemberRole.RECIPIENT;
+      case PARTICIPANTS_ONLY, ALL_MEMBERS -> true;
+    };
+  }
+
+  /**
+   * 이 역할의 참여자가 편지 한 통을 볼 수 있는지. {@code PARTICIPANTS_ONLY} 는 이름과 달리 "수신자는 전부, 작성자는 자기가 쓴 편지만" 을 뜻한다.
+   * 이름이 뜻과 어긋나 있어 별도 작업에서 바꾼다.
+   *
+   * @param isAuthor 이 편지를 조회하는 회원이 쓴 편지인지
+   */
+  public boolean canViewLetter(MemberRole role, boolean isAuthor) {
+    if (!canViewLetters(role)) {
+      return false;
+    }
+    return switch (visibilityType) {
+      case RECIPIENT_ONLY, ALL_MEMBERS -> true;
+      case PARTICIPANTS_ONLY -> role == MemberRole.RECIPIENT || isAuthor;
+    };
+  }
+
   /** WRITING 중이며 공개 시각과 작성 마감 모두 지나지 않았을 때만 생성한다. 경계 시각은 마감이다. */
   public boolean canWriteLetter(LocalDateTime now) {
     return status == CapsuleStatus.WRITING
