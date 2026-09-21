@@ -71,15 +71,9 @@ public class TimeCapsuleService {
    * 캡슐 존재 여부가 드러난다.
    */
   public TimeCapsuleDetail getDetail(Long capsuleId, Long userId) {
-    TimeCapsule capsule =
-        timeCapsuleRepository
-            .findByIdAndDeletedAtIsNull(capsuleId)
-            .orElseThrow(() -> new ApiException(CapsuleErrorCode.CAPSULE_NOT_FOUND));
+    TimeCapsule capsule = getActiveCapsule(capsuleId);
 
-    CapsuleMember me =
-        capsuleMemberRepository
-            .findByTimeCapsuleIdAndUserIdAndStatus(capsuleId, userId, MemberStatus.ACTIVE)
-            .orElseThrow(() -> new ApiException(CapsuleErrorCode.CAPSULE_NOT_FOUND));
+    CapsuleMember me = requireActiveMember(capsuleId, userId);
 
     long memberCount =
         capsuleMemberRepository.countByTimeCapsuleIdAndStatus(capsuleId, MemberStatus.ACTIVE);
@@ -87,5 +81,25 @@ public class TimeCapsuleService {
         timeCapsuleRepository.countLettersByStatus(capsuleId, LetterStatus.SUBMITTED);
 
     return new TimeCapsuleDetail(capsule, me.getRole(), memberCount, letterCount);
+  }
+
+  public TimeCapsule getActiveCapsule(Long capsuleId) {
+    return timeCapsuleRepository
+        .findByIdAndDeletedAtIsNull(capsuleId)
+        .orElseThrow(() -> new ApiException(CapsuleErrorCode.CAPSULE_NOT_FOUND));
+  }
+
+  /** 호출한 서비스의 쓰기 트랜잭션에 참여해 후속 저장이 끝날 때까지 캡슐 행 잠금을 유지한다. */
+  @Transactional
+  public TimeCapsule getActiveCapsuleForUpdate(Long capsuleId) {
+    return timeCapsuleRepository
+        .findActiveByIdForUpdate(capsuleId)
+        .orElseThrow(() -> new ApiException(CapsuleErrorCode.CAPSULE_NOT_FOUND));
+  }
+
+  public CapsuleMember requireActiveMember(Long capsuleId, Long userId) {
+    return capsuleMemberRepository
+        .findByTimeCapsuleIdAndUserIdAndStatus(capsuleId, userId, MemberStatus.ACTIVE)
+        .orElseThrow(() -> new ApiException(CapsuleErrorCode.CAPSULE_NOT_FOUND));
   }
 }

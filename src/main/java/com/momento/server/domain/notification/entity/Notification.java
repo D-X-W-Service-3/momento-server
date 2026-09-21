@@ -10,6 +10,7 @@ import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.Index;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
@@ -24,7 +25,9 @@ import org.hibernate.type.SqlTypes;
 
 /** 회원에게 보낸 알림. 발송 후 읽음 여부만 바뀌므로 생성 시각만 관리한다. */
 @Entity
-@Table(name = "notifications")
+@Table(
+    name = "notifications",
+    indexes = @Index(name = "IDX_NOTIFICATIONS_USER_ID_ID", columnList = "user_id, id"))
 @Getter
 @Builder
 @AllArgsConstructor

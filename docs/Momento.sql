@@ -90,7 +90,7 @@ CREATE TABLE `memories` (
 	`time_capsule_id`	BIGINT	NULL	COMMENT '원본 타임캡슐 ID, 직접 등록한 추억이면 NULL',
 	`title`	VARCHAR(100)	NOT NULL	COMMENT '추억 제목',
 	`content`	TEXT	NULL	COMMENT '추억 내용',
-	`memory_date`	DATE	NULL	COMMENT '추억이 발생한 날짜',
+	`memory_date`	DATE	NOT NULL	COMMENT '추억이 발생한 날짜',
 	`visibility_type`	VARCHAR(30)	NOT NULL	DEFAULT 'PRIVATE'	COMMENT '공개 범위: PRIVATE, LINK',
 	`share_token`	VARCHAR(255)	NULL	UNIQUE	COMMENT '추억 공유 링크 토큰',
 	`created_at`	DATETIME(6)	NOT NULL	COMMENT '생성 일시',
@@ -147,6 +147,12 @@ ALTER TABLE `capsule_invites` ADD CONSTRAINT `PK_CAPSULE_INVITES` PRIMARY KEY (
 );
 
 ALTER TABLE `notifications` ADD CONSTRAINT `PK_NOTIFICATIONS` PRIMARY KEY (
+	`id`
+);
+
+-- 알림 목록 조회(cursor keyset)·안읽음 개수 조회가 PK 외 인덱스 없이 회원별 스캔을 하던 것을 막는다 (PR #20 리뷰, 이슈 #23)
+ALTER TABLE `notifications` ADD INDEX `IDX_NOTIFICATIONS_USER_ID_ID` (
+	`user_id`,
 	`id`
 );
 
