@@ -11,7 +11,7 @@ Momento — 타임캡슐·추억 아카이빙 서비스의 백엔드(Spring Boot
 ## 명령어
 
 ```bash
-./gradlew bootRun          # 로컬 실행 (프로필 local, 설정 없으면 H2 인메모리로 구동)
+./gradlew bootRun          # 로컬 실행 (프로필 local, H2 인메모리 + Flyway 마이그레이션)
 ./gradlew build            # 전체 빌드 + 테스트 + spotless/checkstyle 검사
 ./gradlew test             # 테스트만
 ./gradlew spotlessApply    # 코드 포맷 자동 정렬 (커밋 전 필수)
@@ -71,8 +71,12 @@ Momento — 타임캡슐·추억 아카이빙 서비스의 백엔드(Spring Boot
 ## 주의점
 
 - **받은 명세서를 그대로 믿지 말 것**: 팀원이 주는 API 명세서는 빠르게 작성된 문서라 빠진 것과 틀린 것이 실제로 나온다(경로 중복, 같은 경로가 두 기능에 배정, enum 값 이름이 엔티티와 불일치 등). 코드와 어긋나거나 이상하면 **임의로 한쪽을 고르지 말고 작성자에게 확인**한다. 값 목록이 확정되지 않은 필드는 enum 대신 `String` 으로 두고 확정 후 전환한다. ERD(`docs/Momento.sql`)도 마찬가지다.
-- **스키마 기준은 ERD**: 확정된 ERD 는 [docs/Momento.sql](./docs/Momento.sql) 이고, 10개 테이블의 엔티티는 이미 등록돼 있다. 컬럼 추가·타입 변경이 필요하면 임의로 고치지 말고 ERD 부터 합의한 뒤 별도 이슈로 반영한다(여러 도메인이 동시에 작업 중이라 충돌 위험).
+- **스키마 기준은 마이그레이션**: 실제로 DB 를 만드는 것은 `src/main/resources/db/migration/` 의 Flyway 마이그레이션이고, 이게 유일한 기준이다. [docs/Momento.sql](./docs/Momento.sql) 은 전체 스키마를 한눈에 보는 **설계 문서**이며 실행되지 않는다.
+  - 스키마를 바꾸려면 **엔티티와 새 마이그레이션(`V2__...sql`)을 같이** 고친다. 한쪽만 고치면 `ddl-auto: validate` 가 잡아 `./gradlew test` 가 깨진다 — 의도된 동작이다.
+  - **이미 머지된 마이그레이션 파일은 고치지 않는다.** 체크섬이 기록돼 있어 수정하면 다음 실행이 실패한다. 잘못된 건 새 버전으로 고친다.
+  - 컬럼 추가·타입 변경은 여러 도메인이 동시에 작업 중이라 충돌 위험이 크다. 임의로 고치지 말고 합의한 뒤 별도 이슈로 반영한다.
 - **미확정 값**: `letters.theme_type`(편지지 테마)과 `notifications.reference_type`(알림이 가리키는 리소스 종류)은 값 목록이 정해지지 않아 `String` 이다. 각각 편지 API·알림 API 작업에서 값을 확정한 뒤 enum 으로 전환한다.
-- **DB 설정 건드리지 말 것**: 로컬은 H2 자동 구동, 운영은 `application-prod.yml`(MySQL, `ddl-auto: validate`). 명시적 요청 없이 datasource/ddl 설정을 바꾸지 않는다.
+- **DB 설정 건드리지 말 것**: 로컬·테스트는 H2 를 MySQL 호환 모드로 띄우고(`application.yml`), 운영은 `application-prod.yml`(MySQL). **양쪽 모두 `ddl-auto: validate` 이고 스키마는 Flyway 가 만든다.** 명시적 요청 없이 datasource/ddl 설정을 바꾸지 않는다.
+  - `application-local.yml` 에 `ddl-auto` 를 다시 넣지 않는다. 넣으면 마이그레이션과 엔티티가 어긋나도 로컬에서 드러나지 않는다.
 - **시크릿**: 카카오/JWT/AWS 값은 환경변수 주입(로컬 기본값은 개발용 더미). 실제 키를 코드/`application.yml` 에 하드코딩하지 않는다. `application-local.yml` 은 gitignore 대상.
 - **AI 서버 연동**: FeignClient 는 `domain/{도메인}/external` 에 두고 URL 은 `${external.api-url.ai}` 사용. 엔드포인트는 AI 팀과 확정 후 작성한다.

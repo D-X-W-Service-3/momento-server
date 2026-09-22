@@ -1,3 +1,10 @@
+-- Momento 스키마 설계 문서.
+--
+-- ⚠️ 이 파일은 실행되지 않는다. 실제로 DB 를 만드는 것은 src/main/resources/db/migration/ 의
+--    Flyway 마이그레이션이고, 스키마의 기준은 그쪽이다. 이 파일은 전체 구조를 한눈에 보고
+--    설계를 논의하기 위한 문서다. 스키마를 바꿀 때는 엔티티와 새 마이그레이션을 고치고,
+--    이 문서도 같이 갱신한다.
+
 CREATE TABLE `generated_images` (
 	`id`	BIGINT	NOT NULL	AUTO_INCREMENT	COMMENT 'AI 생성 이미지 ID',
 	`time_capsule_id`	BIGINT	NOT NULL	COMMENT '타임캡슐 ID',
