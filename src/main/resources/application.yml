@@ -10,12 +10,22 @@ spring:
       max-request-size: 200MB
       resolve-lazily: true
 
+  # 로컬·테스트는 H2 를 MySQL 호환 모드로 띄운다. 운영과 같은 마이그레이션 SQL 한 벌을 양쪽에서 돌리기 위해서다.
+  datasource:
+    url: jdbc:h2:mem:momento;MODE=MySQL;DATABASE_TO_LOWER=TRUE;CASE_INSENSITIVE_IDENTIFIERS=TRUE;DB_CLOSE_DELAY=-1
+    driver-class-name: org.h2.Driver
+    username: sa
+    password:
+
   jpa:
     open-in-view: false
     properties:
       hibernate:
         format_sql: true
     show-sql: true
+    # 스키마는 Flyway 가 만든다. 엔티티와 어긋나면 기동 시점에 실패한다.
+    hibernate:
+      ddl-auto: validate
 
 jwt:
   # Base64 인코딩된 시크릿 (로컬 기본값은 개발용 더미)
