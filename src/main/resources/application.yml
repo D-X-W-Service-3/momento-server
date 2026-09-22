@@ -17,6 +17,11 @@ spring:
         format_sql: true
     show-sql: true
 
+momento:
+  capsule:
+    # 상태 전이 스케줄러 주기. 공개 시각 정각에 들어온 사용자가 겪는 지연이 이 값만큼이다.
+    status-transition-interval: 10s
+
 jwt:
   # Base64 인코딩된 시크릿 (로컬 기본값은 개발용 더미)
   secret-key: ${JWT_SECRET_KEY:bW9tZW50by1sb2NhbC1kZXYtc2VjcmV0LWtleS1jaGFuZ2UtbWU=}
