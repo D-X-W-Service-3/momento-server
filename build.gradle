@@ -55,8 +55,9 @@ dependencies {
     // 외부 AI 서버 연동 (OpenFeign)
     implementation 'org.springframework.cloud:spring-cloud-starter-openfeign'
 
-    // AWS S3 (추억 아카이빙 이미지 업로드)
-    implementation 'io.awspring.cloud:spring-cloud-starter-aws:2.4.4'
+    // AWS S3 (추억 이미지 presigned URL 발급)
+    implementation platform('software.amazon.awssdk:bom:2.55.1')
+    implementation 'software.amazon.awssdk:s3'
     implementation 'org.apache.tika:tika-core:2.9.2'
 
     // API 문서화
