@@ -143,6 +143,9 @@ CREATE TABLE `notifications` (
 -- 알림 목록 조회(cursor keyset)와 안 읽은 개수 조회가 회원별로 테이블 전체를 훑지 않도록 한다 (이슈 #23).
 CREATE INDEX `IDX_NOTIFICATIONS_USER_ID_ID` ON `notifications` (`user_id`, `id`);
 
+-- 상태 전이 스케줄러가 주기마다 도는 조회다 (이슈 #30). 등호 조건인 status 가 앞, 범위 조건인 open_at 이 뒤다.
+CREATE INDEX `IDX_TIME_CAPSULES_STATUS_OPEN_AT` ON `time_capsules` (`status`, `open_at`);
+
 -- 외래키. 소프트 삭제(deleted_at)를 쓰는 테이블이 많아 ON DELETE CASCADE 는 걸지 않고 참조 무결성만 유지한다.
 ALTER TABLE `anniversaries`    ADD CONSTRAINT `FK_ANNIVERSARIES_USER`             FOREIGN KEY (`user_id`)         REFERENCES `users` (`id`);
 ALTER TABLE `time_capsules`    ADD CONSTRAINT `FK_TIME_CAPSULES_CREATOR`          FOREIGN KEY (`creator_id`)      REFERENCES `users` (`id`);
