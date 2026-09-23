@@ -163,6 +163,12 @@ ALTER TABLE `notifications` ADD INDEX `IDX_NOTIFICATIONS_USER_ID_ID` (
 	`id`
 );
 
+-- 상태 전이 스케줄러가 주기마다 도는 조회다 (이슈 #30)
+ALTER TABLE `time_capsules` ADD INDEX `IDX_TIME_CAPSULES_STATUS_OPEN_AT` (
+	`status`,
+	`open_at`
+);
+
 ALTER TABLE `memories` ADD CONSTRAINT `PK_MEMORIES` PRIMARY KEY (
 	`id`
 );

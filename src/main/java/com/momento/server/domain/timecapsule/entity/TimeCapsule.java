@@ -11,6 +11,7 @@ import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.Index;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
@@ -25,7 +26,9 @@ import org.hibernate.type.SqlTypes;
 
 /** 정해진 시각에 열리는 타임캡슐. 삭제는 {@code deletedAt} 을 채우는 소프트 삭제로 처리한다. */
 @Entity
-@Table(name = "time_capsules")
+@Table(
+    name = "time_capsules",
+    indexes = @Index(name = "IDX_TIME_CAPSULES_STATUS_OPEN_AT", columnList = "status, open_at"))
 @Getter
 @Builder
 @AllArgsConstructor
