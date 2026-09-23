@@ -18,11 +18,11 @@ class TimeCapsuleTest {
     "RECIPIENT_ONLY,    PARTICIPANT, true,  false",
     "RECIPIENT_ONLY,    OWNER,       true,  false",
     // 수신자 + 작성자: 수신자는 전부, 작성자는 자기 편지만
-    "PARTICIPANTS_ONLY, RECIPIENT,   false, true",
-    "PARTICIPANTS_ONLY, PARTICIPANT, true,  true",
-    "PARTICIPANTS_ONLY, PARTICIPANT, false, false",
-    "PARTICIPANTS_ONLY, OWNER,       true,  true",
-    "PARTICIPANTS_ONLY, OWNER,       false, false",
+    "RECIPIENT_AND_AUTHOR, RECIPIENT,   false, true",
+    "RECIPIENT_AND_AUTHOR, PARTICIPANT, true,  true",
+    "RECIPIENT_AND_AUTHOR, PARTICIPANT, false, false",
+    "RECIPIENT_AND_AUTHOR, OWNER,       true,  true",
+    "RECIPIENT_AND_AUTHOR, OWNER,       false, false",
     // 전원: 누구나 모든 편지
     "ALL_MEMBERS,       RECIPIENT,   false, true",
     "ALL_MEMBERS,       PARTICIPANT, false, true",

@@ -120,6 +120,73 @@ class TimeCapsuleIntegrationTest {
   }
 
   @Test
+  @DisplayName("나에게 쓰는 캡슐을 전체 공개로 만들면 201 이다")
+  void selfCapsuleWithAllMembersIsAccepted() throws Exception {
+    mockMvc
+        .perform(
+            post("/v1/time-capsules")
+                .header(AUTHORIZATION, bearer(ownerToken))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(createBody("나에게 쓰는 캡슐", "SELF", "ALL_MEMBERS", future())))
+        .andExpect(status().isCreated())
+        .andExpect(jsonPath("$.data.capsuleType").value("SELF"))
+        .andExpect(jsonPath("$.data.visibilityType").value("ALL_MEMBERS"));
+  }
+
+  @ParameterizedTest(name = "SELF + {0} → 400")
+  @CsvSource({"RECIPIENT_ONLY", "RECIPIENT_AND_AUTHOR"})
+  @DisplayName("나에게 쓰는 캡슐은 전체 공개 외의 범위를 거절하고 캡슐을 만들지 않는다")
+  void selfCapsuleRejectsOtherVisibilities(String visibilityType) throws Exception {
+    mockMvc
+        .perform(
+            post("/v1/time-capsules")
+                .header(AUTHORIZATION, bearer(ownerToken))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(createBody("나에게 쓰는 캡슐", "SELF", visibilityType, future())))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.code").value("INVALID_SELF_CAPSULE_VISIBILITY"));
+
+    assertThat(timeCapsuleRepository.findAll()).isEmpty();
+    assertThat(capsuleMemberRepository.findAll()).isEmpty();
+  }
+
+  @ParameterizedTest(name = "{0} + {1} → 201")
+  @CsvSource({
+    "FRIEND, RECIPIENT_ONLY",
+    "FRIEND, RECIPIENT_AND_AUTHOR",
+    "FRIEND, ALL_MEMBERS",
+    "GROUP,  RECIPIENT_ONLY",
+    "GROUP,  RECIPIENT_AND_AUTHOR",
+    "GROUP,  ALL_MEMBERS"
+  })
+  @DisplayName("친구·그룹 캡슐은 세 공개 범위를 모두 받는다")
+  void otherCapsuleTypesAcceptEveryVisibility(String capsuleType, String visibilityType)
+      throws Exception {
+    mockMvc
+        .perform(
+            post("/v1/time-capsules")
+                .header(AUTHORIZATION, bearer(ownerToken))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(createBody("캡슐", capsuleType, visibilityType, future())))
+        .andExpect(status().isCreated());
+  }
+
+  @Test
+  @DisplayName("옛 이름 PARTICIPANTS_ONLY 로는 캡슐을 만들 수 없다")
+  void oldVisibilityNameIsRejected() throws Exception {
+    mockMvc
+        .perform(
+            post("/v1/time-capsules")
+                .header(AUTHORIZATION, bearer(ownerToken))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(createBody("캡슐", "GROUP", "PARTICIPANTS_ONLY", future())))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.code").value("INVALID_INPUT_VALUE"));
+
+    assertThat(timeCapsuleRepository.findAll()).isEmpty();
+  }
+
+  @Test
   @DisplayName("캡슐을 만들면 생성자가 OWNER 로 참여자에 함께 등록된다")
   void creatorBecomesOwnerMember() throws Exception {
     Long capsuleId = createCapsule(ownerToken);
@@ -259,9 +326,9 @@ class TimeCapsuleIntegrationTest {
     "RECIPIENT_ONLY,    RECIPIENT,   true",
     "RECIPIENT_ONLY,    PARTICIPANT, false",
     "RECIPIENT_ONLY,    OWNER,       false",
-    "PARTICIPANTS_ONLY, RECIPIENT,   true",
-    "PARTICIPANTS_ONLY, PARTICIPANT, true",
-    "PARTICIPANTS_ONLY, OWNER,       true",
+    "RECIPIENT_AND_AUTHOR, RECIPIENT,   true",
+    "RECIPIENT_AND_AUTHOR, PARTICIPANT, true",
+    "RECIPIENT_AND_AUTHOR, OWNER,       true",
     "ALL_MEMBERS,       RECIPIENT,   true",
     "ALL_MEMBERS,       PARTICIPANT, true",
     "ALL_MEMBERS,       OWNER,       true"
