@@ -70,6 +70,10 @@ dependencies {
     runtimeOnly 'com.mysql:mysql-connector-j'
     runtimeOnly 'com.h2database:h2'
 
+    // 스키마 마이그레이션 (Flyway 10 부터 DB 별 모듈이 분리돼 MySQL 은 별도 모듈이 필요하다. H2 는 core 에 포함)
+    implementation 'org.flywaydb:flyway-core'
+    runtimeOnly 'org.flywaydb:flyway-mysql'
+
     // Dev
     developmentOnly 'org.springframework.boot:spring-boot-devtools'
 
