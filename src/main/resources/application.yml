@@ -37,18 +37,13 @@ jwt:
   secret-key: ${JWT_SECRET_KEY:bW9tZW50by1sb2NhbC1kZXYtc2VjcmV0LWtleS1jaGFuZ2UtbWU=}
   issuer: ${JWT_ISSUER:momento}
 
-cloud:
-  aws:
-    s3:
-      bucket: ${S3_BUCKET:momento-bucket}
-      base-url: ${S3_BASE_URL:https://momento-bucket.s3.ap-northeast-2.amazonaws.com}
-    credentials:
-      access-key: ${S3_ACCESS_KEY:local-access-key}
-      secret-key: ${S3_SECRET_KEY:local-secret-key}
-    region:
-      static: ap-northeast-2
-    stack:
-      auto: false
+aws:
+  s3:
+    region: ${S3_REGION:ap-northeast-2}
+    bucket: ${S3_BUCKET:momento-bucket}
+    # 로컬 기본값은 개발용 더미라 실제 업로드는 되지 않는다
+    access-key: ${S3_ACCESS_KEY:local-access-key}
+    secret-key: ${S3_SECRET_KEY:local-secret-key}
 
 cors:
   allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000}
