@@ -63,4 +63,24 @@ public class Letter extends BaseTimeEntity {
 
   @Column(name = "deleted_at")
   private LocalDateTime deletedAt;
+
+  public boolean isSubmitted() {
+    return status == LetterStatus.SUBMITTED;
+  }
+
+  public void update(String content, String themeType) {
+    this.content = content;
+    this.themeType = themeType;
+  }
+
+  public void submit(LocalDateTime now) {
+    if (!isSubmitted()) {
+      status = LetterStatus.SUBMITTED;
+      submittedAt = now;
+    }
+  }
+
+  public void delete(LocalDateTime now) {
+    deletedAt = now;
+  }
 }
