@@ -8,6 +8,7 @@ import org.springframework.http.HttpStatus;
 @Getter
 @RequiredArgsConstructor
 public enum LetterErrorCode implements ErrorCode {
+  LETTER_CONTENT_REQUIRED("제출할 편지 본문은 공백일 수 없습니다.", HttpStatus.BAD_REQUEST),
   LETTER_NOT_FOUND("작성한 편지를 찾을 수 없습니다.", HttpStatus.NOT_FOUND),
   LETTER_ALREADY_EXISTS("이미 작성한 편지가 있습니다.", HttpStatus.CONFLICT),
   LETTER_WRITING_NOT_ALLOWED("이 캡슐에서는 수신자가 편지를 작성할 수 없습니다.", HttpStatus.FORBIDDEN),

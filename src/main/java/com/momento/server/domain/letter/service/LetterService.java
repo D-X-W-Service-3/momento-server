@@ -1,6 +1,7 @@
 package com.momento.server.domain.letter.service;
 
 import com.momento.server.domain.letter.dto.request.LetterCreateRequest;
+import com.momento.server.domain.letter.dto.request.LetterUpdateRequest;
 import com.momento.server.domain.letter.entity.Letter;
 import com.momento.server.domain.letter.exception.LetterErrorCode;
 import com.momento.server.domain.letter.repository.LetterRepository;
@@ -31,13 +32,7 @@ public class LetterService {
       throw new ApiException(LetterErrorCode.LETTER_ALREADY_EXISTS);
     }
     // 잠금 대기 중 마감될 수 있으므로 시간은 잠금을 얻은 뒤 읽는다.
-    switch (capsule.getLetterWritingEligibility(member.getRole(), LocalDateTime.now(clock))) {
-      case NOT_ALLOWED -> throw new ApiException(LetterErrorCode.LETTER_WRITING_NOT_ALLOWED);
-      case CLOSED -> throw new ApiException(LetterErrorCode.LETTER_WRITING_CLOSED);
-      case ALLOWED -> {
-        // 작성 가능한 경우에만 아래 저장을 진행한다.
-      }
-    }
+    requireWritable(capsule, member, LocalDateTime.now(clock));
     return letterRepository.save(
         Letter.builder()
             .timeCapsule(capsule)
@@ -54,5 +49,68 @@ public class LetterService {
     return letterRepository
         .findByTimeCapsuleIdAndAuthorIdAndDeletedAtIsNull(capsuleId, userId)
         .orElseThrow(() -> new ApiException(LetterErrorCode.LETTER_NOT_FOUND));
+  }
+
+  @Transactional
+  public Letter update(Long capsuleId, Long userId, LetterUpdateRequest request) {
+    TimeCapsule capsule = timeCapsuleService.getActiveCapsuleForUpdate(capsuleId);
+    CapsuleMember member = timeCapsuleService.requireActiveMember(capsuleId, userId);
+    Letter letter = getMineForUpdate(capsuleId, userId);
+    requireWritable(capsule, member, LocalDateTime.now(clock));
+    String content = request.hasContent() ? request.getContent() : letter.getContent();
+    String themeType = request.hasThemeType() ? request.getThemeType() : letter.getThemeType();
+    if (letter.isSubmitted()) {
+      requireSubmittableContent(content);
+    }
+    letter.update(content, themeType);
+    return letter;
+  }
+
+  @Transactional
+  public Letter submit(Long capsuleId, Long userId) {
+    TimeCapsule capsule = timeCapsuleService.getActiveCapsuleForUpdate(capsuleId);
+    CapsuleMember member = timeCapsuleService.requireActiveMember(capsuleId, userId);
+    Letter letter = getMineForUpdate(capsuleId, userId);
+    // 성공한 제출의 재시도는 마감 후에도 최초 제출 결과를 반환한다.
+    if (letter.isSubmitted()) {
+      return letter;
+    }
+    LocalDateTime now = LocalDateTime.now(clock);
+    requireWritable(capsule, member, now);
+    requireSubmittableContent(letter.getContent());
+    letter.submit(now);
+    return letter;
+  }
+
+  @Transactional
+  public void delete(Long capsuleId, Long userId) {
+    TimeCapsule capsule = timeCapsuleService.getActiveCapsuleForUpdate(capsuleId);
+    CapsuleMember member = timeCapsuleService.requireActiveMember(capsuleId, userId);
+    Letter letter = getMineForUpdate(capsuleId, userId);
+    LocalDateTime now = LocalDateTime.now(clock);
+    requireWritable(capsule, member, now);
+    letter.delete(now);
+  }
+
+  private Letter getMineForUpdate(Long capsuleId, Long userId) {
+    return letterRepository
+        .findActiveForUpdate(capsuleId, userId)
+        .orElseThrow(() -> new ApiException(LetterErrorCode.LETTER_NOT_FOUND));
+  }
+
+  private void requireWritable(TimeCapsule capsule, CapsuleMember member, LocalDateTime now) {
+    switch (capsule.getLetterWritingEligibility(member.getRole(), now)) {
+      case NOT_ALLOWED -> throw new ApiException(LetterErrorCode.LETTER_WRITING_NOT_ALLOWED);
+      case CLOSED -> throw new ApiException(LetterErrorCode.LETTER_WRITING_CLOSED);
+      case ALLOWED -> {
+        // 작성 가능한 경우에만 변경한다.
+      }
+    }
+  }
+
+  private void requireSubmittableContent(String content) {
+    if (content == null || content.isBlank()) {
+      throw new ApiException(LetterErrorCode.LETTER_CONTENT_REQUIRED);
+    }
   }
 }
