@@ -77,10 +77,14 @@ public class TimeCapsuleService {
 
     long memberCount =
         capsuleMemberRepository.countByTimeCapsuleIdAndStatus(capsuleId, MemberStatus.ACTIVE);
-    long letterCount =
-        timeCapsuleRepository.countLettersByStatus(capsuleId, LetterStatus.SUBMITTED);
+    long letterCount = countSubmittedLetters(capsuleId);
 
     return new TimeCapsuleDetail(capsule, me.getRole(), memberCount, letterCount);
+  }
+
+  /** 제출됐고 삭제되지 않은 편지 수. 초대 미리보기에서도 같은 값을 보여줘 이쪽으로 모았다. */
+  public long countSubmittedLetters(Long capsuleId) {
+    return timeCapsuleRepository.countLettersByStatus(capsuleId, LetterStatus.SUBMITTED);
   }
 
   public TimeCapsule getActiveCapsule(Long capsuleId) {

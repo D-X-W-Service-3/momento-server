@@ -57,4 +57,15 @@ public class CapsuleMember extends BaseTimeEntity {
 
   @Column(name = "joined_at")
   private LocalDateTime joinedAt;
+
+  public boolean isActive() {
+    return status == MemberStatus.ACTIVE;
+  }
+
+  /** 나갔거나 제외됐던 회원이 새 초대로 다시 들어올 때 쓴다. 역할은 이번 초대가 정한 값으로 갱신한다. */
+  public void reactivate(MemberRole role, LocalDateTime joinedAt) {
+    this.status = MemberStatus.ACTIVE;
+    this.role = role;
+    this.joinedAt = joinedAt;
+  }
 }

@@ -61,11 +61,10 @@ CREATE TABLE `capsule_invites` (
     `id`              BIGINT       NOT NULL AUTO_INCREMENT COMMENT '초대 링크 ID',
     `time_capsule_id` BIGINT       NOT NULL COMMENT '타임캡슐 ID',
     `inviter_id`      BIGINT       NOT NULL COMMENT '초대 링크 생성자 ID',
+    `invitee_id`      BIGINT       NULL COMMENT '이 링크를 선점한 회원 ID. 발급 시점엔 NULL(공유 링크)이고, 로그인한 회원이 처음 열면 그 회원으로 고정된다',
     `invite_token`    VARCHAR(100) NOT NULL COMMENT '초대 링크 식별 토큰',
     `target_role`     VARCHAR(20)  NOT NULL DEFAULT 'PARTICIPANT' COMMENT '초대 대상 역할: RECIPIENT, PARTICIPANT',
     `status`          VARCHAR(20)  NOT NULL DEFAULT 'ACTIVE' COMMENT '초대 링크 상태: ACTIVE, EXPIRED, REVOKED',
-    `max_uses`        INT          NULL COMMENT '최대 사용 횟수, NULL 이면 제한 없음',
-    `used_count`      INT          NOT NULL DEFAULT 0 COMMENT '현재 사용 횟수',
     `expires_at`      DATETIME(6)  NULL COMMENT '초대 링크 만료 일시',
     `created_at`      DATETIME(6)  NOT NULL COMMENT '생성 일시',
     `updated_at`      DATETIME(6)  NOT NULL COMMENT '수정 일시',
@@ -146,6 +145,9 @@ CREATE INDEX `IDX_NOTIFICATIONS_USER_ID_ID` ON `notifications` (`user_id`, `id`)
 -- 상태 전이 스케줄러가 주기마다 도는 조회다 (이슈 #30). 등호 조건인 status 가 앞, 범위 조건인 open_at 이 뒤다.
 CREATE INDEX `IDX_TIME_CAPSULES_STATUS_OPEN_AT` ON `time_capsules` (`status`, `open_at`);
 
+-- 받은 초대 목록 조회가 회원별로 지정형 초대를 찾는 조회다.
+CREATE INDEX `IDX_CAPSULE_INVITES_INVITEE_ID_STATUS` ON `capsule_invites` (`invitee_id`, `status`);
+
 -- 외래키. 소프트 삭제(deleted_at)를 쓰는 테이블이 많아 ON DELETE CASCADE 는 걸지 않고 참조 무결성만 유지한다.
 ALTER TABLE `anniversaries`    ADD CONSTRAINT `FK_ANNIVERSARIES_USER`             FOREIGN KEY (`user_id`)         REFERENCES `users` (`id`);
 ALTER TABLE `time_capsules`    ADD CONSTRAINT `FK_TIME_CAPSULES_CREATOR`          FOREIGN KEY (`creator_id`)      REFERENCES `users` (`id`);
@@ -154,6 +156,7 @@ ALTER TABLE `capsule_members`  ADD CONSTRAINT `FK_CAPSULE_MEMBERS_TIME_CAPSULE` 
 ALTER TABLE `capsule_members`  ADD CONSTRAINT `FK_CAPSULE_MEMBERS_USER`           FOREIGN KEY (`user_id`)         REFERENCES `users` (`id`);
 ALTER TABLE `capsule_invites`  ADD CONSTRAINT `FK_CAPSULE_INVITES_TIME_CAPSULE`   FOREIGN KEY (`time_capsule_id`) REFERENCES `time_capsules` (`id`);
 ALTER TABLE `capsule_invites`  ADD CONSTRAINT `FK_CAPSULE_INVITES_INVITER`        FOREIGN KEY (`inviter_id`)      REFERENCES `users` (`id`);
+ALTER TABLE `capsule_invites`  ADD CONSTRAINT `FK_CAPSULE_INVITES_INVITEE`        FOREIGN KEY (`invitee_id`)      REFERENCES `users` (`id`);
 ALTER TABLE `letters`          ADD CONSTRAINT `FK_LETTERS_TIME_CAPSULE`           FOREIGN KEY (`time_capsule_id`) REFERENCES `time_capsules` (`id`);
 ALTER TABLE `letters`          ADD CONSTRAINT `FK_LETTERS_AUTHOR`                 FOREIGN KEY (`author_id`)       REFERENCES `users` (`id`);
 ALTER TABLE `memories`         ADD CONSTRAINT `FK_MEMORIES_USER`                  FOREIGN KEY (`user_id`)         REFERENCES `users` (`id`);
