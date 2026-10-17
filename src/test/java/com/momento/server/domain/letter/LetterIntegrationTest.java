@@ -1,8 +1,11 @@
 package com.momento.server.domain.letter;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.BDDMockito.given;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -33,6 +36,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -48,9 +52,11 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 /** 실제 인증 필터와 트랜잭션 커밋을 포함한다. 테스트 전체를 트랜잭션으로 감싸지 않는다. */
-@SpringBootTest
+@SpringBootTest(properties = "momento.capsule.status-transition-interval=1h")
 @AutoConfigureMockMvc
 class LetterIntegrationTest {
   private static final String BODY = "{\"content\":\"내 편지\",\"themeType\":\"WATERCOLOR\"}";
@@ -62,6 +68,7 @@ class LetterIntegrationTest {
   @Autowired private LetterRepository letters;
   @Autowired private JdbcTemplate jdbc;
   @Autowired private ObjectMapper objectMapper;
+  @Autowired private PlatformTransactionManager transactionManager;
   @MockitoBean private Clock clock;
   private static final Instant NOW = Instant.parse("2026-09-14T12:00:00Z");
   private User owner;
@@ -468,6 +475,633 @@ class LetterIntegrationTest {
         .andExpect(status().isConflict())
         .andExpect(jsonPath("$.code").value("LETTER_ALREADY_EXISTS"));
     assertThat(letters.count()).isEqualTo(1);
+  }
+
+  @Test
+  void submitsSavedDraftAndKeepsFirstSubmissionAfterDeadline() throws Exception {
+    create(token, BODY).andExpect(status().isCreated());
+    submit(token)
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.data.status").value("SUBMITTED"));
+    LocalDateTime first = letters.findAll().getFirst().getSubmittedAt();
+    assertThat(first).isEqualTo(LocalDateTime.ofInstant(NOW, ZoneOffset.UTC));
+    jdbc.update(
+        "update time_capsules set status = 'OPENED', open_at = ? where id = ?",
+        first,
+        capsule.getId());
+    given(clock.instant()).willReturn(NOW.plusSeconds(30));
+    submit(token).andExpect(status().isOk());
+    Letter saved = letters.findAll().getFirst();
+    assertThat(saved.getSubmittedAt()).isEqualTo(first);
+    assertThat(saved.getContent()).isEqualTo("내 편지");
+    assertThat(capsules.countLettersByStatus(capsule.getId(), LetterStatus.SUBMITTED)).isEqualTo(1);
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"", " ", "\t\n"})
+  void cannotSubmitBlankDraft(String content) throws Exception {
+    create(token, objectMapper.writeValueAsString(java.util.Map.of("content", content)))
+        .andExpect(status().isCreated());
+    submit(token)
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.code").value("LETTER_CONTENT_REQUIRED"));
+    Letter saved = letters.findAll().getFirst();
+    assertThat(saved.getStatus()).isEqualTo(LetterStatus.DRAFT);
+    assertThat(saved.getSubmittedAt()).isNull();
+  }
+
+  @ParameterizedTest
+  @EnumSource(LetterStatus.class)
+  void softDeleteExcludesLetterAndAllowsNewDraft(LetterStatus state) throws Exception {
+    create(token, BODY).andExpect(status().isCreated());
+    if (state == LetterStatus.SUBMITTED) {
+      submit(token).andExpect(status().isOk());
+    }
+    Long originalId = letters.findAll().getFirst().getId();
+    remove(token).andExpect(status().isOk());
+    assertThat(letters.findById(originalId).orElseThrow().getDeletedAt())
+        .isEqualTo(LocalDateTime.ofInstant(NOW, ZoneOffset.UTC));
+    assertThat(capsules.countLettersByStatus(capsule.getId(), LetterStatus.SUBMITTED)).isZero();
+    read(token).andExpect(status().isNotFound());
+    remove(token)
+        .andExpect(status().isNotFound())
+        .andExpect(jsonPath("$.code").value("LETTER_NOT_FOUND"));
+    submit(token).andExpect(status().isNotFound());
+    create(token, BODY)
+        .andExpect(status().isCreated())
+        .andExpect(jsonPath("$.data.status").value("DRAFT"));
+    Letter replacement =
+        letters
+            .findByTimeCapsuleIdAndAuthorIdAndDeletedAtIsNull(capsule.getId(), owner.getId())
+            .orElseThrow();
+    assertThat(replacement.getId()).isNotEqualTo(originalId);
+    assertThat(replacement.getSubmittedAt()).isNull();
+  }
+
+  @Test
+  void submitAndDeleteRequireAuthenticationAndOwnActiveMembership() throws Exception {
+    create(token, BODY).andExpect(status().isCreated());
+    mvc.perform(post(path() + "/me/submit")).andExpect(status().isUnauthorized());
+    mvc.perform(delete(path() + "/me")).andExpect(status().isUnauthorized());
+    User other = users.save(User.builder().kakaoId("mutation-other").nickname("다른 사람").build());
+    String otherToken = tokens.generateToken(other, Duration.ofHours(1));
+    submit(otherToken)
+        .andExpect(status().isNotFound())
+        .andExpect(jsonPath("$.code").value("CAPSULE_NOT_FOUND"));
+    remove(otherToken).andExpect(status().isNotFound());
+    join(other);
+    submit(otherToken)
+        .andExpect(status().isNotFound())
+        .andExpect(jsonPath("$.code").value("LETTER_NOT_FOUND"));
+    remove(otherToken)
+        .andExpect(status().isNotFound())
+        .andExpect(jsonPath("$.code").value("LETTER_NOT_FOUND"));
+    submit(token).andExpect(status().isOk());
+    for (String state : List.of("LEFT", "REMOVED")) {
+      jdbc.update("update capsule_members set status = ? where user_id = ?", state, owner.getId());
+      submit(token)
+          .andExpect(status().isNotFound())
+          .andExpect(jsonPath("$.code").value("CAPSULE_NOT_FOUND"));
+      remove(token).andExpect(status().isNotFound());
+    }
+    assertThat(letters.findAll().getFirst().getDeletedAt()).isNull();
+  }
+
+  @ParameterizedTest
+  @CsvSource({"-1,200", "0,409", "1,409"})
+  void firstSubmissionChecksDeadlineBoundary(int seconds, int expected) throws Exception {
+    create(token, BODY).andExpect(status().isCreated());
+    jdbc.update(
+        "update time_capsules set letter_deadline_at = ? where id = ?",
+        LocalDateTime.ofInstant(NOW, ZoneOffset.UTC).minusSeconds(seconds),
+        capsule.getId());
+    submit(token).andExpect(status().is(expected));
+    assertThat(letters.findAll().getFirst().getStatus())
+        .isEqualTo(expected == 200 ? LetterStatus.SUBMITTED : LetterStatus.DRAFT);
+  }
+
+  @ParameterizedTest
+  @EnumSource(LetterStatus.class)
+  void deletionAfterDeadlinePreservesLetter(LetterStatus state) throws Exception {
+    create(token, BODY).andExpect(status().isCreated());
+    if (state == LetterStatus.SUBMITTED) {
+      submit(token).andExpect(status().isOk());
+    }
+    jdbc.update(
+        "update time_capsules set letter_deadline_at = ? where id = ?",
+        LocalDateTime.ofInstant(NOW, ZoneOffset.UTC),
+        capsule.getId());
+    remove(token)
+        .andExpect(status().isConflict())
+        .andExpect(jsonPath("$.code").value("LETTER_WRITING_CLOSED"));
+    assertThat(letters.findAll().getFirst().getDeletedAt()).isNull();
+  }
+
+  @Test
+  void roleDenialPrecedesDeadlineAndBlankContentButResubmissionIsIdempotent() throws Exception {
+    create(token, BODY).andExpect(status().isCreated());
+    submit(token).andExpect(status().isOk());
+    jdbc.update("update capsule_members set role = 'RECIPIENT' where user_id = ?", owner.getId());
+    jdbc.update(
+        "update time_capsules set visibility_type = 'RECIPIENT_ONLY', letter_deadline_at = ? where id = ?",
+        LocalDateTime.ofInstant(NOW, ZoneOffset.UTC),
+        capsule.getId());
+    submit(token).andExpect(status().isOk());
+    remove(token)
+        .andExpect(status().isForbidden())
+        .andExpect(jsonPath("$.code").value("LETTER_WRITING_NOT_ALLOWED"));
+    jdbc.update(
+        "update letters set status = 'DRAFT', submitted_at = null, content = '' where author_id = ?",
+        owner.getId());
+    submit(token)
+        .andExpect(status().isForbidden())
+        .andExpect(jsonPath("$.code").value("LETTER_WRITING_NOT_ALLOWED"));
+  }
+
+  @Test
+  void concurrentSubmissionsKeepSingleFirstTimestamp() throws Exception {
+    create(token, BODY).andExpect(status().isCreated());
+    try (var executor = Executors.newFixedThreadPool(6)) {
+      CountDownLatch ready = new CountDownLatch(6);
+      CountDownLatch start = new CountDownLatch(1);
+      List<Future<Integer>> results = new ArrayList<>();
+      for (int i = 0; i < 6; i++) {
+        results.add(
+            executor.submit(
+                () -> {
+                  ready.countDown();
+                  if (!start.await(10, TimeUnit.SECONDS)) {
+                    throw new IllegalStateException("start timeout");
+                  }
+                  return submit(token).andReturn().getResponse().getStatus();
+                }));
+      }
+      assertThat(ready.await(10, TimeUnit.SECONDS)).isTrue();
+      start.countDown();
+      for (Future<Integer> result : results) {
+        assertThat(result.get(20, TimeUnit.SECONDS)).isEqualTo(200);
+      }
+    }
+    assertThat(letters.count()).isEqualTo(1);
+    assertThat(letters.findAll().getFirst().getSubmittedAt())
+        .isEqualTo(LocalDateTime.ofInstant(NOW, ZoneOffset.UTC));
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"submit", "delete", "update"})
+  void mutationWaitingForCapsuleLockRechecksTime(String operation) throws Exception {
+    create(token, BODY).andExpect(status().isCreated());
+    Instant deadline = NOW.plusSeconds(1);
+    jdbc.update(
+        "update time_capsules set letter_deadline_at = ? where id = ?",
+        LocalDateTime.ofInstant(deadline, ZoneOffset.UTC),
+        capsule.getId());
+    try (var executor = Executors.newSingleThreadExecutor()) {
+      List<Future<Integer>> pending = new ArrayList<>();
+      new TransactionTemplate(transactionManager)
+          .executeWithoutResult(
+              tx -> {
+                capsules.findActiveByIdForUpdate(capsule.getId()).orElseThrow();
+                CountDownLatch started = new CountDownLatch(1);
+                Future<Integer> result =
+                    executor.submit(
+                        () -> {
+                          started.countDown();
+                          return (switch (operation) {
+                                case "submit" -> submit(token);
+                                case "update" -> update(token, "{\"content\":\"수정\"}");
+                                default -> remove(token);
+                              })
+                              .andReturn()
+                              .getResponse()
+                              .getStatus();
+                        });
+                pending.add(result);
+                try {
+                  assertThat(started.await(5, TimeUnit.SECONDS)).isTrue();
+                  assertThatThrownBy(() -> result.get(200, TimeUnit.MILLISECONDS))
+                      .isInstanceOf(TimeoutException.class);
+                  given(clock.instant()).willReturn(deadline);
+                } catch (InterruptedException e) {
+                  Thread.currentThread().interrupt();
+                  throw new IllegalStateException(e);
+                }
+              });
+      assertThat(pending.getFirst().get(10, TimeUnit.SECONDS)).isEqualTo(409);
+    }
+    Letter saved = letters.findAll().getFirst();
+    assertThat(saved.getStatus()).isEqualTo(LetterStatus.DRAFT);
+    assertThat(saved.getDeletedAt()).isNull();
+    assertThat(saved.getSubmittedAt()).isNull();
+  }
+
+  @Test
+  void concurrentDeleteAndCreateNeverLeaveTwoActiveLetters() throws Exception {
+    create(token, BODY).andExpect(status().isCreated());
+    try (var executor = Executors.newFixedThreadPool(6)) {
+      CountDownLatch start = new CountDownLatch(1);
+      List<Future<Integer>> results = new ArrayList<>();
+      for (int i = 0; i < 6; i++) {
+        boolean deleting = i % 2 == 0;
+        results.add(
+            executor.submit(
+                () -> {
+                  if (!start.await(5, TimeUnit.SECONDS)) {
+                    throw new IllegalStateException("start timeout");
+                  }
+                  return (deleting ? remove(token) : create(token, BODY))
+                      .andReturn()
+                      .getResponse()
+                      .getStatus();
+                }));
+      }
+      start.countDown();
+      for (Future<Integer> result : results) {
+        assertThat(result.get(15, TimeUnit.SECONDS)).isIn(200, 201, 404, 409);
+      }
+    }
+    assertThat(letters.findAll().stream().filter(l -> l.getDeletedAt() == null).count())
+        .isLessThanOrEqualTo(1);
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"LOCKED", "OPENED"})
+  void firstSubmissionAndDeletionRejectNonWritingCapsule(String state) throws Exception {
+    create(token, BODY).andExpect(status().isCreated());
+    jdbc.update("update time_capsules set status = ? where id = ?", state, capsule.getId());
+    submit(token)
+        .andExpect(status().isConflict())
+        .andExpect(jsonPath("$.code").value("LETTER_WRITING_CLOSED"));
+    remove(token).andExpect(status().isConflict());
+    assertThat(letters.findAll().getFirst().getStatus()).isEqualTo(LetterStatus.DRAFT);
+    assertThat(letters.findAll().getFirst().getDeletedAt()).isNull();
+  }
+
+  @Test
+  void deletedCapsuleCannotBeSubmittedOrDeleted() throws Exception {
+    create(token, BODY).andExpect(status().isCreated());
+    submit(token).andExpect(status().isOk());
+    jdbc.update(
+        "update time_capsules set deleted_at = ? where id = ?",
+        LocalDateTime.ofInstant(NOW, ZoneOffset.UTC),
+        capsule.getId());
+    submit(token)
+        .andExpect(status().isNotFound())
+        .andExpect(jsonPath("$.code").value("CAPSULE_NOT_FOUND"));
+    remove(token)
+        .andExpect(status().isNotFound())
+        .andExpect(jsonPath("$.code").value("CAPSULE_NOT_FOUND"));
+    assertThat(letters.findAll().getFirst().getDeletedAt()).isNull();
+  }
+
+  @ParameterizedTest
+  @EnumSource(LetterStatus.class)
+  void updatingOnlyContentKeepsThemeAndSubmission(LetterStatus state) throws Exception {
+    create(token, BODY).andExpect(status().isCreated());
+    if (state == LetterStatus.SUBMITTED) {
+      submit(token).andExpect(status().isOk());
+    }
+    LocalDateTime submittedAt = letters.findAll().getFirst().getSubmittedAt();
+    given(clock.instant()).willReturn(NOW.plusSeconds(10));
+    update(token, "{\"content\":\"고친 글\"}")
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.data.themeType").value("WATERCOLOR"))
+        .andExpect(jsonPath("$.data.content").value("고친 글"))
+        .andExpect(jsonPath("$.data.status").value(state.name()));
+    assertThat(letters.findAll().getFirst().getSubmittedAt()).isEqualTo(submittedAt);
+  }
+
+  @Test
+  void updatingThemeOrClearingItKeepsContent() throws Exception {
+    create(token, BODY).andExpect(status().isCreated());
+    update(token, "{\"themeType\":\"FLOWER\"}")
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.data.content").value("내 편지"))
+        .andExpect(jsonPath("$.data.themeType").value("FLOWER"));
+    update(token, "{\"themeType\":null}").andExpect(status().isOk());
+    Letter saved = letters.findAll().getFirst();
+    assertThat(saved.getThemeType()).isNull();
+    assertThat(saved.getContent()).isEqualTo("내 편지");
+  }
+
+  @Test
+  void emptyPatchAndClientManagedFieldsCannotAlterLetter() throws Exception {
+    create(token, BODY).andExpect(status().isCreated());
+    update(token, "{}").andExpect(status().isOk());
+    update(
+            token,
+            "{\"status\":\"SUBMITTED\",\"submittedAt\":\"2026-01-01T00:00:00\",\"deletedAt\":\"2026-01-01T00:00:00\",\"authorId\":999,\"contentPresent\":true,\"themeTypePresent\":true}")
+        .andExpect(status().isOk());
+    Letter saved = letters.findAll().getFirst();
+    assertThat(saved.getContent()).isEqualTo("내 편지");
+    assertThat(saved.getThemeType()).isEqualTo("WATERCOLOR");
+    assertThat(saved.getAuthor().getId()).isEqualTo(owner.getId());
+    assertThat(saved.getStatus()).isEqualTo(LetterStatus.DRAFT);
+    assertThat(saved.getSubmittedAt()).isNull();
+    assertThat(saved.getDeletedAt()).isNull();
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"{\"content\":null}", "{", "{\"content\":[]}", "{\"themeType\":{}}"})
+  void invalidPatchIsRejectedWithoutMutation(String body) throws Exception {
+    create(token, BODY).andExpect(status().isCreated());
+    update(token, body)
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.code").value("INVALID_INPUT_VALUE"));
+    assertThat(letters.findAll().getFirst().getContent()).isEqualTo("내 편지");
+    assertThat(letters.findAll().getFirst().getThemeType()).isEqualTo("WATERCOLOR");
+  }
+
+  @ParameterizedTest
+  @CsvSource({"10000,20,200", "10001,20,400", "10000,21,400"})
+  void patchValidatesLengthBoundaries(int contentLength, int themeLength, int expected)
+      throws Exception {
+    create(token, BODY).andExpect(status().isCreated());
+    String content = "가".repeat(contentLength);
+    String theme = "T".repeat(themeLength);
+    update(
+            token,
+            objectMapper.writeValueAsString(
+                java.util.Map.of("content", content, "themeType", theme)))
+        .andExpect(status().is(expected));
+    Letter saved = letters.findAll().getFirst();
+    assertThat(saved.getContent()).isEqualTo(expected == 200 ? content : "내 편지");
+    assertThat(saved.getThemeType()).isEqualTo(expected == 200 ? theme : "WATERCOLOR");
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"", " ", "\t\n"})
+  void blankUpdateAllowedOnlyForDraft(String content) throws Exception {
+    create(token, BODY).andExpect(status().isCreated());
+    String body =
+        objectMapper.writeValueAsString(
+            java.util.Map.of("content", content, "themeType", "FLOWER"));
+    update(token, body).andExpect(status().isOk());
+    update(token, BODY).andExpect(status().isOk());
+    submit(token).andExpect(status().isOk());
+    LocalDateTime first = letters.findAll().getFirst().getSubmittedAt();
+    update(token, body)
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.code").value("LETTER_CONTENT_REQUIRED"));
+    Letter saved = letters.findAll().getFirst();
+    assertThat(saved.getContent()).isEqualTo("내 편지");
+    assertThat(saved.getThemeType()).isEqualTo("WATERCOLOR");
+    assertThat(saved.getSubmittedAt()).isEqualTo(first);
+  }
+
+  @Test
+  void patchRequiresAuthenticationAndOwnActiveMembership() throws Exception {
+    create(token, BODY).andExpect(status().isCreated());
+    mvc.perform(patch(path() + "/me").contentType(MediaType.APPLICATION_JSON).content(BODY))
+        .andExpect(status().isUnauthorized());
+    User other = users.save(User.builder().kakaoId("update-other").nickname("다른 사람").build());
+    String otherToken = tokens.generateToken(other, Duration.ofHours(1));
+    update(otherToken, BODY)
+        .andExpect(status().isNotFound())
+        .andExpect(jsonPath("$.code").value("CAPSULE_NOT_FOUND"));
+    join(other);
+    update(otherToken, BODY)
+        .andExpect(status().isNotFound())
+        .andExpect(jsonPath("$.code").value("LETTER_NOT_FOUND"));
+    for (String state : List.of("LEFT", "REMOVED")) {
+      jdbc.update("update capsule_members set status = ? where user_id = ?", state, owner.getId());
+      update(token, BODY)
+          .andExpect(status().isNotFound())
+          .andExpect(jsonPath("$.code").value("CAPSULE_NOT_FOUND"));
+    }
+    assertThat(letters.findAll().getFirst().getContent()).isEqualTo("내 편지");
+  }
+
+  @Test
+  void patchRejectsMissingOrDeletedLetterAndCapsule() throws Exception {
+    update(token, BODY)
+        .andExpect(status().isNotFound())
+        .andExpect(jsonPath("$.code").value("LETTER_NOT_FOUND"));
+    create(token, BODY).andExpect(status().isCreated());
+    remove(token).andExpect(status().isOk());
+    update(token, BODY)
+        .andExpect(status().isNotFound())
+        .andExpect(jsonPath("$.code").value("LETTER_NOT_FOUND"));
+    jdbc.update(
+        "update time_capsules set deleted_at = ? where id = ?",
+        LocalDateTime.ofInstant(NOW, ZoneOffset.UTC),
+        capsule.getId());
+    update(token, BODY)
+        .andExpect(status().isNotFound())
+        .andExpect(jsonPath("$.code").value("CAPSULE_NOT_FOUND"));
+    mvc.perform(
+            patch("/v1/time-capsules/9223372036854775807/letters/me")
+                .header("Authorization", "Bearer " + token)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(BODY))
+        .andExpect(status().isNotFound())
+        .andExpect(jsonPath("$.code").value("CAPSULE_NOT_FOUND"));
+  }
+
+  @ParameterizedTest
+  @CsvSource({
+    "DRAFT,-1,200",
+    "DRAFT,0,409",
+    "DRAFT,1,409",
+    "SUBMITTED,-1,200",
+    "SUBMITTED,0,409",
+    "SUBMITTED,1,409"
+  })
+  void patchChecksDeadlineForBothStates(LetterStatus state, int seconds, int expected)
+      throws Exception {
+    create(token, BODY).andExpect(status().isCreated());
+    if (state == LetterStatus.SUBMITTED) {
+      submit(token).andExpect(status().isOk());
+    }
+    jdbc.update(
+        "update time_capsules set letter_deadline_at = ? where id = ?",
+        LocalDateTime.ofInstant(NOW, ZoneOffset.UTC).minusSeconds(seconds),
+        capsule.getId());
+    update(token, "{\"content\":\"수정\"}").andExpect(status().is(expected));
+    assertThat(letters.findAll().getFirst().getContent())
+        .isEqualTo(expected == 200 ? "수정" : "내 편지");
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"LOCKED", "OPENED"})
+  void patchRejectsNonWritingCapsule(String state) throws Exception {
+    create(token, BODY).andExpect(status().isCreated());
+    jdbc.update("update time_capsules set status = ? where id = ?", state, capsule.getId());
+    update(token, BODY)
+        .andExpect(status().isConflict())
+        .andExpect(jsonPath("$.code").value("LETTER_WRITING_CLOSED"));
+  }
+
+  @ParameterizedTest
+  @CsvSource({
+    "OWNER,RECIPIENT_ONLY,200",
+    "OWNER,RECIPIENT_AND_AUTHOR,200",
+    "OWNER,ALL_MEMBERS,200",
+    "PARTICIPANT,RECIPIENT_ONLY,200",
+    "PARTICIPANT,RECIPIENT_AND_AUTHOR,200",
+    "PARTICIPANT,ALL_MEMBERS,200",
+    "RECIPIENT,RECIPIENT_ONLY,403",
+    "RECIPIENT,RECIPIENT_AND_AUTHOR,403",
+    "RECIPIENT,ALL_MEMBERS,200"
+  })
+  void mutationsFollowRoleAndVisibility(MemberRole role, VisibilityType visibility, int expected)
+      throws Exception {
+    create(token, BODY).andExpect(status().isCreated());
+    jdbc.update(
+        "update capsule_members set role = ? where user_id = ?", role.name(), owner.getId());
+    jdbc.update(
+        "update time_capsules set visibility_type = ? where id = ?",
+        visibility.name(),
+        capsule.getId());
+    update(token, BODY).andExpect(status().is(expected));
+    submit(token).andExpect(status().is(expected));
+    remove(token).andExpect(status().is(expected));
+  }
+
+  @Test
+  void patchRoleDenialPrecedesDeadlineAndBlankBody() throws Exception {
+    create(token, BODY).andExpect(status().isCreated());
+    submit(token).andExpect(status().isOk());
+    jdbc.update("update capsule_members set role = 'RECIPIENT' where user_id = ?", owner.getId());
+    jdbc.update(
+        "update time_capsules set visibility_type = 'RECIPIENT_ONLY', open_at = ? where id = ?",
+        LocalDateTime.ofInstant(NOW, ZoneOffset.UTC),
+        capsule.getId());
+    update(token, "{\"content\":\"\"}")
+        .andExpect(status().isForbidden())
+        .andExpect(jsonPath("$.code").value("LETTER_WRITING_NOT_ALLOWED"));
+    jdbc.update("update capsule_members set role = 'OWNER' where user_id = ?", owner.getId());
+    update(token, "{\"content\":\"\"}")
+        .andExpect(status().isConflict())
+        .andExpect(jsonPath("$.code").value("LETTER_WRITING_CLOSED"));
+  }
+
+  @Test
+  void concurrentPartialUpdatesPreserveBothFields() throws Exception {
+    create(token, BODY).andExpect(status().isCreated());
+    try (var executor = Executors.newFixedThreadPool(2)) {
+      CountDownLatch start = new CountDownLatch(1);
+      Future<Integer> content =
+          executor.submit(
+              () -> {
+                if (!start.await(5, TimeUnit.SECONDS)) {
+                  throw new IllegalStateException("timeout");
+                }
+                return update(token, "{\"content\":\"수정\"}").andReturn().getResponse().getStatus();
+              });
+      Future<Integer> theme =
+          executor.submit(
+              () -> {
+                if (!start.await(5, TimeUnit.SECONDS)) {
+                  throw new IllegalStateException("timeout");
+                }
+                return update(token, "{\"themeType\":\"FLOWER\"}")
+                    .andReturn()
+                    .getResponse()
+                    .getStatus();
+              });
+      start.countDown();
+      assertThat(content.get(10, TimeUnit.SECONDS)).isEqualTo(200);
+      assertThat(theme.get(10, TimeUnit.SECONDS)).isEqualTo(200);
+    }
+    Letter saved = letters.findAll().getFirst();
+    assertThat(saved.getContent()).isEqualTo("수정");
+    assertThat(saved.getThemeType()).isEqualTo("FLOWER");
+  }
+
+  @Test
+  void concurrentBlankUpdateAndSubmitCannotProduceBlankSubmittedLetter() throws Exception {
+    create(token, BODY).andExpect(status().isCreated());
+    try (var executor = Executors.newFixedThreadPool(2)) {
+      CountDownLatch start = new CountDownLatch(1);
+      Future<Integer> update =
+          executor.submit(
+              () -> {
+                if (!start.await(5, TimeUnit.SECONDS)) {
+                  throw new IllegalStateException("timeout");
+                }
+                return update(token, "{\"content\":\"\"}").andReturn().getResponse().getStatus();
+              });
+      Future<Integer> submit =
+          executor.submit(
+              () -> {
+                if (!start.await(5, TimeUnit.SECONDS)) {
+                  throw new IllegalStateException("timeout");
+                }
+                return submit(token).andReturn().getResponse().getStatus();
+              });
+      start.countDown();
+      List<Integer> results =
+          List.of(update.get(10, TimeUnit.SECONDS), submit.get(10, TimeUnit.SECONDS));
+      assertThat(results).containsExactlyInAnyOrder(200, 400);
+    }
+    Letter saved = letters.findAll().getFirst();
+    if (saved.isSubmitted()) {
+      assertThat(saved.getContent()).isEqualTo("내 편지");
+      assertThat(saved.getSubmittedAt()).isEqualTo(LocalDateTime.ofInstant(NOW, ZoneOffset.UTC));
+    } else {
+      assertThat(saved.getContent()).isEmpty();
+      assertThat(saved.getSubmittedAt()).isNull();
+    }
+  }
+
+  @Test
+  void concurrentUpdateSubmitAndDeleteCannotReviveDeletedLetter() throws Exception {
+    create(token, BODY).andExpect(status().isCreated());
+    Long id = letters.findAll().getFirst().getId();
+    try (var executor = Executors.newFixedThreadPool(3)) {
+      CountDownLatch start = new CountDownLatch(1);
+      List<Future<Integer>> results = new ArrayList<>();
+      for (String operation : List.of("update", "submit", "delete")) {
+        results.add(
+            executor.submit(
+                () -> {
+                  if (!start.await(5, TimeUnit.SECONDS)) {
+                    throw new IllegalStateException("timeout");
+                  }
+                  return (switch (operation) {
+                        case "update" -> update(token, "{\"content\":\"수정\"}");
+                        case "submit" -> submit(token);
+                        default -> remove(token);
+                      })
+                      .andReturn()
+                      .getResponse()
+                      .getStatus();
+                }));
+      }
+      start.countDown();
+      assertThat(results.get(0).get(10, TimeUnit.SECONDS)).isIn(200, 404);
+      assertThat(results.get(1).get(10, TimeUnit.SECONDS)).isIn(200, 404);
+      assertThat(results.get(2).get(10, TimeUnit.SECONDS)).isEqualTo(200);
+    }
+    Letter deleted = letters.findById(id).orElseThrow();
+    assertThat(deleted.getDeletedAt()).isNotNull();
+    update(token, BODY).andExpect(status().isNotFound());
+    submit(token).andExpect(status().isNotFound());
+    Letter unchanged = letters.findById(id).orElseThrow();
+    assertThat(unchanged.getContent()).isEqualTo(deleted.getContent());
+    assertThat(unchanged.getSubmittedAt()).isEqualTo(deleted.getSubmittedAt());
+    assertThat(
+            letters.findByTimeCapsuleIdAndAuthorIdAndDeletedAtIsNull(
+                capsule.getId(), owner.getId()))
+        .isEmpty();
+  }
+
+  private ResultActions update(String accessToken, String body) throws Exception {
+    return mvc.perform(
+        patch(path() + "/me")
+            .header("Authorization", "Bearer " + accessToken)
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(body));
+  }
+
+  private ResultActions submit(String accessToken) throws Exception {
+    return mvc.perform(
+        post(path() + "/me/submit").header("Authorization", "Bearer " + accessToken));
+  }
+
+  private ResultActions remove(String accessToken) throws Exception {
+    return mvc.perform(delete(path() + "/me").header("Authorization", "Bearer " + accessToken));
   }
 
   private String path() {
