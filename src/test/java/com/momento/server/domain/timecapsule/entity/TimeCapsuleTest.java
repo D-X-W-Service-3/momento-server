@@ -44,10 +44,12 @@ class TimeCapsuleTest {
 
   private TimeCapsule capsule(CapsuleStatus status, VisibilityType visibility) {
     return TimeCapsule.builder()
+        .iconType("ICE_CREAM")
         .title("캡슐")
         .capsuleType(CapsuleType.GROUP)
         .visibilityType(visibility)
         .status(status)
+        .letterDeadlineAt(LocalDateTime.now().minusDays(1))
         .openAt(LocalDateTime.now())
         .build();
   }

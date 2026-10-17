@@ -3,6 +3,7 @@ package com.momento.server.domain.timecapsule.service;
 import com.momento.server.domain.letter.entity.LetterStatus;
 import com.momento.server.domain.timecapsule.dto.request.TimeCapsuleCreateRequest;
 import com.momento.server.domain.timecapsule.entity.CapsuleMember;
+import com.momento.server.domain.timecapsule.entity.CapsuleSchedule;
 import com.momento.server.domain.timecapsule.entity.CapsuleType;
 import com.momento.server.domain.timecapsule.entity.MemberRole;
 import com.momento.server.domain.timecapsule.entity.MemberStatus;
@@ -13,6 +14,8 @@ import com.momento.server.domain.timecapsule.repository.CapsuleMemberRepository;
 import com.momento.server.domain.timecapsule.repository.TimeCapsuleRepository;
 import com.momento.server.domain.user.entity.User;
 import com.momento.server.global.common.exception.ApiException;
+import java.time.Clock;
+import java.time.LocalDate;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -24,6 +27,7 @@ public class TimeCapsuleService {
 
   private final TimeCapsuleRepository timeCapsuleRepository;
   private final CapsuleMemberRepository capsuleMemberRepository;
+  private final Clock clock;
 
   /**
    * 캡슐과 생성자의 OWNER 참여 행을 만든다. {@code creator_id} 와 OWNER 행은 같은 사실을 두 곳에 담는데, 소유권 이전이 없어 둘이 어긋날 수 있는
@@ -32,16 +36,22 @@ public class TimeCapsuleService {
   @Transactional
   public TimeCapsule create(User creator, TimeCapsuleCreateRequest request) {
     validateVisibility(request.capsuleType(), request.visibilityType());
+    CapsuleSchedule schedule = CapsuleSchedule.of(request.letterDeadlineDate(), request.openDate());
+    if (!schedule.isValidOn(LocalDate.now(clock))) {
+      throw new ApiException(CapsuleErrorCode.INVALID_CAPSULE_SCHEDULE);
+    }
 
     TimeCapsule capsule =
         timeCapsuleRepository.save(
             TimeCapsule.builder()
                 .creator(creator)
+                .iconType(request.iconType())
                 .title(request.title())
                 .description(request.description())
                 .capsuleType(request.capsuleType())
                 .visibilityType(request.visibilityType())
-                .openAt(request.openAt())
+                .letterDeadlineAt(schedule.letterDeadlineAt())
+                .openAt(schedule.openAt())
                 .build());
 
     capsuleMemberRepository.save(

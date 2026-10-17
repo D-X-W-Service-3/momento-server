@@ -49,6 +49,10 @@ public class TimeCapsule extends BaseTimeEntity {
   @JoinColumn(name = "anniversary_id")
   private Anniversary anniversary;
 
+  /** 캡슐 대표 아이콘. 값 목록이 확정되지 않아 문자열로 둔다. */
+  @Column(name = "icon_type", nullable = false, length = 30)
+  private String iconType;
+
   @Column(name = "title", nullable = false, length = 50)
   private String title;
 
@@ -74,8 +78,8 @@ public class TimeCapsule extends BaseTimeEntity {
   @Column(name = "open_at", nullable = false)
   private LocalDateTime openAt;
 
-  /** 편지 작성 마감 일시. 없으면 공개 직전까지 쓸 수 있다. */
-  @Column(name = "letter_deadline_at")
+  /** 편지 작성 마감 일시. 이 시각부터 편지를 쓸 수 없고 캡슐이 잠긴다. */
+  @Column(name = "letter_deadline_at", nullable = false)
   private LocalDateTime letterDeadlineAt;
 
   @Column(name = "deleted_at")

@@ -78,9 +78,11 @@ class LetterIntegrationTest {
         capsules.save(
             TimeCapsule.builder()
                 .creator(owner)
+                .iconType("ICE_CREAM")
                 .title("캡슐")
                 .capsuleType(CapsuleType.GROUP)
                 .visibilityType(VisibilityType.ALL_MEMBERS)
+                .letterDeadlineAt(LocalDateTime.ofInstant(NOW, ZoneOffset.UTC).plusDays(1))
                 .openAt(LocalDateTime.ofInstant(NOW, ZoneOffset.UTC).plusDays(1))
                 .build());
     join(owner);
@@ -298,14 +300,14 @@ class LetterIntegrationTest {
   }
 
   @ParameterizedTest
-  @CsvSource({"1,,201", "0,,409", "-1,,409", "60,1,201", "60,0,409", "60,-1,409", "0,60,409"})
-  void creationHonorsExactTimeBoundaries(long openOffset, Long deadlineOffset, int expectedStatus)
+  @CsvSource({"1,60,201", "0,60,409", "-1,60,409", "60,1,201", "60,0,409", "60,-1,409"})
+  void creationHonorsExactTimeBoundaries(long openOffset, long deadlineOffset, int expectedStatus)
       throws Exception {
     LocalDateTime now = LocalDateTime.ofInstant(NOW, ZoneOffset.UTC);
     jdbc.update(
         "update time_capsules set open_at = ?, letter_deadline_at = ? where id = ?",
         now.plusSeconds(openOffset),
-        deadlineOffset == null ? null : now.plusSeconds(deadlineOffset),
+        now.plusSeconds(deadlineOffset),
         capsule.getId());
     ResultActions result = create(token, BODY).andExpect(status().is(expectedStatus));
     if (expectedStatus == 409) {
