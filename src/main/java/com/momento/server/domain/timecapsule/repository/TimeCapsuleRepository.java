@@ -46,8 +46,7 @@ public interface TimeCapsuleRepository extends JpaRepository<TimeCapsule, Long> 
   int openAll(@Param("ids") List<Long> ids);
 
   /**
-   * 편지 마감이 지났지만 아직 공개 시각은 되지 않은 캡슐을 잠근다. 마감이 없는 캡슐({@code letter_deadline_at IS NULL})은 잠기지 않고 공개
-   * 시각에 바로 열린다.
+   * 편지 마감이 지났지만 아직 공개 시각은 되지 않은 캡슐을 잠근다.
    *
    * @return 실제로 바뀐 행 수
    */
@@ -57,7 +56,6 @@ public interface TimeCapsuleRepository extends JpaRepository<TimeCapsule, Long> 
           + " set c.status = com.momento.server.domain.timecapsule.entity.CapsuleStatus.LOCKED"
           + " where c.deletedAt is null"
           + " and c.status = com.momento.server.domain.timecapsule.entity.CapsuleStatus.WRITING"
-          + " and c.letterDeadlineAt is not null"
           + " and c.letterDeadlineAt <= :now")
   int lockAllPastDeadline(@Param("now") LocalDateTime now);
 

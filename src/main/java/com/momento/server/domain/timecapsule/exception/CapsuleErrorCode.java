@@ -13,6 +13,9 @@ public enum CapsuleErrorCode implements ErrorCode {
 
   /** 나에게 쓰는 캡슐은 참여자가 생성자 한 명뿐이라 공개 범위를 고를 여지가 없다. */
   INVALID_SELF_CAPSULE_VISIBILITY("나에게 쓰는 캡슐의 공개 범위는 전체 공개여야 합니다.", HttpStatus.BAD_REQUEST),
+
+  /** 편지 수정 마감일은 오늘부터 개봉일 2일 전까지만 고를 수 있다. */
+  INVALID_CAPSULE_SCHEDULE("편지 수정 마감일은 오늘 이후, 개봉일 이전이어야 합니다.", HttpStatus.BAD_REQUEST),
   ;
 
   private final String message;
