@@ -115,7 +115,7 @@ public class TimeCapsule extends BaseTimeEntity {
     }
     if (status != CapsuleStatus.WRITING
         || !now.isBefore(openAt)
-        || (letterDeadlineAt != null && !now.isBefore(letterDeadlineAt))) {
+        || !now.isBefore(letterDeadlineAt)) {
       return LetterWritingEligibility.CLOSED;
     }
     return LetterWritingEligibility.ALLOWED;
