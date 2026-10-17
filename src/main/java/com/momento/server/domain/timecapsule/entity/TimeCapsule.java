@@ -82,17 +82,11 @@ public class TimeCapsule extends BaseTimeEntity {
   private LocalDateTime deletedAt;
 
   /**
-   * 이 역할의 참여자가 편지함에 들어갈 수 있는지. 캡슐이 열려야 하고, 수신자만 공개인 캡슐이면 수신자만 들어갈 수 있다. 그 밖의 범위에서는 참여자 전원이 들어가되, 어떤
-   * 편지가 보이는지는 {@link #canViewLetter} 로 한 통씩 정한다. OWNER 도 예외 없이 편지를 쓴 참여자로 취급한다.
+   * 이 역할의 참여자가 편지함에 들어갈 수 있는지. 캡슐이 열리면 공개 범위와 관계없이 참여자 전원이 들어가되, 어떤 편지가 보이는지는 {@link
+   * #canViewLetter} 로 한 통씩 정한다. OWNER 도 예외 없이 편지를 쓴 참여자로 취급한다.
    */
   public boolean canViewLetters(MemberRole role) {
-    if (status != CapsuleStatus.OPENED) {
-      return false;
-    }
-    return switch (visibilityType) {
-      case RECIPIENT_ONLY -> role == MemberRole.RECIPIENT;
-      case RECIPIENT_AND_AUTHOR, ALL_MEMBERS -> true;
-    };
+    return status == CapsuleStatus.OPENED;
   }
 
   /**
@@ -105,7 +99,7 @@ public class TimeCapsule extends BaseTimeEntity {
       return false;
     }
     return switch (visibilityType) {
-      case RECIPIENT_ONLY, ALL_MEMBERS -> true;
+      case ALL_MEMBERS -> true;
       case RECIPIENT_AND_AUTHOR -> role == MemberRole.RECIPIENT || isAuthor;
     };
   }

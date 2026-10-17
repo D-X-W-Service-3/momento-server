@@ -271,13 +271,10 @@ class LetterIntegrationTest {
 
   @ParameterizedTest
   @CsvSource({
-    "OWNER,RECIPIENT_ONLY,201",
     "OWNER,RECIPIENT_AND_AUTHOR,201",
     "OWNER,ALL_MEMBERS,201",
-    "PARTICIPANT,RECIPIENT_ONLY,201",
     "PARTICIPANT,RECIPIENT_AND_AUTHOR,201",
     "PARTICIPANT,ALL_MEMBERS,201",
-    "RECIPIENT,RECIPIENT_ONLY,403",
     "RECIPIENT,RECIPIENT_AND_AUTHOR,403",
     "RECIPIENT,ALL_MEMBERS,201"
   })
@@ -437,7 +434,7 @@ class LetterIntegrationTest {
 
   @ParameterizedTest
   @CsvSource({
-    "RECIPIENT_ONLY,403,LETTER_WRITING_NOT_ALLOWED",
+    "RECIPIENT_AND_AUTHOR,403,LETTER_WRITING_NOT_ALLOWED",
     "ALL_MEMBERS,409,LETTER_WRITING_CLOSED"
   })
   void recipientDenialDistinguishesPermissionFromDeadline(
@@ -461,7 +458,7 @@ class LetterIntegrationTest {
     jdbc.update(
         "update capsule_members set role = 'RECIPIENT' where time_capsule_id = ?", capsule.getId());
     jdbc.update(
-        "update time_capsules set visibility_type = 'RECIPIENT_ONLY' where id = ?",
+        "update time_capsules set visibility_type = 'RECIPIENT_AND_AUTHOR' where id = ?",
         capsule.getId());
     read(token).andExpect(status().isOk()).andExpect(jsonPath("$.data.content").value("내 편지"));
     create(token, BODY)

@@ -13,10 +13,6 @@ class TimeCapsuleTest {
 
   @ParameterizedTest(name = "{0} 캡슐의 {1}, 내가 쓴 편지={2} → {3}")
   @CsvSource({
-    // 수신자만: 작성자는 OWNER 라도 자기 편지를 못 본다
-    "RECIPIENT_ONLY,    RECIPIENT,   false, true",
-    "RECIPIENT_ONLY,    PARTICIPANT, true,  false",
-    "RECIPIENT_ONLY,    OWNER,       true,  false",
     // 수신자 + 작성자: 수신자는 전부, 작성자는 자기 편지만
     "RECIPIENT_AND_AUTHOR, RECIPIENT,   false, true",
     "RECIPIENT_AND_AUTHOR, PARTICIPANT, true,  true",

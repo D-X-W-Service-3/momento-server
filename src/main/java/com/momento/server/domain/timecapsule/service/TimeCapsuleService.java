@@ -56,9 +56,9 @@ public class TimeCapsuleService {
   }
 
   /**
-   * 나에게 쓰는 캡슐은 생성자가 OWNER 로만 들어가 수신자가 없다. {@code RECIPIENT_ONLY} 를 고르면 편지를 볼 수 있는 사람이 0 명이 되고,
-   * {@code RECIPIENT_AND_AUTHOR} 는 결과가 {@code ALL_MEMBERS} 와 같다. 고를 의미가 없는데 허용하면 같은 캡슐이 두 값으로 저장돼
-   * 통계·필터에서 갈리므로 하나만 받는다. 조용히 바꿔 저장하지 않고 400 으로 거절해 계약을 분명히 한다.
+   * 나에게 쓰는 캡슐은 생성자가 OWNER 로만 들어가 수신자가 없어 {@code RECIPIENT_AND_AUTHOR} 의 결과가 {@code ALL_MEMBERS} 와
+   * 같다. 고를 의미가 없는데 허용하면 같은 캡슐이 두 값으로 저장돼 통계·필터에서 갈리므로 하나만 받는다. 조용히 바꿔 저장하지 않고 400 으로 거절해 계약을 분명히
+   * 한다.
    */
   private void validateVisibility(CapsuleType capsuleType, VisibilityType visibilityType) {
     if (capsuleType == CapsuleType.SELF && visibilityType != VisibilityType.ALL_MEMBERS) {

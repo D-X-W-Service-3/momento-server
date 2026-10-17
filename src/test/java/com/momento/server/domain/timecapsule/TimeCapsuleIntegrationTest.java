@@ -133,16 +133,15 @@ class TimeCapsuleIntegrationTest {
         .andExpect(jsonPath("$.data.visibilityType").value("ALL_MEMBERS"));
   }
 
-  @ParameterizedTest(name = "SELF + {0} → 400")
-  @CsvSource({"RECIPIENT_ONLY", "RECIPIENT_AND_AUTHOR"})
+  @Test
   @DisplayName("나에게 쓰는 캡슐은 전체 공개 외의 범위를 거절하고 캡슐을 만들지 않는다")
-  void selfCapsuleRejectsOtherVisibilities(String visibilityType) throws Exception {
+  void selfCapsuleRejectsOtherVisibilities() throws Exception {
     mockMvc
         .perform(
             post("/v1/time-capsules")
                 .header(AUTHORIZATION, bearer(ownerToken))
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(createBody("나에게 쓰는 캡슐", "SELF", visibilityType, future())))
+                .content(createBody("나에게 쓰는 캡슐", "SELF", "RECIPIENT_AND_AUTHOR", future())))
         .andExpect(status().isBadRequest())
         .andExpect(jsonPath("$.code").value("INVALID_SELF_CAPSULE_VISIBILITY"));
 
@@ -152,14 +151,12 @@ class TimeCapsuleIntegrationTest {
 
   @ParameterizedTest(name = "{0} + {1} → 201")
   @CsvSource({
-    "FRIEND, RECIPIENT_ONLY",
     "FRIEND, RECIPIENT_AND_AUTHOR",
     "FRIEND, ALL_MEMBERS",
-    "GROUP,  RECIPIENT_ONLY",
     "GROUP,  RECIPIENT_AND_AUTHOR",
     "GROUP,  ALL_MEMBERS"
   })
-  @DisplayName("친구·그룹 캡슐은 세 공개 범위를 모두 받는다")
+  @DisplayName("친구·그룹 캡슐은 두 공개 범위를 모두 받는다")
   void otherCapsuleTypesAcceptEveryVisibility(String capsuleType, String visibilityType)
       throws Exception {
     mockMvc
@@ -171,15 +168,16 @@ class TimeCapsuleIntegrationTest {
         .andExpect(status().isCreated());
   }
 
-  @Test
-  @DisplayName("옛 이름 PARTICIPANTS_ONLY 로는 캡슐을 만들 수 없다")
-  void oldVisibilityNameIsRejected() throws Exception {
+  @ParameterizedTest(name = "{0} → 400")
+  @CsvSource({"PARTICIPANTS_ONLY", "RECIPIENT_ONLY"})
+  @DisplayName("없어진 공개 범위 값으로는 캡슐을 만들 수 없다")
+  void removedVisibilityIsRejected(String visibilityType) throws Exception {
     mockMvc
         .perform(
             post("/v1/time-capsules")
                 .header(AUTHORIZATION, bearer(ownerToken))
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(createBody("캡슐", "GROUP", "PARTICIPANTS_ONLY", future())))
+                .content(createBody("캡슐", "GROUP", visibilityType, future())))
         .andExpect(status().isBadRequest())
         .andExpect(jsonPath("$.code").value("INVALID_INPUT_VALUE"));
 
@@ -323,9 +321,6 @@ class TimeCapsuleIntegrationTest {
 
   @ParameterizedTest(name = "{0} 캡슐의 {1} → {2}")
   @CsvSource({
-    "RECIPIENT_ONLY,    RECIPIENT,   true",
-    "RECIPIENT_ONLY,    PARTICIPANT, false",
-    "RECIPIENT_ONLY,    OWNER,       false",
     "RECIPIENT_AND_AUTHOR, RECIPIENT,   true",
     "RECIPIENT_AND_AUTHOR, PARTICIPANT, true",
     "RECIPIENT_AND_AUTHOR, OWNER,       true",
@@ -333,7 +328,7 @@ class TimeCapsuleIntegrationTest {
     "ALL_MEMBERS,       PARTICIPANT, true",
     "ALL_MEMBERS,       OWNER,       true"
   })
-  @DisplayName("열린 캡슐의 편지함은 수신자만 공개일 때만 수신자로 제한되고, 참여자 목록은 OWNER 만 볼 수 있다")
+  @DisplayName("열린 캡슐의 편지함은 공개 범위와 관계없이 멤버 전원이 들어가고, 참여자 목록은 OWNER 만 볼 수 있다")
   void openedCapsuleVisibilityFollowsRole(
       VisibilityType visibility, MemberRole role, boolean canViewLetters) throws Exception {
     TimeCapsule capsule = saveCapsule(CapsuleStatus.OPENED, visibility, null);
