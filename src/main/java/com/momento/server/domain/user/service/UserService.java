@@ -1,5 +1,6 @@
 package com.momento.server.domain.user.service;
 
+import com.momento.server.domain.user.dto.request.UserUpdateRequest;
 import com.momento.server.domain.user.entity.User;
 import com.momento.server.domain.user.exception.UserErrorCode;
 import com.momento.server.domain.user.repository.UserRepository;
@@ -7,6 +8,7 @@ import com.momento.server.global.common.exception.ApiException;
 import java.util.Optional;
 import java.util.concurrent.ThreadLocalRandom;
 import lombok.RequiredArgsConstructor;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -29,6 +31,49 @@ public class UserService {
     return userRepository
         .findByIdAndDeletedAtIsNull(userId)
         .orElseThrow(() -> new ApiException(UserErrorCode.USER_NOT_FOUND));
+  }
+
+  /**
+   * 보낸 필드만 바꾼다. 이메일 · 전화번호는 빈 문자열이면 지운다.
+   *
+   * <p>닉네임은 저장 전에 다른 회원이 쓰는지 먼저 확인해 409 로 돌려준다. 다만 두 요청이 동시에 같은 닉네임으로 바꾸면 둘 다 확인을 통과하므로, 최종 판정은 DB
+   * 의 닉네임 UNIQUE 다. {@code saveAndFlush} 로 위반을 이 자리에서 드러내 같은 409 로 바꾼다. 커밋 시점까지 미루면 트랜잭션 밖에서 터져 500
+   * 이 된다. 이 테이블에서 수정으로 걸릴 수 있는 UNIQUE 는 닉네임뿐이다.
+   */
+  @Transactional
+  public User updateProfile(Long userId, UserUpdateRequest request) {
+    User user = getActiveUser(userId);
+
+    if (request.nickname() != null) {
+      if (userRepository.existsByNicknameAndIdNot(request.nickname(), userId)) {
+        throw new ApiException(UserErrorCode.NICKNAME_DUPLICATED);
+      }
+      user.updateNickname(request.nickname());
+    }
+    if (request.birthday() != null) {
+      user.updateBirthday(request.birthday());
+    }
+    if (request.email() != null) {
+      user.updateEmail(emptyToNull(request.email()));
+    }
+    if (request.phoneNumber() != null) {
+      user.updatePhoneNumber(emptyToNull(request.phoneNumber()));
+    }
+
+    try {
+      return userRepository.saveAndFlush(user);
+    } catch (DataIntegrityViolationException exception) {
+      throw new ApiException(UserErrorCode.NICKNAME_DUPLICATED, exception);
+    }
+  }
+
+  /** 다른 회원이 쓰지 않는 닉네임인지. 지금 내 닉네임이면 사용할 수 있다. */
+  public boolean isNicknameAvailable(Long userId, String nickname) {
+    return !userRepository.existsByNicknameAndIdNot(nickname, userId);
+  }
+
+  private String emptyToNull(String value) {
+    return value.isEmpty() ? null : value;
   }
 
   /** 새 회원은 다른 회원과 겹치지 않는 임시 닉네임으로 가입한다. 사용자는 가입 직후 프로필 설정에서 닉네임을 정한다. */
