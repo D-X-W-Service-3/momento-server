@@ -7,6 +7,7 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
@@ -31,11 +32,22 @@ public class User extends BaseTimeEntity {
   @Column(name = "kakao_id", nullable = false, unique = true, length = 100)
   private String kakaoId;
 
-  @Column(name = "nickname", nullable = false, length = 30)
+  /** 다른 회원과 겹치지 않는다(DB UNIQUE). 탈퇴 회원도 행이 남아 닉네임을 계속 차지한다. */
+  @Column(name = "nickname", nullable = false, unique = true, length = 30)
   private String nickname;
 
   @Column(name = "profile_image_url", length = 500)
   private String profileImageUrl;
+
+  @Column(name = "birthday")
+  private LocalDate birthday;
+
+  @Column(name = "email", length = 100)
+  private String email;
+
+  /** {@code 010-1234-5678} 처럼 하이픈을 넣은 형식. */
+  @Column(name = "phone_number", length = 20)
+  private String phoneNumber;
 
   @Builder.Default
   @Column(name = "notification_enabled", nullable = false)
