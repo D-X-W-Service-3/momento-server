@@ -126,6 +126,19 @@ class TimeCapsuleOverviewIntegrationTest {
   }
 
   @Test
+  @DisplayName("확인하지 않은 열린 캡슐은 열린 지 7일까지만 곧 만날 캡슐에 나오고, 그 뒤로는 열린 섹션에만 나온다")
+  void upcomingKeepsOpenedCapsulesForAWeek() throws Exception {
+    TimeCapsule sevenDays = mine("7일 전 열림", CapsuleStatus.OPENED, -20, -7);
+    TimeCapsule eightDays = mine("8일 전 열림", CapsuleStatus.OPENED, -20, -8);
+
+    overview()
+        .andExpect(jsonPath("$.data.upcoming[*].capsuleId").value(contains(id(sevenDays))))
+        .andExpect(
+            jsonPath("$.data.opened[*].capsuleId").value(contains(id(sevenDays), id(eightDays))))
+        .andExpect(jsonPath("$.data.opened[1].openedByMe").value(false));
+  }
+
+  @Test
   @DisplayName("두 섹션에 함께 나온 캡슐도 카드 내용은 같다")
   void sameCardAcrossSections() throws Exception {
     TimeCapsule capsule = mine("작성 중", CapsuleStatus.WRITING, 3, 10);

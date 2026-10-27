@@ -75,13 +75,22 @@ public interface TimeCapsuleRepository extends JpaRepository<TimeCapsule, Long> 
       @Param("cursorId") Long cursorId,
       Limit limit);
 
-  /** 탭 홈 "곧 만날 타임캡슐". 내가 아직 확인하지 않은 캡슐을 개봉일이 가까운 순으로 읽는다. 열렸지만 확인하지 않은 캡슐은 개봉일이 지나 있으므로 맨 앞에 온다. */
+  /**
+   * 탭 홈 "곧 만날 타임캡슐". 내가 아직 확인하지 않은 캡슐을 개봉일이 가까운 순으로 읽는다. 열렸지만 확인하지 않은 캡슐은 개봉일이 지나 있으므로 맨 앞에 온다.
+   *
+   * <p>열린 캡슐은 {@code openedSince} 이후에 열린 것만 넣는다. 오래전에 열고 확인하지 않은 캡슐이 섹션을 다 차지하면 곧 열릴 캡슐이 나오지 않는다.
+   * 그런 캡슐은 "추억이 열렸어요" 에서 "개봉 가능" 배지로 보인다.
+   */
   @Query(
       "select new com.momento.server.domain.timecapsule.repository.MyCapsule(c, m.openedAt)"
           + MY_ACTIVE_CAPSULES
           + " and m.openedAt is null"
+          + " and (c.status in (com.momento.server.domain.timecapsule.entity.CapsuleStatus.WRITING,"
+          + " com.momento.server.domain.timecapsule.entity.CapsuleStatus.LOCKED)"
+          + " or c.openAt >= :openedSince)"
           + " order by c.openAt, c.id")
-  List<MyCapsule> findMyUnopenedCapsules(@Param("userId") Long userId, Limit limit);
+  List<MyCapsule> findMyUnopenedCapsules(
+      @Param("userId") Long userId, @Param("openedSince") LocalDateTime openedSince, Limit limit);
 
   /** 탭 홈 "수정할 수 있어요". 작성 중인 캡슐을 편지 마감이 가까운 순으로 읽는다. */
   @Query(

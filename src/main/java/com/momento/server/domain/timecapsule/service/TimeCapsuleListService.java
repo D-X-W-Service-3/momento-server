@@ -10,6 +10,7 @@ import com.momento.server.domain.timecapsule.repository.CapsuleStatusCount;
 import com.momento.server.domain.timecapsule.repository.MyCapsule;
 import com.momento.server.domain.timecapsule.repository.TimeCapsuleRepository;
 import java.time.Clock;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -31,6 +32,9 @@ import org.springframework.transaction.annotation.Transactional;
 public class TimeCapsuleListService {
 
   private static final int OVERVIEW_SECTION_SIZE = 5;
+
+  /** "곧 만날 타임캡슐" 에 열린 캡슐을 개봉 후 며칠까지 남겨 둘지. 당일을 0 일로 센다. */
+  private static final int UPCOMING_OPENED_DAYS = 7;
 
   private final TimeCapsuleRepository timeCapsuleRepository;
   private final CapsuleMemberRepository capsuleMemberRepository;
@@ -70,7 +74,9 @@ public class TimeCapsuleListService {
    */
   public TimeCapsuleOverview getOverview(Long userId) {
     Limit section = Limit.of(OVERVIEW_SECTION_SIZE);
-    List<MyCapsule> upcoming = timeCapsuleRepository.findMyUnopenedCapsules(userId, section);
+    LocalDateTime openedSince = LocalDate.now(clock).minusDays(UPCOMING_OPENED_DAYS).atStartOfDay();
+    List<MyCapsule> upcoming =
+        timeCapsuleRepository.findMyUnopenedCapsules(userId, openedSince, section);
     List<MyCapsule> writing = timeCapsuleRepository.findMyWritingCapsules(userId, section);
     List<MyCapsule> locked =
         timeCapsuleRepository.findMyCapsules(

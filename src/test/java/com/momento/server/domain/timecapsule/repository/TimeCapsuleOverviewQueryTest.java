@@ -37,6 +37,7 @@ class TimeCapsuleOverviewQueryTest {
 
   private static final LocalDateTime NOW = LocalDateTime.of(2045, 1, 10, 12, 0);
   private static final Limit FIVE = Limit.of(5);
+  private static final LocalDateTime WEEK_AGO = NOW.toLocalDate().minusDays(7).atStartOfDay();
 
   @Autowired private TimeCapsuleRepository timeCapsuleRepository;
   @Autowired private CapsuleMemberRepository capsuleMemberRepository;
@@ -69,7 +70,7 @@ class TimeCapsuleOverviewQueryTest {
     TimeCapsule checked = mine(CapsuleStatus.OPENED, NOW.minusDays(9), NOW.minusDays(2));
     markOpened(checked, me);
 
-    assertThat(ids(timeCapsuleRepository.findMyUnopenedCapsules(me.getId(), FIVE)))
+    assertThat(ids(timeCapsuleRepository.findMyUnopenedCapsules(me.getId(), WEEK_AGO, FIVE)))
         .containsExactly(openedNotChecked.getId(), locked.getId(), later.getId());
   }
 
@@ -80,8 +81,19 @@ class TimeCapsuleOverviewQueryTest {
     join(capsule, friend);
     markOpened(capsule, friend);
 
-    assertThat(ids(timeCapsuleRepository.findMyUnopenedCapsules(me.getId(), FIVE)))
+    assertThat(ids(timeCapsuleRepository.findMyUnopenedCapsules(me.getId(), WEEK_AGO, FIVE)))
         .containsExactly(capsule.getId());
+  }
+
+  @Test
+  @DisplayName("곧 만날 캡슐에는 기준일 이후에 열린 캡슐만 들어간다")
+  void unopenedSkipsLongAgoOpenedCapsules() {
+    TimeCapsule onBoundary = mine(CapsuleStatus.OPENED, WEEK_AGO.minusDays(9), WEEK_AGO);
+    mine(CapsuleStatus.OPENED, WEEK_AGO.minusDays(10), WEEK_AGO.minusDays(1));
+    TimeCapsule writing = mine(CapsuleStatus.WRITING, NOW.plusDays(2), NOW.plusDays(10));
+
+    assertThat(ids(timeCapsuleRepository.findMyUnopenedCapsules(me.getId(), WEEK_AGO, FIVE)))
+        .containsExactly(onBoundary.getId(), writing.getId());
   }
 
   @Test
@@ -116,7 +128,7 @@ class TimeCapsuleOverviewQueryTest {
     }
 
     assertThat(timeCapsuleRepository.findMyWritingCapsules(me.getId(), FIVE)).hasSize(5);
-    assertThat(timeCapsuleRepository.findMyUnopenedCapsules(me.getId(), FIVE)).hasSize(5);
+    assertThat(timeCapsuleRepository.findMyUnopenedCapsules(me.getId(), WEEK_AGO, FIVE)).hasSize(5);
   }
 
   @Test
