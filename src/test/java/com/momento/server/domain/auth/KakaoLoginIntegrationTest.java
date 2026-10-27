@@ -41,6 +41,7 @@ class KakaoLoginIntegrationTest {
 
   private static final long KAKAO_ID = 1234567890L;
   private static final String NICKNAME = "모모";
+  private static final String TEMPORARY_NICKNAME = "모멘토친구\\d{6}";
   private static final String PROFILE_IMAGE_URL = "https://k.kakaocdn.net/dn/profile.jpg";
   private static final String REDIRECT_URI = "http://localhost:3000/auth/kakao/callback";
   private static final String LOGIN_BODY =
@@ -58,12 +59,17 @@ class KakaoLoginIntegrationTest {
     userRepository.deleteAll();
     given(kakaoAuthClient.issueToken(any()))
         .willReturn(new KakaoTokenResponse("kakao-access-token"));
+    givenKakaoUser(KAKAO_ID, NICKNAME, PROFILE_IMAGE_URL);
+  }
+
+  private void givenKakaoUser(long kakaoId, String nickname, String profileImageUrl) {
+    KakaoUserResponse.KakaoAccount account =
+        nickname == null && profileImageUrl == null
+            ? null
+            : new KakaoUserResponse.KakaoAccount(
+                new KakaoUserResponse.Profile(nickname, profileImageUrl));
     given(kakaoApiClient.getUserInfo(anyString()))
-        .willReturn(
-            new KakaoUserResponse(
-                KAKAO_ID,
-                new KakaoUserResponse.KakaoAccount(
-                    new KakaoUserResponse.Profile(NICKNAME, PROFILE_IMAGE_URL))));
+        .willReturn(new KakaoUserResponse(kakaoId, account));
   }
 
   @AfterEach
@@ -77,7 +83,7 @@ class KakaoLoginIntegrationTest {
     String accessToken = login(true);
 
     User saved = userRepository.findByKakaoId(String.valueOf(KAKAO_ID)).orElseThrow();
-    assertThat(saved.getNickname()).isEqualTo(NICKNAME);
+    assertThat(saved.getNickname()).matches(TEMPORARY_NICKNAME).isNotEqualTo(NICKNAME);
     assertThat(saved.getProfileImageUrl()).isEqualTo(PROFILE_IMAGE_URL);
     assertThat(saved.isNotificationEnabled()).isTrue();
     assertThat(saved.getDeletedAt()).isNull();
@@ -102,19 +108,48 @@ class KakaoLoginIntegrationTest {
   }
 
   @Test
-  @DisplayName("탈퇴한 회원이 같은 카카오 계정으로 로그인하면 계정이 복구된다")
+  @DisplayName("카카오 닉네임에 동의하지 않아도 임시 닉네임으로 가입한다")
+  void loginWithoutKakaoNickname() throws Exception {
+    givenKakaoUser(KAKAO_ID, null, null);
+
+    login(true);
+
+    User saved = userRepository.findByKakaoId(String.valueOf(KAKAO_ID)).orElseThrow();
+    assertThat(saved.getNickname()).matches(TEMPORARY_NICKNAME);
+    assertThat(saved.getProfileImageUrl()).isNull();
+  }
+
+  @Test
+  @DisplayName("카카오 닉네임이 같은 두 사람이 가입해도 닉네임이 겹치지 않는다")
+  void twoUsersGetDifferentNicknames() throws Exception {
+    login(true);
+    givenKakaoUser(KAKAO_ID + 1, NICKNAME, PROFILE_IMAGE_URL);
+    login(true);
+
+    assertThat(userRepository.findAll())
+        .extracting(User::getNickname)
+        .hasSize(2)
+        .doesNotHaveDuplicates();
+  }
+
+  @Test
+  @DisplayName("탈퇴한 회원이 같은 카카오 계정으로 로그인하면 계정이 복구되고, 닉네임 · 사진은 탈퇴 전 그대로다")
   void loginRestoresWithdrawnUser() throws Exception {
     login(true);
 
     User user = userRepository.findByKakaoId(String.valueOf(KAKAO_ID)).orElseThrow();
+    user.updateNickname("직접정한닉네임");
     user.withdraw();
     userRepository.saveAndFlush(user);
+    givenKakaoUser(KAKAO_ID, "카카오에서바꾼닉네임", "https://k.kakaocdn.net/dn/changed.jpg");
 
     login(false);
 
+    User restored = userRepository.findByKakaoId(String.valueOf(KAKAO_ID)).orElseThrow();
     assertThat(userRepository.count()).isEqualTo(1);
-    assertThat(userRepository.findByKakaoId(String.valueOf(KAKAO_ID)).orElseThrow().getDeletedAt())
-        .isNull();
+    assertThat(restored.getDeletedAt()).isNull();
+    assertThat(restored.getNickname()).isEqualTo("직접정한닉네임");
+    assertThat(restored.getProfileImageUrl()).isEqualTo(PROFILE_IMAGE_URL);
   }
 
   @Test

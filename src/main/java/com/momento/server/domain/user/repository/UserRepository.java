@@ -10,4 +10,7 @@ public interface UserRepository extends JpaRepository<User, Long> {
   Optional<User> findByKakaoId(String kakaoId);
 
   Optional<User> findByIdAndDeletedAtIsNull(Long id);
+
+  /** 탈퇴 회원의 닉네임도 센다. 탈퇴는 소프트 삭제라 행이 남아 닉네임을 계속 차지한다. */
+  boolean existsByNickname(String nickname);
 }

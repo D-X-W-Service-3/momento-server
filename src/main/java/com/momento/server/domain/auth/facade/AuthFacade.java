@@ -28,14 +28,9 @@ public class AuthFacade {
 
     User user =
         found
-            .map(
-                existing ->
-                    userService.restoreIfWithdrawn(
-                        existing.getId(), kakaoUser.nickname(), kakaoUser.profileImageUrl()))
+            .map(existing -> userService.restoreIfWithdrawn(existing.getId()))
             .orElseGet(
-                () ->
-                    userService.register(
-                        kakaoUser.kakaoId(), kakaoUser.nickname(), kakaoUser.profileImageUrl()));
+                () -> userService.register(kakaoUser.kakaoId(), kakaoUser.profileImageUrl()));
 
     String accessToken = tokenProvider.generateToken(user, ACCESS_TOKEN_EXPIRY);
 

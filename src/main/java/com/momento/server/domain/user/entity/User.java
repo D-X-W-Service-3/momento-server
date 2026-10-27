@@ -53,11 +53,12 @@ public class User extends BaseTimeEntity {
     this.deletedAt = LocalDateTime.now();
   }
 
-  /** 탈퇴했던 회원이 같은 카카오 계정으로 다시 로그인했을 때 카카오 프로필로 되살린다. */
-  public void restore(String nickname, String profileImageUrl) {
+  /**
+   * 탈퇴했던 회원이 같은 카카오 계정으로 다시 로그인했을 때 되살린다. 닉네임 · 프로필 사진은 탈퇴 전 값을 그대로 둔다. 카카오 프로필로 덮으면 사용자가 정한 값이
+   * 사라진다.
+   */
+  public void restore() {
     this.deletedAt = null;
-    this.nickname = nickname;
-    this.profileImageUrl = profileImageUrl;
   }
 
   public void updateNickname(String nickname) {
