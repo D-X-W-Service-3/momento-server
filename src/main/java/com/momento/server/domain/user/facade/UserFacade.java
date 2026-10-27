@@ -3,6 +3,7 @@ package com.momento.server.domain.user.facade;
 import com.momento.server.domain.timecapsule.service.TimeCapsuleListService;
 import com.momento.server.domain.user.dto.request.UserUpdateRequest;
 import com.momento.server.domain.user.dto.response.MyProfileResponse;
+import com.momento.server.domain.user.dto.response.NicknameAvailabilityResponse;
 import com.momento.server.domain.user.entity.User;
 import com.momento.server.domain.user.service.UserService;
 import lombok.RequiredArgsConstructor;
@@ -27,5 +28,10 @@ public class UserFacade {
     User user = userService.updateProfile(userId, request);
 
     return MyProfileResponse.of(user, timeCapsuleListService.countMyCapsulesByStatus(userId));
+  }
+
+  public NicknameAvailabilityResponse checkNickname(Long userId, String nickname) {
+    return new NicknameAvailabilityResponse(
+        nickname, userService.isNicknameAvailable(userId, nickname));
   }
 }

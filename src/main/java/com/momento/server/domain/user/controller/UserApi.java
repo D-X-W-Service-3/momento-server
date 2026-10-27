@@ -1,13 +1,16 @@
 package com.momento.server.domain.user.controller;
 
+import com.momento.server.domain.user.dto.request.NicknameAvailabilityRequest;
 import com.momento.server.domain.user.dto.request.UserUpdateRequest;
 import com.momento.server.domain.user.dto.response.MyProfileResponse;
+import com.momento.server.domain.user.dto.response.NicknameAvailabilityResponse;
 import com.momento.server.global.common.auth.UserPrincipal;
 import com.momento.server.global.common.dto.CommonResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import org.springdoc.core.annotations.ParameterObject;
 
 @Tag(name = "User", description = "회원 API")
 public interface UserApi {
@@ -29,4 +32,14 @@ public interface UserApi {
               + "형식이 맞지 않으면 400 INVALID_INPUT_VALUE 다. 수정 후 내 정보 조회와 같은 형태를 돌려준다.")
   CommonResponse<MyProfileResponse> updateMyProfile(
       @Parameter(hidden = true) UserPrincipal principal, @Valid UserUpdateRequest request);
+
+  @Operation(
+      summary = "닉네임 사용 가능 여부 확인",
+      description =
+          "프로필 설정에서 닉네임을 입력하면 호출한다. 다른 회원(탈퇴한 회원 포함)이 쓰지 않으면 available 이 true 다. "
+              + "지금 내 닉네임이면 true 다. 앞뒤 공백을 빼고 확인하며, 2~20자가 아니면 400 INVALID_INPUT_VALUE 다. "
+              + "확인 뒤 저장 사이에 다른 회원이 가져갈 수 있으므로, 최종 판정은 내 정보 수정의 409 다.")
+  CommonResponse<NicknameAvailabilityResponse> checkNickname(
+      @Parameter(hidden = true) UserPrincipal principal,
+      @ParameterObject @Valid NicknameAvailabilityRequest request);
 }

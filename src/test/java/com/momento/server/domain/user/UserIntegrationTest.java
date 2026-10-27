@@ -38,6 +38,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -289,6 +290,62 @@ class UserIntegrationTest {
             MockMvcRequestBuilders.patch("/v1/users/me")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"nickname\": \"모모\"}"))
+        .andExpect(status().isUnauthorized());
+  }
+
+  @Test
+  @DisplayName("아무도 쓰지 않는 닉네임은 사용할 수 있고, 앞뒤 공백을 뺀 값으로 확인한다")
+  void availableNickname() throws Exception {
+    authorized(get("/v1/users/nickname/availability").param("nickname", "  모모  "))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.data.nickname").value("모모"))
+        .andExpect(jsonPath("$.data.available").value(true));
+  }
+
+  @Test
+  @DisplayName("다른 회원이 쓰는 닉네임은 사용할 수 없고, 탈퇴한 회원의 닉네임도 마찬가지다")
+  void takenNickname() throws Exception {
+    userRepository.save(User.builder().kakaoId("user-other").nickname("유빈").build());
+    User withdrawn = User.builder().kakaoId("user-withdrawn").nickname("지수").build();
+    withdrawn.withdraw();
+    userRepository.save(withdrawn);
+
+    authorized(get("/v1/users/nickname/availability").param("nickname", "유빈"))
+        .andExpect(jsonPath("$.data.available").value(false));
+    authorized(get("/v1/users/nickname/availability").param("nickname", "지수"))
+        .andExpect(jsonPath("$.data.available").value(false));
+  }
+
+  @Test
+  @DisplayName("지금 내 닉네임은 사용할 수 있다")
+  void myNicknameIsAvailable() throws Exception {
+    authorized(get("/v1/users/nickname/availability").param("nickname", "상래"))
+        .andExpect(jsonPath("$.data.available").value(true));
+  }
+
+  @ParameterizedTest(name = "\"{0}\"")
+  @ValueSource(strings = {"상", " 상 ", "가나다라마바사아자차카타파하가나다라마바사"})
+  @DisplayName("2~20자가 아니면 400 이다")
+  void rejectsNicknameLength(String nickname) throws Exception {
+    authorized(get("/v1/users/nickname/availability").param("nickname", nickname))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.code").value("INVALID_INPUT_VALUE"))
+        .andExpect(jsonPath("$.message").value("닉네임은 2자 이상 20자 이하여야 합니다."));
+  }
+
+  @Test
+  @DisplayName("닉네임을 보내지 않으면 400 이다")
+  void requiresNickname() throws Exception {
+    authorized(get("/v1/users/nickname/availability"))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.code").value("INVALID_INPUT_VALUE"));
+  }
+
+  @Test
+  @DisplayName("인증 없이 확인할 수 없다")
+  void availabilityRequiresAuthentication() throws Exception {
+    mockMvc
+        .perform(get("/v1/users/nickname/availability").param("nickname", "모모"))
         .andExpect(status().isUnauthorized());
   }
 
