@@ -135,6 +135,16 @@ class TimeCapsuleListQueryTest {
   }
 
   @Test
+  @DisplayName("내 닉네임으로는 찾지 않는다")
+  void doesNotMatchMyOwnNickname() {
+    mine("캡슐", OPEN, CapsuleStatus.WRITING);
+    TimeCapsule withFriend = mine("캡슐", OPEN, CapsuleStatus.WRITING);
+    join(withFriend, saveUser("list-sang", "상민"), MemberStatus.ACTIVE);
+
+    assertThat(ids(findAll(null, "상"))).containsExactly(withFriend.getId());
+  }
+
+  @Test
   @DisplayName("닉네임이 여러 명 맞아도 캡슐은 한 번만 나온다")
   void nicknameMatchesDoNotDuplicate() {
     TimeCapsule capsule = mine("캡슐", OPEN, CapsuleStatus.WRITING);

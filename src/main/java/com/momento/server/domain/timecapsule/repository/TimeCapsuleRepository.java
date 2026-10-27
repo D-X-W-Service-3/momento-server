@@ -25,8 +25,9 @@ public interface TimeCapsuleRepository extends JpaRepository<TimeCapsule, Long> 
           + " and c.deletedAt is null";
 
   /**
-   * 캡슐 이름 · 설명 · ACTIVE 멤버 닉네임 중 하나에 검색어가 들어 있는 캡슐. {@code :keyword} 가 null 이면 거르지 않는다. 닉네임은 조인하면
-   * 여러 명이 맞을 때 같은 캡슐이 여러 번 나오므로 서브쿼리로 찾는다.
+   * 캡슐 이름 · 설명 · 나를 뺀 ACTIVE 멤버 닉네임 중 하나에 검색어가 들어 있는 캡슐. {@code :keyword} 가 null 이면 거르지 않는다. 내
+   * 닉네임까지 보면 내 닉네임의 일부로 검색했을 때 내 캡슐이 전부 나온다. 닉네임은 조인하면 여러 명이 맞을 때 같은 캡슐이 여러 번 나오므로 서브쿼리로 찾는다. 이 조건을
+   * 쓰는 쿼리는 {@code :userId} 를 받아야 한다.
    */
   String KEYWORD_MATCHES =
       " and (:keyword is null"
@@ -35,6 +36,7 @@ public interface TimeCapsuleRepository extends JpaRepository<TimeCapsule, Long> 
           + " or exists (select km.id from CapsuleMember km join km.user ku"
           + " where km.timeCapsule = c"
           + " and km.status = com.momento.server.domain.timecapsule.entity.MemberStatus.ACTIVE"
+          + " and ku.id <> :userId"
           + " and ku.nickname like :keyword escape '!'))";
 
   /**
