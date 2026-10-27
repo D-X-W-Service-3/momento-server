@@ -9,6 +9,7 @@ import com.momento.server.domain.timecapsule.dto.response.TimeCapsuleOpenRespons
 import com.momento.server.domain.timecapsule.entity.CapsuleStatus;
 import com.momento.server.domain.timecapsule.entity.TimeCapsule;
 import com.momento.server.domain.timecapsule.service.TimeCapsuleDetail;
+import com.momento.server.domain.timecapsule.service.TimeCapsuleListService;
 import com.momento.server.domain.timecapsule.service.TimeCapsulePage;
 import com.momento.server.domain.timecapsule.service.TimeCapsuleService;
 import com.momento.server.domain.timecapsule.service.TimeCapsuleSummary;
@@ -30,6 +31,7 @@ public class TimeCapsuleFacade {
 
   private final UserService userService;
   private final TimeCapsuleService timeCapsuleService;
+  private final TimeCapsuleListService timeCapsuleListService;
   private final Clock clock;
 
   public TimeCapsuleCreateResponse create(Long userId, TimeCapsuleCreateRequest request) {
@@ -60,7 +62,7 @@ public class TimeCapsuleFacade {
     }
     TimeCapsuleCursor after = TimeCapsuleCursor.parse(cursor);
     TimeCapsulePage page =
-        timeCapsuleService.getMyCapsules(
+        timeCapsuleListService.getMyCapsules(
             userId,
             status,
             keyword,
