@@ -175,6 +175,17 @@ class TimeCapsuleOverviewQueryTest {
     assertThat(capsuleInviteeRepository.existsPendingFor(me.getId(), NOW)).isFalse();
   }
 
+  @Test
+  @DisplayName("잠기거나 열린 캡슐의 초대는 수락할 수 없으므로 대기 중이 아니다")
+  void noPendingInviteForClosedCapsule() {
+    for (CapsuleStatus closed : List.of(CapsuleStatus.LOCKED, CapsuleStatus.OPENED)) {
+      TimeCapsule capsule = saveCapsule(friend, closed, NOW.minusDays(1), null);
+      open(saveInvite(capsule, InviteStatus.ACTIVE, null), me, InviteeStatus.PENDING);
+    }
+
+    assertThat(capsuleInviteeRepository.existsPendingFor(me.getId(), NOW)).isFalse();
+  }
+
   private List<Long> ids(List<MyCapsule> capsules) {
     return capsules.stream().map(found -> found.capsule().getId()).toList();
   }
