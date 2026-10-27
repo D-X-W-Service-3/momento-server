@@ -120,8 +120,11 @@ CREATE TABLE `memories` (
 CREATE TABLE `users` (
 	`id`	BIGINT	NOT NULL	AUTO_INCREMENT	COMMENT '회원 ID',
 	`kakao_id`	VARCHAR(100)	NOT NULL	UNIQUE	COMMENT '카카오 회원 고유 ID',
-	`nickname`	VARCHAR(30)	NOT NULL	COMMENT '닉네임',
+	`nickname`	VARCHAR(30)	NOT NULL	UNIQUE	COMMENT '닉네임. 탈퇴 회원도 행이 남아 계속 차지한다',
 	`profile_image_url`	VARCHAR(500)	NULL	COMMENT '프로필 이미지 URL',
+	`birthday`	DATE	NULL	COMMENT '생일',
+	`email`	VARCHAR(100)	NULL	COMMENT '이메일',
+	`phone_number`	VARCHAR(20)	NULL	COMMENT '전화번호 (010-1234-5678)',
 	`notification_enabled`	BOOLEAN	NOT NULL	DEFAULT TRUE	COMMENT '알림 수신 여부',
 	`created_at`	DATETIME(6)	NOT NULL	COMMENT '생성 일시',
 	`updated_at`	DATETIME(6)	NOT NULL	COMMENT '수정 일시',
