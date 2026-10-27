@@ -48,6 +48,18 @@ class TimeCapsuleCardResponseTest {
     assertThat(card(capsule).deadlineDDay()).isEqualTo(3);
   }
 
+  @Test
+  @DisplayName("마감이 지났는데 아직 작성 중이면 마감 D-Day 는 음수가 아니라 0 이다")
+  void deadlineDDayDoesNotGoNegative() {
+    TimeCapsule capsule =
+        capsule(
+            CapsuleStatus.WRITING,
+            TODAY.minusDays(1).atTime(23, 59, 59),
+            TODAY.plusDays(1).atStartOfDay());
+
+    assertThat(card(capsule).deadlineDDay()).isZero();
+  }
+
   @ParameterizedTest(name = "{0}")
   @EnumSource(
       value = CapsuleStatus.class,

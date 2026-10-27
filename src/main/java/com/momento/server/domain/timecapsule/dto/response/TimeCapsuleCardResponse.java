@@ -31,6 +31,9 @@ public record TimeCapsuleCardResponse(
   /**
    * D-Day 는 시각이 아니라 날짜로 센다. 마감 23:59:59 인 캡슐도 마감일 당일이면 0 이다.
    *
+   * <p>마감 D-Day 는 0 아래로 내려가지 않는다. 자정에 마감이 지나도 스케줄러가 LOCKED 로 바꾸기 전까지(최대 한 주기) 캡슐은 WRITING 이라, 그대로
+   * 두면 "수정마감 D+1" 처럼 보인다.
+   *
    * @param today 서버 시간대의 오늘. 호출하는 쪽이 {@code LocalDate.now(clock)} 으로 넘긴다
    */
   public static TimeCapsuleCardResponse of(
@@ -41,7 +44,7 @@ public record TimeCapsuleCardResponse(
       LocalDate today) {
     Integer deadlineDDay =
         capsule.getStatus() == CapsuleStatus.WRITING
-            ? daysUntil(today, capsule.getLetterDeadlineAt())
+            ? Math.max(0, daysUntil(today, capsule.getLetterDeadlineAt()))
             : null;
     return new TimeCapsuleCardResponse(
         capsule.getId(),
