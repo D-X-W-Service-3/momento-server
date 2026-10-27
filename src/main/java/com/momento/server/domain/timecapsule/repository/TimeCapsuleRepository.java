@@ -73,6 +73,30 @@ public interface TimeCapsuleRepository extends JpaRepository<TimeCapsule, Long> 
       @Param("cursorId") Long cursorId,
       Limit limit);
 
+  /** 탭 홈 "곧 만날 타임캡슐". 내가 아직 확인하지 않은 캡슐을 개봉일이 가까운 순으로 읽는다. 열렸지만 확인하지 않은 캡슐은 개봉일이 지나 있으므로 맨 앞에 온다. */
+  @Query(
+      "select new com.momento.server.domain.timecapsule.repository.MyCapsule(c, m.openedAt)"
+          + MY_ACTIVE_CAPSULES
+          + " and m.openedAt is null"
+          + " order by c.openAt, c.id")
+  List<MyCapsule> findMyUnopenedCapsules(@Param("userId") Long userId, Limit limit);
+
+  /** 탭 홈 "수정할 수 있어요". 작성 중인 캡슐을 편지 마감이 가까운 순으로 읽는다. */
+  @Query(
+      "select new com.momento.server.domain.timecapsule.repository.MyCapsule(c, m.openedAt)"
+          + MY_ACTIVE_CAPSULES
+          + " and c.status = com.momento.server.domain.timecapsule.entity.CapsuleStatus.WRITING"
+          + " order by c.letterDeadlineAt, c.id")
+  List<MyCapsule> findMyWritingCapsules(@Param("userId") Long userId, Limit limit);
+
+  /** 탭 홈 "추억이 열렸어요". 열린 캡슐을 최근에 열린 순으로 읽는다. */
+  @Query(
+      "select new com.momento.server.domain.timecapsule.repository.MyCapsule(c, m.openedAt)"
+          + MY_ACTIVE_CAPSULES
+          + " and c.status = com.momento.server.domain.timecapsule.entity.CapsuleStatus.OPENED"
+          + " order by c.openAt desc, c.id desc")
+  List<MyCapsule> findMyOpenedCapsules(@Param("userId") Long userId, Limit limit);
+
   /** 내가 속한 캡슐의 상태별 개수. 검색어는 적용하고, 상태 탭과 커서는 적용하지 않는다. 캡슐이 없는 상태는 결과에 없다. */
   @Query(
       "select new com.momento.server.domain.timecapsule.repository.CapsuleStatusCount("
