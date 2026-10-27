@@ -13,4 +13,7 @@ public interface UserRepository extends JpaRepository<User, Long> {
 
   /** 탈퇴 회원의 닉네임도 센다. 탈퇴는 소프트 삭제라 행이 남아 닉네임을 계속 차지한다. */
   boolean existsByNickname(String nickname);
+
+  /** 이 닉네임을 나 말고 다른 회원이 쓰고 있는지. 지금 내 닉네임으로 확인하거나 저장하면 false 다. */
+  boolean existsByNicknameAndIdNot(String nickname, Long id);
 }
