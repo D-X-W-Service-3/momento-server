@@ -76,10 +76,15 @@ public class UserService {
     return value.isEmpty() ? null : value;
   }
 
-  /** 새 회원은 다른 회원과 겹치지 않는 임시 닉네임으로 가입한다. 사용자는 가입 직후 프로필 설정에서 닉네임을 정한다. */
+  /**
+   * 새 회원은 다른 회원과 겹치지 않는 임시 닉네임으로 가입한다. 사용자는 가입 직후 프로필 설정에서 닉네임을 정한다.
+   *
+   * <p>{@code saveAndFlush} 로 UNIQUE 위반(임시 닉네임 · 카카오 ID)을 이 자리에서 {@code
+   * DataIntegrityViolationException} 으로 드러낸다. 다시 시도할지는 호출하는 쪽이 정한다.
+   */
   @Transactional
   public User register(String kakaoId, String profileImageUrl) {
-    return userRepository.save(
+    return userRepository.saveAndFlush(
         User.builder()
             .kakaoId(kakaoId)
             .nickname(newTemporaryNickname())
@@ -89,7 +94,7 @@ public class UserService {
 
   /**
    * {@code 모멘토친구} 뒤에 숫자 6자리를 붙이고, 이미 있으면 다시 뽑는다. 경우의 수가 90만 개라 겹칠 일이 드물다. 동시에 가입한 두 사람이 같은 번호를 뽑으면
-   * 닉네임 UNIQUE 에 걸려 한 사람의 가입이 실패하고, 다시 로그인하면 된다.
+   * 닉네임 UNIQUE 에 걸리고, 로그인 쪽에서 한 번 더 가입시킨다.
    */
   private String newTemporaryNickname() {
     for (int attempt = 0; attempt < TEMPORARY_NICKNAME_ATTEMPTS; attempt++) {

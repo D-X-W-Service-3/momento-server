@@ -4,6 +4,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.BDDMockito.then;
+import static org.mockito.BDDMockito.willAnswer;
+import static org.mockito.BDDMockito.willThrow;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -17,6 +21,7 @@ import com.momento.server.domain.auth.external.dto.KakaoTokenResponse;
 import com.momento.server.domain.auth.external.dto.KakaoUserResponse;
 import com.momento.server.domain.user.entity.User;
 import com.momento.server.domain.user.repository.UserRepository;
+import com.momento.server.domain.user.service.UserService;
 import feign.FeignException;
 import feign.Request;
 import java.nio.charset.StandardCharsets;
@@ -29,9 +34,14 @@ import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.util.MultiValueMap;
 
 /** 카카오 API 만 대체하고 로그인 흐름을 실제 필터/시큐리티까지 태워 검증한다. */
@@ -50,9 +60,11 @@ class KakaoLoginIntegrationTest {
   @Autowired private MockMvc mockMvc;
   @Autowired private ObjectMapper objectMapper;
   @Autowired private UserRepository userRepository;
+  @Autowired private PlatformTransactionManager transactionManager;
 
   @MockitoBean private KakaoAuthClient kakaoAuthClient;
   @MockitoBean private KakaoApiClient kakaoApiClient;
+  @MockitoSpyBean private UserService userService;
 
   @BeforeEach
   void setUp() {
@@ -130,6 +142,48 @@ class KakaoLoginIntegrationTest {
         .extracting(User::getNickname)
         .hasSize(2)
         .doesNotHaveDuplicates();
+  }
+
+  @Test
+  @DisplayName("가입이 닉네임 UNIQUE 에 걸려도 한 번 더 시도해 로그인에 성공한다")
+  void retriesRegisterOnUniqueViolation() throws Exception {
+    willThrow(new DataIntegrityViolationException("임시 닉네임 중복"))
+        .willCallRealMethod()
+        .given(userService)
+        .register(anyString(), any());
+
+    login(true);
+
+    assertThat(userRepository.findByKakaoId(String.valueOf(KAKAO_ID))).isPresent();
+    then(userService).should(times(2)).register(anyString(), any());
+  }
+
+  @Test
+  @DisplayName("같은 카카오 계정의 다른 요청이 먼저 가입시켰으면 그 회원으로 로그인한다")
+  void usesAccountCreatedByConcurrentLogin() throws Exception {
+    TransactionTemplate otherRequest = new TransactionTemplate(transactionManager);
+    otherRequest.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+    willAnswer(
+            invocation -> {
+              // 다른 요청이 먼저 가입시켜 커밋까지 마친 상황이다. 이 가입의 트랜잭션은 롤백되므로 따로 커밋한다.
+              otherRequest.executeWithoutResult(
+                  tx ->
+                      userRepository.save(
+                          User.builder()
+                              .kakaoId(invocation.getArgument(0))
+                              .nickname("먼저가입")
+                              .build()));
+              throw new DataIntegrityViolationException("카카오 ID 중복");
+            })
+        .given(userService)
+        .register(anyString(), any());
+
+    login(true);
+
+    assertThat(userRepository.count()).isEqualTo(1);
+    assertThat(userRepository.findByKakaoId(String.valueOf(KAKAO_ID)).orElseThrow().getNickname())
+        .isEqualTo("먼저가입");
+    then(userService).should(times(1)).register(anyString(), any());
   }
 
   @Test
