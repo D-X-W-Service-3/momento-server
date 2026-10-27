@@ -76,4 +76,18 @@ public class User extends BaseTimeEntity {
   public void updateNickname(String nickname) {
     this.nickname = nickname;
   }
+
+  public void updateBirthday(LocalDate birthday) {
+    this.birthday = birthday;
+  }
+
+  /** null 이면 지운다. */
+  public void updateEmail(String email) {
+    this.email = email;
+  }
+
+  /** null 이면 지운다. */
+  public void updatePhoneNumber(String phoneNumber) {
+    this.phoneNumber = phoneNumber;
+  }
 }
