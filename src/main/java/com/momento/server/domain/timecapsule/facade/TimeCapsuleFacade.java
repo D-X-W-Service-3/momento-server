@@ -6,10 +6,12 @@ import com.momento.server.domain.timecapsule.dto.response.TimeCapsuleCreateRespo
 import com.momento.server.domain.timecapsule.dto.response.TimeCapsuleDetailResponse;
 import com.momento.server.domain.timecapsule.dto.response.TimeCapsuleListResponse;
 import com.momento.server.domain.timecapsule.dto.response.TimeCapsuleOpenResponse;
+import com.momento.server.domain.timecapsule.dto.response.TimeCapsuleOverviewResponse;
 import com.momento.server.domain.timecapsule.entity.CapsuleStatus;
 import com.momento.server.domain.timecapsule.entity.TimeCapsule;
 import com.momento.server.domain.timecapsule.service.TimeCapsuleDetail;
 import com.momento.server.domain.timecapsule.service.TimeCapsuleListService;
+import com.momento.server.domain.timecapsule.service.TimeCapsuleOverview;
 import com.momento.server.domain.timecapsule.service.TimeCapsulePage;
 import com.momento.server.domain.timecapsule.service.TimeCapsuleService;
 import com.momento.server.domain.timecapsule.service.TimeCapsuleSummary;
@@ -72,9 +74,22 @@ public class TimeCapsuleFacade {
 
     return new TimeCapsuleListResponse(
         TimeCapsuleListResponse.Counts.of(page.countsByStatus()),
-        toCards(page.capsules()),
+        toCards(page.capsules(), LocalDate.now(clock)),
         page.hasNext() ? nextCursor(page.capsules()) : null,
         page.hasNext());
+  }
+
+  /** 네 섹션의 D-Day 를 같은 날짜로 계산하려고 오늘을 한 번만 읽는다. */
+  public TimeCapsuleOverviewResponse getOverview(Long userId) {
+    TimeCapsuleOverview overview = timeCapsuleListService.getOverview(userId);
+    LocalDate today = LocalDate.now(clock);
+
+    return new TimeCapsuleOverviewResponse(
+        overview.hasPendingInvite(),
+        toCards(overview.upcoming(), today),
+        toCards(overview.writing(), today),
+        toCards(overview.locked(), today),
+        toCards(overview.opened(), today));
   }
 
   private String nextCursor(List<TimeCapsuleSummary> capsules) {
@@ -82,8 +97,8 @@ public class TimeCapsuleFacade {
     return new TimeCapsuleCursor(last.getOpenAt(), last.getId()).encode();
   }
 
-  private List<TimeCapsuleCardResponse> toCards(List<TimeCapsuleSummary> capsules) {
-    LocalDate today = LocalDate.now(clock);
+  private List<TimeCapsuleCardResponse> toCards(
+      List<TimeCapsuleSummary> capsules, LocalDate today) {
     return capsules.stream()
         .map(
             summary ->

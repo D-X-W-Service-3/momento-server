@@ -5,6 +5,7 @@ import com.momento.server.domain.timecapsule.dto.response.TimeCapsuleCreateRespo
 import com.momento.server.domain.timecapsule.dto.response.TimeCapsuleDetailResponse;
 import com.momento.server.domain.timecapsule.dto.response.TimeCapsuleListResponse;
 import com.momento.server.domain.timecapsule.dto.response.TimeCapsuleOpenResponse;
+import com.momento.server.domain.timecapsule.dto.response.TimeCapsuleOverviewResponse;
 import com.momento.server.domain.timecapsule.entity.CapsuleStatus;
 import com.momento.server.domain.timecapsule.facade.TimeCapsuleFacade;
 import com.momento.server.global.common.annotation.RestApiController;
@@ -45,6 +46,13 @@ public class TimeCapsuleController implements TimeCapsuleApi {
       @RequestParam(defaultValue = "20") int size) {
     return CommonResponse.ok(
         timeCapsuleFacade.getList(principal.getUserId(), status, keyword, cursor, size));
+  }
+
+  @Override
+  @GetMapping("/overview")
+  public CommonResponse<TimeCapsuleOverviewResponse> getTimeCapsuleOverview(
+      @AuthenticationPrincipal UserPrincipal principal) {
+    return CommonResponse.ok(timeCapsuleFacade.getOverview(principal.getUserId()));
   }
 
   @Override

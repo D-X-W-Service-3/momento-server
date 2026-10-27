@@ -5,6 +5,7 @@ import com.momento.server.domain.timecapsule.dto.response.TimeCapsuleCreateRespo
 import com.momento.server.domain.timecapsule.dto.response.TimeCapsuleDetailResponse;
 import com.momento.server.domain.timecapsule.dto.response.TimeCapsuleListResponse;
 import com.momento.server.domain.timecapsule.dto.response.TimeCapsuleOpenResponse;
+import com.momento.server.domain.timecapsule.dto.response.TimeCapsuleOverviewResponse;
 import com.momento.server.domain.timecapsule.entity.CapsuleStatus;
 import com.momento.server.global.common.auth.UserPrincipal;
 import com.momento.server.global.common.dto.CommonResponse;
@@ -39,6 +40,17 @@ public interface TimeCapsuleApi {
       @Parameter(description = "검색어. 캡슐 이름 · 설명 · 멤버 닉네임에서 찾는다", example = "제주") String keyword,
       @Parameter(description = "다음 페이지 커서. 첫 조회 때는 보내지 않는다") String cursor,
       @Parameter(description = "한 번에 조회할 개수. 1~100", example = "20") int size);
+
+  @Operation(
+      summary = "타임캡슐 탭 홈 조회",
+      description =
+          "하단 탭 '타임캡슐' 첫 화면의 섹션을 한 번에 조회한다. 섹션마다 최대 5개이고, 원소는 목록 조회의 capsules[] 와 같은 카드다. "
+              + "upcoming 은 내가 아직 확인하지 않은 캡슐을 개봉일이 가까운 순으로, writing 은 편지 마감이 가까운 순으로, "
+              + "locked 는 개봉일이 가까운 순으로, opened 는 최근에 열린 순으로 담는다. 같은 캡슐이 upcoming 과 다른 섹션에 함께 나올 수 있다. "
+              + "각 섹션의 '전체보기' 는 목록 조회를 해당 status 로 호출한다. "
+              + "hasPendingInvite 는 내가 초대 링크를 열고 아직 수락 · 거절하지 않은 초대가 있으면 true 다.")
+  CommonResponse<TimeCapsuleOverviewResponse> getTimeCapsuleOverview(
+      @Parameter(hidden = true) UserPrincipal principal);
 
   @Operation(
       summary = "타임캡슐 상세 조회",
