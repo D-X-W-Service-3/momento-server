@@ -49,13 +49,6 @@ public class CapsuleInvite extends BaseTimeEntity {
   @JoinColumn(name = "inviter_id", nullable = false)
   private User inviter;
 
-  /**
-   * 이 링크를 처음 연 회원. 발급할 때는 비어 있고, 로그인한 회원이 처음 열면 그 회원에게 고정된다. 탭 홈의 초대 배너가 이 값으로 나에게 온 대기 중 초대를 찾는다.
-   */
-  @ManyToOne(fetch = FetchType.LAZY)
-  @JoinColumn(name = "invitee_id")
-  private User invitee;
-
   @Column(name = "invite_token", nullable = false, unique = true, length = 100)
   private String inviteToken;
 

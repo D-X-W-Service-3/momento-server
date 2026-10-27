@@ -4,7 +4,7 @@ import com.momento.server.domain.letter.entity.LetterStatus;
 import com.momento.server.domain.timecapsule.entity.CapsuleStatus;
 import com.momento.server.domain.timecapsule.entity.MemberStatus;
 import com.momento.server.domain.timecapsule.repository.CapsuleCount;
-import com.momento.server.domain.timecapsule.repository.CapsuleInviteRepository;
+import com.momento.server.domain.timecapsule.repository.CapsuleInviteeRepository;
 import com.momento.server.domain.timecapsule.repository.CapsuleMemberRepository;
 import com.momento.server.domain.timecapsule.repository.CapsuleStatusCount;
 import com.momento.server.domain.timecapsule.repository.MyCapsule;
@@ -34,7 +34,7 @@ public class TimeCapsuleListService {
 
   private final TimeCapsuleRepository timeCapsuleRepository;
   private final CapsuleMemberRepository capsuleMemberRepository;
-  private final CapsuleInviteRepository capsuleInviteRepository;
+  private final CapsuleInviteeRepository capsuleInviteeRepository;
   private final Clock clock;
 
   /**
@@ -86,7 +86,7 @@ public class TimeCapsuleListService {
             .collect(Collectors.toMap(summary -> summary.capsule().getId(), summary -> summary));
 
     boolean hasPendingInvite =
-        capsuleInviteRepository.existsPendingFor(userId, LocalDateTime.now(clock));
+        capsuleInviteeRepository.existsPendingFor(userId, LocalDateTime.now(clock));
 
     return new TimeCapsuleOverview(
         hasPendingInvite,

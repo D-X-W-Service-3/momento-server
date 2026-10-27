@@ -3,10 +3,12 @@ package com.momento.server.domain.timecapsule.repository;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.momento.server.domain.timecapsule.entity.CapsuleInvite;
+import com.momento.server.domain.timecapsule.entity.CapsuleInvitee;
 import com.momento.server.domain.timecapsule.entity.CapsuleMember;
 import com.momento.server.domain.timecapsule.entity.CapsuleStatus;
 import com.momento.server.domain.timecapsule.entity.CapsuleType;
 import com.momento.server.domain.timecapsule.entity.InviteStatus;
+import com.momento.server.domain.timecapsule.entity.InviteeStatus;
 import com.momento.server.domain.timecapsule.entity.MemberRole;
 import com.momento.server.domain.timecapsule.entity.MemberStatus;
 import com.momento.server.domain.timecapsule.entity.TimeCapsule;
@@ -39,6 +41,7 @@ class TimeCapsuleOverviewQueryTest {
   @Autowired private TimeCapsuleRepository timeCapsuleRepository;
   @Autowired private CapsuleMemberRepository capsuleMemberRepository;
   @Autowired private CapsuleInviteRepository capsuleInviteRepository;
+  @Autowired private CapsuleInviteeRepository capsuleInviteeRepository;
   @Autowired private UserRepository userRepository;
   @Autowired private TransactionTemplate transactionTemplate;
 
@@ -117,42 +120,59 @@ class TimeCapsuleOverviewQueryTest {
   }
 
   @Test
-  @DisplayName("나에게 고정된 ACTIVE 초대가 있으면 대기 중인 초대가 있다")
+  @DisplayName("내가 연 링크에 아직 응답하지 않았으면 대기 중인 초대가 있다")
   void pendingInviteExists() {
-    saveInvite(othersCapsule(), me, InviteStatus.ACTIVE, null);
+    open(saveInvite(othersCapsule(), InviteStatus.ACTIVE, null), me, InviteeStatus.PENDING);
 
-    assertThat(capsuleInviteRepository.existsPendingFor(me.getId(), NOW)).isTrue();
+    assertThat(capsuleInviteeRepository.existsPendingFor(me.getId(), NOW)).isTrue();
+  }
+
+  @Test
+  @DisplayName("공유 링크 하나를 여러 명이 열면 모두 대기 중이다")
+  void sharedLinkIsPendingForEveryone() {
+    CapsuleInvite link = saveInvite(othersCapsule(), InviteStatus.ACTIVE, null);
+    User other = saveUser("overview-other", "민수");
+    open(link, me, InviteeStatus.PENDING);
+    open(link, other, InviteeStatus.PENDING);
+
+    assertThat(capsuleInviteeRepository.existsPendingFor(me.getId(), NOW)).isTrue();
+    assertThat(capsuleInviteeRepository.existsPendingFor(other.getId(), NOW)).isTrue();
   }
 
   @Test
   @DisplayName("만료 시각 전이면 대기 중이고, 만료 시각이 되면 대기 중이 아니다")
   void pendingInviteExpiresAtBoundary() {
-    saveInvite(othersCapsule(), me, InviteStatus.ACTIVE, NOW);
+    open(saveInvite(othersCapsule(), InviteStatus.ACTIVE, NOW), me, InviteeStatus.PENDING);
 
-    assertThat(capsuleInviteRepository.existsPendingFor(me.getId(), NOW.minusSeconds(1))).isTrue();
-    assertThat(capsuleInviteRepository.existsPendingFor(me.getId(), NOW)).isFalse();
+    assertThat(capsuleInviteeRepository.existsPendingFor(me.getId(), NOW.minusSeconds(1))).isTrue();
+    assertThat(capsuleInviteeRepository.existsPendingFor(me.getId(), NOW)).isFalse();
   }
 
   @Test
-  @DisplayName("끝난 초대, 남에게 고정된 초대, 아무도 열지 않은 초대는 대기 중이 아니다")
+  @DisplayName("수락 · 거절한 초대, 끝난 링크, 남만 연 링크, 아무도 열지 않은 링크는 대기 중이 아니다")
   void noPendingInvite() {
-    saveInvite(othersCapsule(), me, InviteStatus.REVOKED, null);
-    saveInvite(othersCapsule(), saveUser("overview-other", "민수"), InviteStatus.ACTIVE, null);
-    saveInvite(othersCapsule(), null, InviteStatus.ACTIVE, null);
+    open(saveInvite(othersCapsule(), InviteStatus.ACTIVE, null), me, InviteeStatus.DECLINED);
+    open(saveInvite(othersCapsule(), InviteStatus.ACTIVE, null), me, InviteeStatus.ACCEPTED);
+    open(saveInvite(othersCapsule(), InviteStatus.REVOKED, null), me, InviteeStatus.PENDING);
+    open(
+        saveInvite(othersCapsule(), InviteStatus.ACTIVE, null),
+        saveUser("overview-other", "민수"),
+        InviteeStatus.PENDING);
+    saveInvite(othersCapsule(), InviteStatus.ACTIVE, null);
 
-    assertThat(capsuleInviteRepository.existsPendingFor(me.getId(), NOW)).isFalse();
+    assertThat(capsuleInviteeRepository.existsPendingFor(me.getId(), NOW)).isFalse();
   }
 
   @Test
   @DisplayName("삭제된 캡슐의 초대나 이미 멤버인 캡슐의 초대는 대기 중이 아니다")
   void noPendingInviteForDeletedOrJoinedCapsule() {
     TimeCapsule deleted = saveCapsule(friend, CapsuleStatus.WRITING, NOW.plusDays(2), NOW);
-    saveInvite(deleted, me, InviteStatus.ACTIVE, null);
+    open(saveInvite(deleted, InviteStatus.ACTIVE, null), me, InviteeStatus.PENDING);
     TimeCapsule joined = othersCapsule();
     join(joined, me);
-    saveInvite(joined, me, InviteStatus.ACTIVE, null);
+    open(saveInvite(joined, InviteStatus.ACTIVE, null), me, InviteeStatus.PENDING);
 
-    assertThat(capsuleInviteRepository.existsPendingFor(me.getId(), NOW)).isFalse();
+    assertThat(capsuleInviteeRepository.existsPendingFor(me.getId(), NOW)).isFalse();
   }
 
   private List<Long> ids(List<MyCapsule> capsules) {
@@ -212,17 +232,21 @@ class TimeCapsuleOverviewQueryTest {
         tx -> capsuleMemberRepository.markOpenedIfAbsent(member.getId(), NOW));
   }
 
-  private void saveInvite(
-      TimeCapsule capsule, User invitee, InviteStatus status, LocalDateTime expiresAt) {
-    capsuleInviteRepository.save(
+  private CapsuleInvite saveInvite(
+      TimeCapsule capsule, InviteStatus status, LocalDateTime expiresAt) {
+    return capsuleInviteRepository.save(
         CapsuleInvite.builder()
             .timeCapsule(capsule)
             .inviter(friend)
-            .invitee(invitee)
             .inviteToken(UUID.randomUUID().toString())
             .status(status)
             .expiresAt(expiresAt)
             .build());
+  }
+
+  private void open(CapsuleInvite invite, User user, InviteeStatus status) {
+    capsuleInviteeRepository.save(
+        CapsuleInvitee.builder().capsuleInvite(invite).user(user).status(status).build());
   }
 
   private User saveUser(String kakaoId, String nickname) {
@@ -230,6 +254,7 @@ class TimeCapsuleOverviewQueryTest {
   }
 
   private void cleanUp() {
+    capsuleInviteeRepository.deleteAllInBatch();
     capsuleInviteRepository.deleteAllInBatch();
     capsuleMemberRepository.deleteAllInBatch();
     timeCapsuleRepository.deleteAllInBatch();

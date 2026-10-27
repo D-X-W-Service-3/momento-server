@@ -9,6 +9,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.momento.server.domain.timecapsule.entity.CapsuleInvite;
+import com.momento.server.domain.timecapsule.entity.CapsuleInvitee;
 import com.momento.server.domain.timecapsule.entity.CapsuleMember;
 import com.momento.server.domain.timecapsule.entity.CapsuleStatus;
 import com.momento.server.domain.timecapsule.entity.CapsuleType;
@@ -18,6 +19,7 @@ import com.momento.server.domain.timecapsule.entity.MemberStatus;
 import com.momento.server.domain.timecapsule.entity.TimeCapsule;
 import com.momento.server.domain.timecapsule.entity.VisibilityType;
 import com.momento.server.domain.timecapsule.repository.CapsuleInviteRepository;
+import com.momento.server.domain.timecapsule.repository.CapsuleInviteeRepository;
 import com.momento.server.domain.timecapsule.repository.CapsuleMemberRepository;
 import com.momento.server.domain.timecapsule.repository.TimeCapsuleRepository;
 import com.momento.server.domain.user.entity.User;
@@ -62,6 +64,7 @@ class TimeCapsuleOverviewIntegrationTest {
   @Autowired private TimeCapsuleRepository timeCapsuleRepository;
   @Autowired private CapsuleMemberRepository capsuleMemberRepository;
   @Autowired private CapsuleInviteRepository capsuleInviteRepository;
+  @Autowired private CapsuleInviteeRepository capsuleInviteeRepository;
   @Autowired private TransactionTemplate transactionTemplate;
 
   @MockitoBean private Clock clock;
@@ -257,16 +260,18 @@ class TimeCapsuleOverviewIntegrationTest {
         tx -> capsuleMemberRepository.markOpenedIfAbsent(member.getId(), NOW_AT));
   }
 
+  /** 내가 이 캡슐의 초대 링크를 열고 아직 응답하지 않은 상태를 만든다. */
   private void saveInvite(TimeCapsule capsule, LocalDateTime expiresAt) {
-    capsuleInviteRepository.save(
-        CapsuleInvite.builder()
-            .timeCapsule(capsule)
-            .inviter(friend)
-            .invitee(me)
-            .inviteToken(UUID.randomUUID().toString())
-            .status(InviteStatus.ACTIVE)
-            .expiresAt(expiresAt)
-            .build());
+    CapsuleInvite invite =
+        capsuleInviteRepository.save(
+            CapsuleInvite.builder()
+                .timeCapsule(capsule)
+                .inviter(friend)
+                .inviteToken(UUID.randomUUID().toString())
+                .status(InviteStatus.ACTIVE)
+                .expiresAt(expiresAt)
+                .build());
+    capsuleInviteeRepository.save(CapsuleInvitee.builder().capsuleInvite(invite).user(me).build());
   }
 
   private User saveUser(String kakaoId, String nickname) {
@@ -274,6 +279,7 @@ class TimeCapsuleOverviewIntegrationTest {
   }
 
   private void cleanUp() {
+    capsuleInviteeRepository.deleteAllInBatch();
     capsuleInviteRepository.deleteAllInBatch();
     capsuleMemberRepository.deleteAllInBatch();
     timeCapsuleRepository.deleteAllInBatch();
