@@ -25,10 +25,11 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * 내가 속한 캡슐을 카드로 여러 개 읽는다. 목록 · 탭 홈처럼 캡슐 카드를 내려주는 조회가 여기 모인다. 캡슐 하나를 ID 로 다루는 일(생성 · 상세 · 개봉 확인)은
  * {@link TimeCapsuleService} 가 맡는다.
+ *
+ * <p>조회 메서드는 쿼리를 여러 번 한다(페이지 · 개수 · 멤버 수 · 편지 수). 한 트랜잭션으로 묶어 같은 시점의 데이터로 카드와 개수를 만든다.
  */
 @Service
 @RequiredArgsConstructor
-@Transactional(readOnly = true)
 public class TimeCapsuleListService {
 
   private static final int OVERVIEW_SECTION_SIZE = 5;
@@ -47,6 +48,7 @@ public class TimeCapsuleListService {
    * @param keyword 비어 있으면 검색하지 않는다
    * @param cursorOpenAt 직전 페이지 마지막 캡슐의 개봉일. null 이면 첫 페이지
    */
+  @Transactional(readOnly = true)
   public TimeCapsulePage getMyCapsules(
       Long userId,
       CapsuleStatus status,
@@ -72,6 +74,7 @@ public class TimeCapsuleListService {
    * 탭 홈의 네 섹션과 초대 배너 여부를 읽는다. 같은 캡슐이 "곧 만날" 과 다른 섹션에 함께 나올 수 있어서, 멤버 수 · 편지 수는 네 섹션의 캡슐을 중복 없이 모아 한
    * 번에 센다.
    */
+  @Transactional(readOnly = true)
   public TimeCapsuleOverview getOverview(Long userId) {
     Limit section = Limit.of(OVERVIEW_SECTION_SIZE);
     LocalDateTime openedSince = LocalDate.now(clock).minusDays(UPCOMING_OPENED_DAYS).atStartOfDay();
