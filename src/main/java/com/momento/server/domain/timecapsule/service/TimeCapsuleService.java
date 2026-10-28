@@ -1,11 +1,13 @@
 package com.momento.server.domain.timecapsule.service;
 
 import com.momento.server.domain.letter.entity.LetterStatus;
+import com.momento.server.domain.letter.repository.LetterRepository;
 import com.momento.server.domain.timecapsule.dto.request.TimeCapsuleCreateRequest;
 import com.momento.server.domain.timecapsule.entity.CapsuleMember;
 import com.momento.server.domain.timecapsule.entity.CapsuleSchedule;
 import com.momento.server.domain.timecapsule.entity.CapsuleStatus;
 import com.momento.server.domain.timecapsule.entity.CapsuleType;
+import com.momento.server.domain.timecapsule.entity.LetterWritingEligibility;
 import com.momento.server.domain.timecapsule.entity.MemberRole;
 import com.momento.server.domain.timecapsule.entity.MemberStatus;
 import com.momento.server.domain.timecapsule.entity.TimeCapsule;
@@ -18,7 +20,9 @@ import com.momento.server.global.common.exception.ApiException;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Limit;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
@@ -28,8 +32,14 @@ import org.springframework.transaction.annotation.Transactional;
 @Transactional(readOnly = true)
 public class TimeCapsuleService {
 
+  private static final int PREVIEW_SIZE = 5;
+  private static final List<MemberRole> PARTICIPANT_ROLES =
+      List.of(MemberRole.OWNER, MemberRole.PARTICIPANT);
+  private static final List<MemberRole> RECIPIENT_ROLES = List.of(MemberRole.RECIPIENT);
+
   private final TimeCapsuleRepository timeCapsuleRepository;
   private final CapsuleMemberRepository capsuleMemberRepository;
+  private final LetterRepository letterRepository;
   private final Clock clock;
 
   /**
@@ -93,7 +103,40 @@ public class TimeCapsuleService {
     long letterCount =
         timeCapsuleRepository.countLettersByStatus(capsuleId, LetterStatus.SUBMITTED);
 
-    return new TimeCapsuleDetail(capsule, me.getRole(), memberCount, letterCount);
+    return new TimeCapsuleDetail(
+        capsule,
+        me,
+        memberCount,
+        letterCount,
+        memberGroup(capsuleId, PARTICIPANT_ROLES),
+        memberGroup(capsuleId, RECIPIENT_ROLES),
+        permissionsOf(capsule, me));
+  }
+
+  private TimeCapsuleDetail.MemberGroup memberGroup(Long capsuleId, List<MemberRole> roles) {
+    return new TimeCapsuleDetail.MemberGroup(
+        capsuleMemberRepository.countByTimeCapsuleIdAndRoleInAndStatus(
+            capsuleId, roles, MemberStatus.ACTIVE),
+        capsuleMemberRepository.findPreviews(capsuleId, roles, Limit.of(PREVIEW_SIZE)));
+  }
+
+  /**
+   * 버튼마다 해당 API 가 거절하는 조건을 그대로 쓴다. 편지 작성은 편지 작성 서비스와 같은 판정에 1인 1통 조건을 더한다. 관리 · 삭제는 방장이고 편지 수정 마감
+   * 전이어야 하고, 삭제는 여기에 삭제되지 않은 편지 0통을 더한다.
+   */
+  private CapsulePermissions permissionsOf(TimeCapsule capsule, CapsuleMember me) {
+    Long capsuleId = capsule.getId();
+    boolean canWriteLetter =
+        capsule.getLetterWritingEligibility(me.getRole(), LocalDateTime.now(clock))
+                == LetterWritingEligibility.ALLOWED
+            && !letterRepository.existsByTimeCapsuleIdAndAuthorIdAndDeletedAtIsNull(
+                capsuleId, me.getUser().getId());
+    boolean canManage = me.isOwner() && capsule.isEditable();
+    boolean canDelete =
+        canManage && letterRepository.countByTimeCapsuleIdAndDeletedAtIsNull(capsuleId) == 0;
+
+    return new CapsulePermissions(
+        canWriteLetter, canManage, canManage, canDelete, capsule.canViewLetters(me.getRole()));
   }
 
   /**

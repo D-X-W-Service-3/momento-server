@@ -50,7 +50,7 @@ public class TimeCapsuleFacade {
     TimeCapsuleDetail detail = timeCapsuleService.getDetail(capsuleId, userId);
 
     return TimeCapsuleDetailResponse.of(
-        detail.capsule(), detail.myRole(), detail.memberCount(), detail.letterCount());
+        detail.capsule(), detail.me().getRole(), detail.memberCount(), detail.letterCount());
   }
 
   /**
