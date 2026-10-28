@@ -164,6 +164,24 @@ public class TimeCapsuleService {
   }
 
   /**
+   * 방장이 캡슐을 지운다(소프트 삭제). 편지 수정 마감 전이고, 삭제되지 않은 편지(임시 저장 · 방장 편지 포함)가 한 통도 없을 때만 된다.
+   *
+   * <p>편지 작성과 같은 캡슐 행 잠금을 먼저 얻는다. 편지를 센 뒤 지우기 전에 편지가 저장되는 일을 막기 위해서다. 둘 중 하나가 끝나야 다른 하나가 진행되므로, 편지가
+   * 먼저 저장되면 409 이고 삭제가 먼저 끝나면 편지 작성이 404 다.
+   */
+  @Transactional
+  public void delete(Long capsuleId, Long userId) {
+    TimeCapsule capsule = getActiveCapsuleForUpdate(capsuleId);
+    CapsuleMember me = requireActiveMember(capsuleId, userId);
+    requireManageable(capsule, me);
+
+    if (letterRepository.countByTimeCapsuleIdAndDeletedAtIsNull(capsuleId) > 0) {
+      throw new ApiException(CapsuleErrorCode.CAPSULE_HAS_LETTERS);
+    }
+    capsule.delete(LocalDateTime.now(clock));
+  }
+
+  /**
    * 방장이 캡슐을 바꾸는 작업의 공통 조건. 멤버인지는 호출하는 쪽이 먼저 확인한다(404 가 403 보다 먼저다). 방장이 아니면 403, 편지 수정 마감 뒤면 409 다.
    * 상세 조회의 {@code canManage} 와 같은 조건이다.
    */
