@@ -3,6 +3,7 @@ package com.momento.server.domain.timecapsule.service;
 import com.momento.server.domain.letter.entity.LetterStatus;
 import com.momento.server.domain.letter.repository.LetterRepository;
 import com.momento.server.domain.timecapsule.dto.request.TimeCapsuleCreateRequest;
+import com.momento.server.domain.timecapsule.dto.request.TimeCapsuleUpdateRequest;
 import com.momento.server.domain.timecapsule.entity.CapsuleMember;
 import com.momento.server.domain.timecapsule.entity.CapsuleSchedule;
 import com.momento.server.domain.timecapsule.entity.CapsuleStatus;
@@ -137,6 +138,42 @@ public class TimeCapsuleService {
 
     return new CapsulePermissions(
         canWriteLetter, canManage, canManage, canDelete, capsule.canViewLetters(me.getRole()));
+  }
+
+  /**
+   * 방장이 아이콘 · 이름 · 설명을 고친다. 보낸 필드만 바꾸고, 설명은 빈 문자열이면 지운다.
+   *
+   * <p>캡슐 행을 잠그고 시작한다. 더티 체킹은 엔티티의 모든 컬럼을 UPDATE 하므로, 잠그지 않으면 그사이 스케줄러가 LOCKED 로 바꾼 상태를 이 수정이
+   * WRITING 으로 되돌려 쓴다. 상태는 잠금을 얻은 뒤 읽은 값으로 판정한다.
+   */
+  @Transactional
+  public void update(Long capsuleId, Long userId, TimeCapsuleUpdateRequest request) {
+    TimeCapsule capsule = getActiveCapsuleForUpdate(capsuleId);
+    CapsuleMember me = requireActiveMember(capsuleId, userId);
+    requireManageable(capsule, me);
+
+    if (request.iconType() != null) {
+      capsule.updateIconType(request.iconType());
+    }
+    if (request.title() != null) {
+      capsule.updateTitle(request.title());
+    }
+    if (request.description() != null) {
+      capsule.updateDescription(request.description().isEmpty() ? null : request.description());
+    }
+  }
+
+  /**
+   * 방장이 캡슐을 바꾸는 작업의 공통 조건. 멤버인지는 호출하는 쪽이 먼저 확인한다(404 가 403 보다 먼저다). 방장이 아니면 403, 편지 수정 마감 뒤면 409 다.
+   * 상세 조회의 {@code canManage} 와 같은 조건이다.
+   */
+  private void requireManageable(TimeCapsule capsule, CapsuleMember me) {
+    if (!me.isOwner()) {
+      throw new ApiException(CapsuleErrorCode.CAPSULE_OWNER_ONLY);
+    }
+    if (!capsule.isEditable()) {
+      throw new ApiException(CapsuleErrorCode.CAPSULE_NOT_EDITABLE);
+    }
   }
 
   /**
