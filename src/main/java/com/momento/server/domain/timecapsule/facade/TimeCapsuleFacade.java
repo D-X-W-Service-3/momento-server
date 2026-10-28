@@ -49,8 +49,7 @@ public class TimeCapsuleFacade {
   public TimeCapsuleDetailResponse getDetail(Long capsuleId, Long userId) {
     TimeCapsuleDetail detail = timeCapsuleService.getDetail(capsuleId, userId);
 
-    return TimeCapsuleDetailResponse.of(
-        detail.capsule(), detail.me().getRole(), detail.memberCount(), detail.letterCount());
+    return TimeCapsuleDetailResponse.of(detail, LocalDate.now(clock));
   }
 
   /**

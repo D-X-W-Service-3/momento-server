@@ -305,7 +305,7 @@ class TimeCapsuleIntegrationTest {
   // ---------- 상세 조회 ----------
 
   @Test
-  @DisplayName("OWNER 가 상세를 조회하면 내 역할과 볼 수 있는 범위를 함께 받는다")
+  @DisplayName("OWNER 가 상세를 조회하면 내 역할과 할 수 있는 동작을 함께 받는다")
   void ownerGetsDetail() throws Exception {
     Long capsuleId = createCapsule(ownerToken);
 
@@ -319,8 +319,9 @@ class TimeCapsuleIntegrationTest {
         .andExpect(jsonPath("$.data.myRole").value("OWNER"))
         .andExpect(jsonPath("$.data.memberCount").value(1))
         .andExpect(jsonPath("$.data.letterCount").value(0))
-        .andExpect(jsonPath("$.data.canViewMemberList").value(true))
-        .andExpect(jsonPath("$.data.canViewLetters").value(false));
+        .andExpect(jsonPath("$.data.permissions.canManage").value(true))
+        .andExpect(jsonPath("$.data.permissions.canViewLetters").value(false))
+        .andExpect(jsonPath("$.data.canViewMemberList").doesNotExist());
   }
 
   @Test
@@ -384,7 +385,7 @@ class TimeCapsuleIntegrationTest {
     "ALL_MEMBERS,       PARTICIPANT, true",
     "ALL_MEMBERS,       OWNER,       true"
   })
-  @DisplayName("열린 캡슐의 편지함은 공개 범위와 관계없이 멤버 전원이 들어가고, 참여자 목록은 OWNER 만 볼 수 있다")
+  @DisplayName("열린 캡슐의 편지함은 공개 범위와 관계없이 멤버 전원이 들어간다")
   void openedCapsuleVisibilityFollowsRole(
       VisibilityType visibility, MemberRole role, boolean canViewLetters) throws Exception {
     TimeCapsule capsule = saveCapsule(CapsuleStatus.OPENED, visibility, null);
@@ -397,8 +398,7 @@ class TimeCapsuleIntegrationTest {
                 .header(AUTHORIZATION, bearer(tokenOf(viewer))))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.data.myRole").value(role.name()))
-        .andExpect(jsonPath("$.data.canViewLetters").value(canViewLetters))
-        .andExpect(jsonPath("$.data.canViewMemberList").value(role == MemberRole.OWNER));
+        .andExpect(jsonPath("$.data.permissions.canViewLetters").value(canViewLetters));
   }
 
   @Test

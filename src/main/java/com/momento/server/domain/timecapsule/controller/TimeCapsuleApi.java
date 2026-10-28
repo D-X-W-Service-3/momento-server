@@ -55,7 +55,10 @@ public interface TimeCapsuleApi {
   @Operation(
       summary = "타임캡슐 상세 조회",
       description =
-          "참여 중인 캡슐의 상세와 내 역할, 볼 수 있는 범위를 조회한다. 없는 캡슐, 삭제된 캡슐, 참여하지 않았거나 나간 캡슐은 구분하지 않고 모두 404 로 응답한다.")
+          "캡슐 상세 화면(수정 가능 · 잠긴 캡슐 · 열린 캡슐)을 그린다. 캡슐 정보, 참여자 · 수신자 미리보기(역할별 최대 5명, 방장이 맨 앞), "
+              + "로그인한 멤버가 할 수 있는 동작(permissions)을 준다. 버튼 노출은 permissions 로 판단한다. "
+              + "canWriteLetter 는 이미 이 캡슐에 편지(임시 저장 포함)를 쓴 멤버에게 false 다. canDelete 는 방장이고 WRITING 이고 편지가 0통일 때만 true 다. "
+              + "없는 캡슐, 삭제된 캡슐, 참여하지 않았거나 나간 캡슐은 구분하지 않고 모두 404 로 응답한다.")
   CommonResponse<TimeCapsuleDetailResponse> getTimeCapsule(
       @Parameter(hidden = true) UserPrincipal principal,
       @Parameter(description = "타임캡슐 ID", example = "12") Long capsuleId);
