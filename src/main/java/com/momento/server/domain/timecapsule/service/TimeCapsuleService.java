@@ -127,12 +127,12 @@ public class TimeCapsuleService {
    */
   private CapsulePermissions permissionsOf(TimeCapsule capsule, CapsuleMember me) {
     Long capsuleId = capsule.getId();
+    LocalDateTime now = LocalDateTime.now(clock);
     boolean canWriteLetter =
-        capsule.getLetterWritingEligibility(me.getRole(), LocalDateTime.now(clock))
-                == LetterWritingEligibility.ALLOWED
+        capsule.getLetterWritingEligibility(me.getRole(), now) == LetterWritingEligibility.ALLOWED
             && !letterRepository.existsByTimeCapsuleIdAndAuthorIdAndDeletedAtIsNull(
                 capsuleId, me.getUser().getId());
-    boolean canManage = me.isOwner() && capsule.isEditable();
+    boolean canManage = me.isOwner() && capsule.isEditable(now);
     boolean canDelete =
         canManage && letterRepository.countByTimeCapsuleIdAndDeletedAtIsNull(capsuleId) == 0;
 
@@ -183,13 +183,13 @@ public class TimeCapsuleService {
 
   /**
    * 방장이 캡슐을 바꾸는 작업의 공통 조건. 멤버인지는 호출하는 쪽이 먼저 확인한다(404 가 403 보다 먼저다). 방장이 아니면 403, 편지 수정 마감 뒤면 409 다.
-   * 상세 조회의 {@code canManage} 와 같은 조건이다.
+   * 상세 조회의 {@code canManage} 와 같은 조건이다. 시각은 캡슐 잠금을 얻은 뒤에 읽는다(잠금을 기다리는 사이 마감될 수 있다).
    */
   private void requireManageable(TimeCapsule capsule, CapsuleMember me) {
     if (!me.isOwner()) {
       throw new ApiException(CapsuleErrorCode.CAPSULE_OWNER_ONLY);
     }
-    if (!capsule.isEditable()) {
+    if (!capsule.isEditable(LocalDateTime.now(clock))) {
       throw new ApiException(CapsuleErrorCode.CAPSULE_NOT_EDITABLE);
     }
   }

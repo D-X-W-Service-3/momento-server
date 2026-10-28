@@ -42,11 +42,29 @@ class TimeCapsuleTest {
     assertThat(locked.canViewLetter(MemberRole.OWNER, true)).isFalse();
   }
 
-  @ParameterizedTest(name = "{0} → {1}")
-  @CsvSource({"WRITING, true", "LOCKED, false", "OPENED, false"})
-  @DisplayName("편지 수정 마감 전(WRITING)에만 캡슐을 고치거나 지울 수 있다")
-  void editableOnlyWhileWriting(CapsuleStatus status, boolean expected) {
-    assertThat(capsule(status, VisibilityType.ALL_MEMBERS).isEditable()).isEqualTo(expected);
+  @ParameterizedTest(name = "{0}, 마감까지 {1}초 → {2}")
+  @CsvSource({
+    "WRITING, 1,  true",
+    "WRITING, 0,  false",
+    "WRITING, -1, false",
+    "LOCKED,  1,  false",
+    "OPENED,  1,  false"
+  })
+  @DisplayName("WRITING 이고 마감 시각 전에만 캡슐을 고치거나 지울 수 있다. 스케줄러가 돌기 전이라도 마감이 지나면 안 된다")
+  void editableOnlyBeforeDeadline(CapsuleStatus status, long secondsLeft, boolean expected) {
+    LocalDateTime deadline = LocalDateTime.of(2045, 1, 1, 23, 59, 59);
+    TimeCapsule capsule =
+        TimeCapsule.builder()
+            .iconType("ICE_CREAM")
+            .title("캡슐")
+            .capsuleType(CapsuleType.GROUP)
+            .visibilityType(VisibilityType.ALL_MEMBERS)
+            .status(status)
+            .letterDeadlineAt(deadline)
+            .openAt(deadline.plusDays(10))
+            .build();
+
+    assertThat(capsule.isEditable(deadline.minusSeconds(secondsLeft))).isEqualTo(expected);
   }
 
   @Test

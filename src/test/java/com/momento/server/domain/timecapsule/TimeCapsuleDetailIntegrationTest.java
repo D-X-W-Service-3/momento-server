@@ -230,6 +230,31 @@ class TimeCapsuleDetailIntegrationTest {
         .andExpect(jsonPath("$.data.permissions.canViewLetters").value(false));
   }
 
+  @Test
+  @DisplayName("마감이 지났으면 스케줄러가 LOCKED 로 바꾸기 전이라도 편지 작성 · 초대 · 관리 · 삭제를 할 수 없다")
+  void pastDeadlineBeforeSchedulerRuns() throws Exception {
+    TimeCapsule capsule =
+        timeCapsuleRepository.save(
+            TimeCapsule.builder()
+                .creator(owner)
+                .iconType("ICE_CREAM")
+                .title("캡슐")
+                .capsuleType(CapsuleType.GROUP)
+                .visibilityType(VisibilityType.ALL_MEMBERS)
+                .status(CapsuleStatus.WRITING)
+                .letterDeadlineAt(NOW_AT.minusSeconds(1))
+                .openAt(TODAY.plusDays(20).atStartOfDay())
+                .build());
+    join(capsule, owner, MemberRole.OWNER, 0);
+
+    detail(capsule, owner)
+        .andExpect(jsonPath("$.data.status").value("WRITING"))
+        .andExpect(jsonPath("$.data.permissions.canWriteLetter").value(false))
+        .andExpect(jsonPath("$.data.permissions.canInvite").value(false))
+        .andExpect(jsonPath("$.data.permissions.canManage").value(false))
+        .andExpect(jsonPath("$.data.permissions.canDelete").value(false));
+  }
+
   private ResultActions detail(TimeCapsule capsule, User user) throws Exception {
     return mockMvc.perform(
         get("/v1/time-capsules/{capsuleId}", capsule.getId())

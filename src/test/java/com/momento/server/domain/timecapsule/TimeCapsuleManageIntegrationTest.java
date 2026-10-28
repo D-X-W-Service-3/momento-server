@@ -170,6 +170,33 @@ class TimeCapsuleManageIntegrationTest {
   }
 
   @Test
+  @DisplayName("마감이 지났으면 스케줄러가 LOCKED 로 바꾸기 전이라도 수정 · 삭제는 409 다")
+  void cannotManageAfterDeadlineBeforeScheduler() throws Exception {
+    TimeCapsule pastDeadline =
+        timeCapsuleRepository.save(
+            TimeCapsule.builder()
+                .creator(owner)
+                .iconType("ICE_CREAM")
+                .title("캡슐")
+                .capsuleType(CapsuleType.GROUP)
+                .visibilityType(VisibilityType.ALL_MEMBERS)
+                .status(CapsuleStatus.WRITING)
+                .letterDeadlineAt(LocalDateTime.now().minusMinutes(1))
+                .openAt(FAR_FUTURE)
+                .build());
+    join(pastDeadline, owner, MemberRole.OWNER);
+
+    update(owner, pastDeadline, "{\"title\": \"늦음\"}")
+        .andExpect(status().isConflict())
+        .andExpect(jsonPath("$.code").value("CAPSULE_NOT_EDITABLE"));
+    delete(owner, pastDeadline)
+        .andExpect(status().isConflict())
+        .andExpect(jsonPath("$.code").value("CAPSULE_NOT_EDITABLE"));
+    assertThat(timeCapsuleRepository.findById(pastDeadline.getId()).orElseThrow().getDeletedAt())
+        .isNull();
+  }
+
+  @Test
   @DisplayName("멤버가 아니면 방장 여부보다 먼저 404 다")
   void strangerGetsNotFound() throws Exception {
     update(saveUser("manage-stranger", "남"), "{\"title\": \"몰래\"}")
