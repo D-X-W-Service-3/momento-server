@@ -47,6 +47,10 @@ public class TimeCapsuleFacade {
     timeCapsuleService.update(capsuleId, userId, request);
   }
 
+  public void delete(Long capsuleId, Long userId) {
+    timeCapsuleService.delete(capsuleId, userId);
+  }
+
   public TimeCapsuleOpenResponse open(Long capsuleId, Long userId) {
     return new TimeCapsuleOpenResponse(capsuleId, timeCapsuleService.open(capsuleId, userId));
   }

@@ -1,28 +1,44 @@
 package com.momento.server.domain.timecapsule;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.hasSize;
 import static org.springframework.http.HttpHeaders.AUTHORIZATION;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.momento.server.domain.letter.dto.request.LetterCreateRequest;
+import com.momento.server.domain.letter.entity.Letter;
+import com.momento.server.domain.letter.entity.LetterStatus;
 import com.momento.server.domain.letter.repository.LetterRepository;
+import com.momento.server.domain.letter.service.LetterService;
 import com.momento.server.domain.timecapsule.entity.CapsuleMember;
 import com.momento.server.domain.timecapsule.entity.CapsuleStatus;
 import com.momento.server.domain.timecapsule.entity.CapsuleType;
 import com.momento.server.domain.timecapsule.entity.MemberRole;
 import com.momento.server.domain.timecapsule.entity.TimeCapsule;
 import com.momento.server.domain.timecapsule.entity.VisibilityType;
+import com.momento.server.domain.timecapsule.exception.CapsuleErrorCode;
 import com.momento.server.domain.timecapsule.repository.CapsuleMemberRepository;
 import com.momento.server.domain.timecapsule.repository.TimeCapsuleRepository;
+import com.momento.server.domain.timecapsule.service.TimeCapsuleService;
 import com.momento.server.domain.user.entity.User;
 import com.momento.server.domain.user.repository.UserRepository;
 import com.momento.server.global.common.auth.service.TokenProvider;
+import com.momento.server.global.common.exception.ApiException;
 import java.time.Duration;
 import java.time.LocalDateTime;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.RepeatedTest;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
@@ -33,6 +49,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
+import org.springframework.test.web.servlet.request.MockMvcRequestBuilders;
 
 /**
  * 방장이 캡슐을 고치고 지우는 API 를 검증한다.
@@ -51,6 +68,8 @@ class TimeCapsuleManageIntegrationTest {
   @Autowired private TimeCapsuleRepository timeCapsuleRepository;
   @Autowired private CapsuleMemberRepository capsuleMemberRepository;
   @Autowired private LetterRepository letterRepository;
+  @Autowired private LetterService letterService;
+  @Autowired private TimeCapsuleService timeCapsuleService;
 
   private User owner;
   private User participant;
@@ -167,6 +186,156 @@ class TimeCapsuleManageIntegrationTest {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"title\": \"몰래\"}"))
         .andExpect(status().isUnauthorized());
+  }
+
+  // ---------- 삭제 ----------
+
+  @Test
+  @DisplayName("편지가 없으면 지우고, 지운 캡슐은 상세 · 목록에서 사라진다")
+  void deletesCapsuleWithoutLetters() throws Exception {
+    delete(owner, capsule).andExpect(status().isOk()).andExpect(jsonPath("$.data").doesNotExist());
+
+    assertThat(reload().getDeletedAt()).isNotNull();
+    mockMvc
+        .perform(
+            get("/v1/time-capsules/{capsuleId}", capsule.getId())
+                .header(AUTHORIZATION, bearer(owner)))
+        .andExpect(status().isNotFound());
+    mockMvc
+        .perform(get("/v1/time-capsules").header(AUTHORIZATION, bearer(participant)))
+        .andExpect(jsonPath("$.data.capsules", hasSize(0)));
+  }
+
+  @ParameterizedTest(name = "{0}")
+  @EnumSource(LetterStatus.class)
+  @DisplayName("임시 저장이든 제출이든 편지가 한 통이라도 있으면 409 이고 지우지 않는다")
+  void cannotDeleteWithLetters(LetterStatus letterStatus) throws Exception {
+    saveLetter(participant, letterStatus, null);
+
+    delete(owner, capsule)
+        .andExpect(status().isConflict())
+        .andExpect(jsonPath("$.code").value("CAPSULE_HAS_LETTERS"));
+
+    assertThat(reload().getDeletedAt()).isNull();
+  }
+
+  @Test
+  @DisplayName("방장 본인의 편지도 센다")
+  void ownerLetterCounts() throws Exception {
+    saveLetter(owner, LetterStatus.DRAFT, null);
+
+    delete(owner, capsule).andExpect(status().isConflict());
+  }
+
+  @Test
+  @DisplayName("삭제된 편지만 있으면 지울 수 있다")
+  void deletedLettersDoNotCount() throws Exception {
+    saveLetter(participant, LetterStatus.SUBMITTED, FAR_FUTURE);
+
+    delete(owner, capsule).andExpect(status().isOk());
+  }
+
+  @Test
+  @DisplayName("방장이 아니면 403 이다")
+  void participantCannotDelete() throws Exception {
+    delete(participant, capsule)
+        .andExpect(status().isForbidden())
+        .andExpect(jsonPath("$.code").value("CAPSULE_OWNER_ONLY"));
+
+    assertThat(reload().getDeletedAt()).isNull();
+  }
+
+  @Test
+  @DisplayName("편지 수정 마감 뒤에는 편지가 없어도 409 다")
+  void cannotDeleteAfterDeadline() throws Exception {
+    TimeCapsule locked = saveCapsule(CapsuleStatus.LOCKED);
+    join(locked, owner, MemberRole.OWNER);
+
+    delete(owner, locked)
+        .andExpect(status().isConflict())
+        .andExpect(jsonPath("$.code").value("CAPSULE_NOT_EDITABLE"));
+  }
+
+  @Test
+  @DisplayName("멤버가 아니면 404 이고, 이미 지운 캡슐도 404 다")
+  void deleteNotFound() throws Exception {
+    delete(saveUser("manage-stranger", "남"), capsule).andExpect(status().isNotFound());
+
+    delete(owner, capsule).andExpect(status().isOk());
+    delete(owner, capsule)
+        .andExpect(status().isNotFound())
+        .andExpect(jsonPath("$.code").value("CAPSULE_NOT_FOUND"));
+  }
+
+  @Test
+  @DisplayName("인증 없이 지울 수 없다")
+  void deleteRequiresAuthentication() throws Exception {
+    mockMvc
+        .perform(MockMvcRequestBuilders.delete("/v1/time-capsules/{capsuleId}", capsule.getId()))
+        .andExpect(status().isUnauthorized());
+  }
+
+  @RepeatedTest(5)
+  @DisplayName("삭제와 편지 작성이 동시에 들어와도 편지가 담긴 캡슐이 지워지지 않는다")
+  void deleteAndWriteConcurrently() throws Exception {
+    CountDownLatch start = new CountDownLatch(1);
+    ExecutorService executor = Executors.newFixedThreadPool(2);
+    try {
+      Future<?> write =
+          executor.submit(
+              () -> {
+                start.await();
+                return letterService.create(
+                    capsule.getId(), participant.getId(), new LetterCreateRequest("편지", null));
+              });
+      Future<?> remove =
+          executor.submit(
+              () -> {
+                start.await();
+                timeCapsuleService.delete(capsule.getId(), owner.getId());
+                return null;
+              });
+      start.countDown();
+      boolean written = succeeded(write);
+      boolean deleted = succeeded(remove);
+
+      assertThat(written ^ deleted).as("둘 중 하나만 성공한다").isTrue();
+      assertThat(reload().getDeletedAt() != null).isEqualTo(deleted);
+      assertThat(letterRepository.countByTimeCapsuleIdAndDeletedAtIsNull(capsule.getId()))
+          .isEqualTo(written ? 1 : 0);
+    } finally {
+      executor.shutdownNow();
+    }
+  }
+
+  /** 다른 쪽에 밀려 거절됐으면 false. 거절 사유는 409(편지가 있음) 또는 404(캡슐이 지워짐)다. */
+  private boolean succeeded(Future<?> task) throws Exception {
+    try {
+      task.get(10, TimeUnit.SECONDS);
+      return true;
+    } catch (ExecutionException exception) {
+      ApiException cause = (ApiException) exception.getCause();
+      assertThat(cause.getErrorCode())
+          .isIn(CapsuleErrorCode.CAPSULE_HAS_LETTERS, CapsuleErrorCode.CAPSULE_NOT_FOUND);
+      return false;
+    }
+  }
+
+  private ResultActions delete(User user, TimeCapsule target) throws Exception {
+    return mockMvc.perform(
+        MockMvcRequestBuilders.delete("/v1/time-capsules/{capsuleId}", target.getId())
+            .header(AUTHORIZATION, bearer(user)));
+  }
+
+  private void saveLetter(User author, LetterStatus letterStatus, LocalDateTime deletedAt) {
+    letterRepository.save(
+        Letter.builder()
+            .timeCapsule(capsule)
+            .author(author)
+            .content("편지")
+            .status(letterStatus)
+            .deletedAt(deletedAt)
+            .build());
   }
 
   private ResultActions update(User user, String body) throws Exception {

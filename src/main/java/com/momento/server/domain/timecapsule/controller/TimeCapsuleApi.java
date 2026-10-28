@@ -77,6 +77,17 @@ public interface TimeCapsuleApi {
       @Valid TimeCapsuleUpdateRequest request);
 
   @Operation(
+      summary = "타임캡슐 삭제",
+      description =
+          "방장이 캡슐을 지운다(소프트 삭제). 편지 수정 마감 전(WRITING)이고 아무도 편지를 쓰지 않았을 때만 된다. "
+              + "편지 수에는 임시 저장과 방장 본인의 편지도 들어가고, 삭제된 편지는 들어가지 않는다. "
+              + "지운 캡슐은 목록 · 탭 홈 · 상세에서 사라진다. 멤버가 아니거나 없는 캡슐은 404, 방장이 아니면 403 CAPSULE_OWNER_ONLY, "
+              + "편지 수정 마감 뒤면 409 CAPSULE_NOT_EDITABLE, 편지가 있으면 409 CAPSULE_HAS_LETTERS 다. 상세의 permissions.canDelete 와 같은 조건이다.")
+  CommonResponse<?> deleteTimeCapsule(
+      @Parameter(hidden = true) UserPrincipal principal,
+      @Parameter(description = "타임캡슐 ID", example = "21") Long capsuleId);
+
+  @Operation(
       summary = "타임캡슐 개봉 확인",
       description =
           "열린 캡슐의 개봉 화면에서 '타임캡슐 확인하기' 를 누르면 호출한다. 로그인한 멤버가 이 캡슐을 확인했다고 기록하고, 처음 확인한 일시를 돌려준다. "
