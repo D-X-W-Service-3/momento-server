@@ -42,6 +42,35 @@ class TimeCapsuleTest {
     assertThat(locked.canViewLetter(MemberRole.OWNER, true)).isFalse();
   }
 
+  @ParameterizedTest(name = "{0} → {1}")
+  @CsvSource({"WRITING, true", "LOCKED, false", "OPENED, false"})
+  @DisplayName("편지 수정 마감 전(WRITING)에만 캡슐을 고치거나 지울 수 있다")
+  void editableOnlyWhileWriting(CapsuleStatus status, boolean expected) {
+    assertThat(capsule(status, VisibilityType.ALL_MEMBERS).isEditable()).isEqualTo(expected);
+  }
+
+  @Test
+  @DisplayName("설명에 null 을 넣으면 지운다")
+  void clearsDescription() {
+    TimeCapsule capsule = capsule(CapsuleStatus.WRITING, VisibilityType.ALL_MEMBERS);
+    capsule.updateDescription("설명");
+
+    capsule.updateDescription(null);
+
+    assertThat(capsule.getDescription()).isNull();
+  }
+
+  @Test
+  @DisplayName("삭제하면 삭제 시각이 남는다")
+  void deleteRecordsTime() {
+    TimeCapsule capsule = capsule(CapsuleStatus.WRITING, VisibilityType.ALL_MEMBERS);
+    LocalDateTime now = LocalDateTime.of(2045, 1, 1, 9, 0);
+
+    capsule.delete(now);
+
+    assertThat(capsule.getDeletedAt()).isEqualTo(now);
+  }
+
   private TimeCapsule capsule(CapsuleStatus status, VisibilityType visibility) {
     return TimeCapsule.builder()
         .iconType("ICE_CREAM")
