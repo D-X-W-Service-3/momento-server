@@ -1,6 +1,7 @@
 package com.momento.server.domain.timecapsule.controller;
 
 import com.momento.server.domain.timecapsule.dto.request.TimeCapsuleCreateRequest;
+import com.momento.server.domain.timecapsule.dto.request.TimeCapsuleUpdateRequest;
 import com.momento.server.domain.timecapsule.dto.response.TimeCapsuleCreateResponse;
 import com.momento.server.domain.timecapsule.dto.response.TimeCapsuleDetailResponse;
 import com.momento.server.domain.timecapsule.dto.response.TimeCapsuleListResponse;
@@ -62,6 +63,18 @@ public interface TimeCapsuleApi {
   CommonResponse<TimeCapsuleDetailResponse> getTimeCapsule(
       @Parameter(hidden = true) UserPrincipal principal,
       @Parameter(description = "타임캡슐 ID", example = "12") Long capsuleId);
+
+  @Operation(
+      summary = "타임캡슐 수정",
+      description =
+          "방장이 캡슐의 아이콘 · 이름 · 설명을 고친다. 보낸 필드만 바꾸고, 보내지 않았거나 null 인 필드는 그대로 둔다. "
+              + "문자열은 앞뒤 공백을 뺀다. 아이콘 · 이름은 비울 수 없고, 설명은 빈 문자열을 보내면 지운다. 글자 수는 생성과 같다(아이콘 30 · 이름 20 · 설명 45). "
+              + "종류 · 공개 범위 · 날짜는 바꿀 수 없다. 멤버가 아니거나 없는 캡슐은 404, 방장이 아니면 403 CAPSULE_OWNER_ONLY, "
+              + "편지 수정 마감 뒤(LOCKED · OPENED)면 409 CAPSULE_NOT_EDITABLE 이다. 응답 데이터는 없다.")
+  CommonResponse<?> updateTimeCapsule(
+      @Parameter(hidden = true) UserPrincipal principal,
+      @Parameter(description = "타임캡슐 ID", example = "21") Long capsuleId,
+      @Valid TimeCapsuleUpdateRequest request);
 
   @Operation(
       summary = "타임캡슐 개봉 확인",
