@@ -68,4 +68,9 @@ public class CapsuleMember extends BaseTimeEntity {
   public boolean isOwner() {
     return role == MemberRole.OWNER;
   }
+
+  /** 방장이 내보낸다. 행은 남겨 두고 상태만 바꾼다. 다시 초대받아 들어오면 이 행을 되살린다. */
+  public void remove() {
+    this.status = MemberStatus.REMOVED;
+  }
 }
