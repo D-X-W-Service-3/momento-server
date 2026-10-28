@@ -132,7 +132,7 @@ public class TimeCapsuleService {
         capsule.getLetterWritingEligibility(me.getRole(), now) == LetterWritingEligibility.ALLOWED
             && !letterRepository.existsByTimeCapsuleIdAndAuthorIdAndDeletedAtIsNull(
                 capsuleId, me.getUser().getId());
-    boolean canManage = me.isOwner() && capsule.isEditable(now);
+    boolean canManage = canManage(capsule, me, now);
     boolean canDelete =
         canManage && letterRepository.countByTimeCapsuleIdAndDeletedAtIsNull(capsuleId) == 0;
 
@@ -182,10 +182,22 @@ public class TimeCapsuleService {
   }
 
   /**
-   * 방장이 캡슐을 바꾸는 작업의 공통 조건. 멤버인지는 호출하는 쪽이 먼저 확인한다(404 가 403 보다 먼저다). 방장이 아니면 403, 편지 수정 마감 뒤면 409 다.
-   * 상세 조회의 {@code canManage} 와 같은 조건이다. 시각은 캡슐 잠금을 얻은 뒤에 읽는다(잠금을 기다리는 사이 마감될 수 있다).
+   * 방장이고 편지 수정 마감 전인지. 상세 · 멤버 목록의 {@code canManage} 이고, {@link #requireManageable} 이 거절하는 조건과 같다.
    */
-  private void requireManageable(TimeCapsule capsule, CapsuleMember me) {
+  public boolean canManage(TimeCapsule capsule, CapsuleMember me) {
+    return canManage(capsule, me, LocalDateTime.now(clock));
+  }
+
+  /** 상세의 권한 계산은 편지 작성 판정과 같은 시각으로 판정한다. */
+  private boolean canManage(TimeCapsule capsule, CapsuleMember me, LocalDateTime now) {
+    return me.isOwner() && capsule.isEditable(now);
+  }
+
+  /**
+   * 방장이 캡슐을 바꾸는 작업(수정 · 삭제 · 멤버 내보내기)의 공통 조건. 멤버인지는 호출하는 쪽이 먼저 확인한다(404 가 403 보다 먼저다). 방장이 아니면 403,
+   * 편지 수정 마감 뒤면 409 다. 시각은 캡슐 잠금을 얻은 뒤에 읽는다(잠금을 기다리는 사이 마감될 수 있다).
+   */
+  public void requireManageable(TimeCapsule capsule, CapsuleMember me) {
     if (!me.isOwner()) {
       throw new ApiException(CapsuleErrorCode.CAPSULE_OWNER_ONLY);
     }
