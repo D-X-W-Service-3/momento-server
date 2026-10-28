@@ -37,6 +37,20 @@ public interface CapsuleMemberRepository extends JpaRepository<CapsuleMember, Lo
       @Param("roles") Collection<MemberRole> roles,
       Limit limit);
 
+  /** 멤버 목록 화면. 순서는 {@link #findPreviews} 와 같고, 회원을 함께 읽어 멤버마다 따로 조회하지 않는다. */
+  @Query(
+      "select m from CapsuleMember m join fetch m.user"
+          + " where m.timeCapsule.id = :capsuleId and m.role in :roles"
+          + " and m.status = com.momento.server.domain.timecapsule.entity.MemberStatus.ACTIVE"
+          + " order by case when m.role = com.momento.server.domain.timecapsule.entity.MemberRole.OWNER"
+          + " then 0 else 1 end, m.joinedAt, m.id")
+  List<CapsuleMember> findActiveWithUser(
+      @Param("capsuleId") Long capsuleId, @Param("roles") Collection<MemberRole> roles);
+
+  /** 내보낼 대상. 캡슐까지 조건에 넣어 다른 캡슐의 멤버 ID 로는 찾지 못하게 한다. */
+  Optional<CapsuleMember> findByIdAndTimeCapsuleIdAndStatus(
+      Long id, Long timeCapsuleId, MemberStatus status);
+
   /** {@link #countByTimeCapsuleIdAndStatus} 를 캡슐 여러 개에 한 번에 센다. 해당 멤버가 없는 캡슐은 결과에 없다. */
   @Query(
       "select new com.momento.server.domain.timecapsule.repository.CapsuleCount("
