@@ -1,7 +1,10 @@
 package com.momento.server.domain.anniversary;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.nullValue;
+import static org.mockito.BDDMockito.given;
 import static org.springframework.http.HttpHeaders.AUTHORIZATION;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -13,9 +16,12 @@ import com.momento.server.domain.anniversary.repository.AnniversaryRepository;
 import com.momento.server.domain.user.entity.User;
 import com.momento.server.domain.user.repository.UserRepository;
 import com.momento.server.global.common.auth.service.TokenProvider;
+import java.time.Clock;
 import java.time.Duration;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalTime;
+import java.time.ZoneOffset;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -26,14 +32,17 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 
-/** 기념일 API 를 검증한다. */
+/** 기념일 API 를 검증한다. 오늘은 2026-10-29 로 고정한다. */
 @SpringBootTest
 @AutoConfigureMockMvc
 class AnniversaryIntegrationTest {
+
+  private static final Instant NOW = Instant.parse("2026-10-29T03:00:00Z");
 
   private static final String FULL_BODY =
       """
@@ -47,11 +56,15 @@ class AnniversaryIntegrationTest {
   @Autowired private UserRepository userRepository;
   @Autowired private AnniversaryRepository anniversaryRepository;
 
+  @MockitoBean private Clock clock;
+
   private User me;
 
   @BeforeEach
   void setUp() {
     cleanUp();
+    given(clock.instant()).willReturn(NOW);
+    given(clock.getZone()).willReturn(ZoneOffset.UTC);
     me = userRepository.save(User.builder().kakaoId("anniversary-me").nickname("나").build());
   }
 
@@ -154,6 +167,106 @@ class AnniversaryIntegrationTest {
         .andExpect(status().isUnauthorized())
         .andExpect(jsonPath("$.code").value("INVALID_ACCESS_TOKEN"));
     assertThat(anniversaryRepository.count()).isZero();
+  }
+
+  @Test
+  @DisplayName("상세는 저장한 값과 다음 기념일 날짜 · 남은 일수를 돌려준다")
+  void getsDetail() throws Exception {
+    Anniversary anniversary =
+        save(
+            me,
+            LocalDate.of(2026, 8, 12),
+            RepeatType.YEARLY,
+            "처음 만난 카페에 다시 가기",
+            true,
+            LocalTime.of(20, 30),
+            3);
+
+    authorized(get("/v1/anniversaries/{anniversaryId}", anniversary.getId()))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.data.anniversaryId").value(anniversary.getId()))
+        .andExpect(jsonPath("$.data.title").value("우리 100일"))
+        .andExpect(jsonPath("$.data.anniversaryDate").value("2026-08-12"))
+        .andExpect(jsonPath("$.data.repeatType").value("YEARLY"))
+        .andExpect(jsonPath("$.data.memo").value("처음 만난 카페에 다시 가기"))
+        .andExpect(jsonPath("$.data.notificationEnabled").value(true))
+        .andExpect(jsonPath("$.data.notifyTime").value("20:30"))
+        .andExpect(jsonPath("$.data.remindDaysBefore").value(3))
+        .andExpect(jsonPath("$.data.nextDate").value("2027-08-12"))
+        .andExpect(jsonPath("$.data.dDay").value(287));
+  }
+
+  @Test
+  @DisplayName("지난 반복 없는 기념일은 그 날짜 그대로이고 남은 일수가 음수다. 비어 있는 값은 null 이다")
+  void getsPastOneTime() throws Exception {
+    Anniversary anniversary =
+        save(me, LocalDate.of(2026, 10, 19), RepeatType.NONE, null, false, null, null);
+
+    authorized(get("/v1/anniversaries/{anniversaryId}", anniversary.getId()))
+        .andExpect(jsonPath("$.data.nextDate").value("2026-10-19"))
+        .andExpect(jsonPath("$.data.dDay").value(-10))
+        .andExpect(jsonPath("$.data.memo").value(nullValue()))
+        .andExpect(jsonPath("$.data.notifyTime").value("09:00"))
+        .andExpect(jsonPath("$.data.remindDaysBefore").value(nullValue()));
+  }
+
+  @Test
+  @DisplayName("오늘이 기념일이면 남은 일수가 0 이다")
+  void getsToday() throws Exception {
+    Anniversary anniversary =
+        save(me, LocalDate.of(2020, 10, 29), RepeatType.YEARLY, null, true, null, null);
+
+    authorized(get("/v1/anniversaries/{anniversaryId}", anniversary.getId()))
+        .andExpect(jsonPath("$.data.nextDate").value("2026-10-29"))
+        .andExpect(jsonPath("$.data.dDay").value(0));
+  }
+
+  @Test
+  @DisplayName("다른 회원의 기념일과 없는 기념일은 404 다")
+  void detailHidesOthersAndMissing() throws Exception {
+    User other =
+        userRepository.save(User.builder().kakaoId("anniversary-other").nickname("남").build());
+    Anniversary others =
+        save(other, LocalDate.of(2026, 8, 12), RepeatType.YEARLY, null, false, null, null);
+
+    authorized(get("/v1/anniversaries/{anniversaryId}", others.getId()))
+        .andExpect(status().isNotFound())
+        .andExpect(jsonPath("$.code").value("ANNIVERSARY_NOT_FOUND"));
+    authorized(get("/v1/anniversaries/{anniversaryId}", others.getId() + 1))
+        .andExpect(status().isNotFound())
+        .andExpect(jsonPath("$.code").value("ANNIVERSARY_NOT_FOUND"));
+  }
+
+  @Test
+  @DisplayName("상세도 인증이 없으면 401 이다")
+  void detailRequiresAuthentication() throws Exception {
+    Anniversary anniversary =
+        save(me, LocalDate.of(2026, 8, 12), RepeatType.YEARLY, null, false, null, null);
+
+    mockMvc
+        .perform(get("/v1/anniversaries/{anniversaryId}", anniversary.getId()))
+        .andExpect(status().isUnauthorized())
+        .andExpect(jsonPath("$.code").value("INVALID_ACCESS_TOKEN"));
+  }
+
+  private Anniversary save(
+      User user,
+      LocalDate date,
+      RepeatType repeatType,
+      String memo,
+      boolean notificationEnabled,
+      LocalTime notifyTime,
+      Integer remindDaysBefore) {
+    return anniversaryRepository.save(
+        Anniversary.create(
+            user,
+            "우리 100일",
+            date,
+            repeatType,
+            memo,
+            notificationEnabled,
+            notifyTime,
+            remindDaysBefore));
   }
 
   private ResultActions create(String body) throws Exception {

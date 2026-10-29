@@ -1,5 +1,6 @@
 package com.momento.server.domain.anniversary.dto.response;
 
+import com.fasterxml.jackson.annotation.JsonFormat;
 import com.momento.server.domain.anniversary.entity.Anniversary;
 import com.momento.server.domain.anniversary.entity.RepeatType;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -15,7 +16,9 @@ public record AnniversaryDetailResponse(
     @Schema(description = "반복 유형", example = "YEARLY") RepeatType repeatType,
     @Schema(description = "메모", nullable = true, example = "처음 만난 카페에 다시 가기") String memo,
     @Schema(description = "알림 받기 여부", example = "true") boolean notificationEnabled,
-    @Schema(description = "알림 시각", example = "09:00", type = "string") LocalTime notifyTime,
+    @Schema(description = "알림 시각. 시 · 분만 준다.", example = "09:00", type = "string")
+        @JsonFormat(pattern = "HH:mm")
+        LocalTime notifyTime,
     @Schema(description = "미리 알림 일수. 없거나 알림 받기가 꺼져 있으면 null.", nullable = true, example = "1")
         Integer remindDaysBefore,
     @Schema(
