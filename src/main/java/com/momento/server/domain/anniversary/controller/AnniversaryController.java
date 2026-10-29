@@ -42,12 +42,12 @@ public class AnniversaryController implements AnniversaryApi {
 
   @Override
   @PatchMapping("/{anniversaryId}")
-  public CommonResponse<AnniversaryDetailResponse> updateAnniversary(
+  public CommonResponse<?> updateAnniversary(
       @AuthenticationPrincipal UserPrincipal principal,
       @PathVariable Long anniversaryId,
       @Valid @RequestBody AnniversaryRequest request) {
-    return CommonResponse.ok(
-        anniversaryFacade.update(anniversaryId, principal.getUserId(), request));
+    anniversaryFacade.update(anniversaryId, principal.getUserId(), request);
+    return CommonResponse.ok();
   }
 
   @Override

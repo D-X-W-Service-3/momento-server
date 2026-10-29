@@ -39,7 +39,7 @@ public class AnniversaryService {
 
   /** 등록과 같은 값으로 통째로 바꾼다. */
   @Transactional
-  public Anniversary update(Long anniversaryId, Long userId, AnniversaryRequest request) {
+  public void update(Long anniversaryId, Long userId, AnniversaryRequest request) {
     Anniversary anniversary = getMine(anniversaryId, userId);
 
     anniversary.update(
@@ -50,8 +50,6 @@ public class AnniversaryService {
         request.notificationEnabled(),
         request.notifyTime(),
         request.remindDaysBefore());
-
-    return anniversary;
   }
 
   /** 기념일을 참조하는 외래키가 없어 행을 바로 지운다. */

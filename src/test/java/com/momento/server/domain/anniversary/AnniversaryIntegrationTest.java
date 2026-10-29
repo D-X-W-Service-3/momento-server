@@ -252,20 +252,17 @@ class AnniversaryIntegrationTest {
   }
 
   @Test
-  @DisplayName("수정은 모든 값을 바꾸고 상세와 같은 형태를 돌려준다")
+  @DisplayName("수정은 모든 값을 바꾸고 응답 데이터는 없다")
   void updates() throws Exception {
     Anniversary anniversary =
         save(me, LocalDate.of(2026, 5, 4), RepeatType.NONE, null, false, null, null);
 
     update(anniversary, FULL_BODY)
         .andExpect(status().isOk())
-        .andExpect(jsonPath("$.data.anniversaryId").value(anniversary.getId()))
-        .andExpect(jsonPath("$.data.title").value("우리 100일"))
-        .andExpect(jsonPath("$.data.notifyTime").value("20:30"))
-        .andExpect(jsonPath("$.data.nextDate").value("2027-08-12"))
-        .andExpect(jsonPath("$.data.dDay").value(287));
+        .andExpect(jsonPath("$.data").doesNotExist());
 
     Anniversary updated = anniversaryRepository.findById(anniversary.getId()).orElseThrow();
+    assertThat(updated.getTitle()).isEqualTo("우리 100일");
     assertThat(updated.getAnniversaryDate()).isEqualTo(LocalDate.of(2026, 8, 12));
     assertThat(updated.getRepeatType()).isEqualTo(RepeatType.YEARLY);
     assertThat(updated.getMemo()).isEqualTo("처음 만난 카페에 다시 가기");
@@ -286,10 +283,7 @@ class AnniversaryIntegrationTest {
             {"title": "우리 100일", "anniversaryDate": "2026-08-12", "repeatType": "YEARLY",
              "memo": null, "notificationEnabled": true, "remindDaysBefore": null}
             """)
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.data.memo").value(nullValue()))
-        .andExpect(jsonPath("$.data.notifyTime").value("09:00"))
-        .andExpect(jsonPath("$.data.remindDaysBefore").value(nullValue()));
+        .andExpect(status().isOk());
 
     Anniversary updated = anniversaryRepository.findById(anniversary.getId()).orElseThrow();
     assertThat(updated.getMemo()).isNull();
@@ -306,10 +300,12 @@ class AnniversaryIntegrationTest {
     update(
             anniversary,
             FULL_BODY.replace("\"notificationEnabled\": true", "\"notificationEnabled\": false"))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.data.notificationEnabled").value(false))
-        .andExpect(jsonPath("$.data.notifyTime").value("20:30"))
-        .andExpect(jsonPath("$.data.remindDaysBefore").value(nullValue()));
+        .andExpect(status().isOk());
+
+    Anniversary updated = anniversaryRepository.findById(anniversary.getId()).orElseThrow();
+    assertThat(updated.isNotificationEnabled()).isFalse();
+    assertThat(updated.getNotifyTime()).isEqualTo(LocalTime.of(20, 30));
+    assertThat(updated.getRemindDaysBefore()).isNull();
   }
 
   @Test
