@@ -15,6 +15,7 @@ import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import java.time.LocalDate;
 import java.time.LocalTime;
+import java.util.Optional;
 import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -127,5 +128,21 @@ public class Anniversary extends BaseTimeEntity {
     }
     LocalDate thisYear = anniversaryDate.withYear(today.getYear());
     return thisYear.isBefore(today) ? anniversaryDate.withYear(today.getYear() + 1) : thisYear;
+  }
+
+  /**
+   * 그 해의 기념일 날짜. 그 해에 기념일이 없으면 빈 값이다.
+   *
+   * <p>반복하지 않으면 등록한 해에만 있다. 매년 반복이면 등록한 해부터 해마다 같은 월 · 일에 있고, 등록한 해보다 앞선 해에는 없다({@link #nextDate} 와
+   * 같은 규칙). 2월 29일은 평년에 2월 28일이다.
+   */
+  public Optional<LocalDate> dateIn(int year) {
+    if (year < anniversaryDate.getYear()) {
+      return Optional.empty();
+    }
+    if (repeatType == RepeatType.NONE) {
+      return year == anniversaryDate.getYear() ? Optional.of(anniversaryDate) : Optional.empty();
+    }
+    return Optional.of(anniversaryDate.withYear(year));
   }
 }
