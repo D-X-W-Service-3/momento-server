@@ -222,6 +222,48 @@ class TimeCapsuleListQueryTest {
         .containsExactly(tuple(capsule.getId(), 2L));
   }
 
+  @Test
+  @DisplayName("개봉일 범위 조회는 시작 시각을 넣고 끝 시각을 뺀다")
+  void openAtBetweenIncludesFromExcludesTo() {
+    LocalDateTime from = OPEN;
+    LocalDateTime to = OPEN.plusDays(1);
+    mine("전날 끝", from.minusMinutes(1), CapsuleStatus.WRITING);
+    mine("시작", from, CapsuleStatus.WRITING);
+    mine("끝 직전", to.minusMinutes(1), CapsuleStatus.WRITING);
+    mine("끝", to, CapsuleStatus.WRITING);
+
+    assertThat(timeCapsuleRepository.findMyOpenAtBetween(me.getId(), from, to))
+        .containsExactlyInAnyOrder(from, to.minusMinutes(1));
+  }
+
+  @Test
+  @DisplayName("개봉일 범위 조회도 내가 ACTIVE 멤버인 삭제되지 않은 캡슐만 본다")
+  void openAtBetweenOnlyMyActiveCapsules() {
+    mine("내 캡슐", OPEN, CapsuleStatus.WRITING);
+    join(saveCapsule("남의 캡슐", OPEN, CapsuleStatus.WRITING), friend, MemberStatus.ACTIVE);
+    join(saveCapsule("내보내진 캡슐", OPEN, CapsuleStatus.WRITING), me, MemberStatus.REMOVED);
+    join(saveCapsule("삭제된 캡슐", OPEN, CapsuleStatus.WRITING, OPEN), me, MemberStatus.ACTIVE);
+
+    assertThat(timeCapsuleRepository.findMyOpenAtBetween(me.getId(), OPEN, OPEN.plusDays(1)))
+        .containsExactly(OPEN);
+  }
+
+  @Test
+  @DisplayName("그 날 열리는 캡슐은 상태와 상관없이 개봉일 · ID 오름차순으로 나온다")
+  void capsulesOpeningBetween() {
+    TimeCapsule later = mine("오후", OPEN.plusHours(12), CapsuleStatus.LOCKED);
+    TimeCapsule first = mine("자정 1", OPEN, CapsuleStatus.OPENED);
+    TimeCapsule second = mine("자정 2", OPEN, CapsuleStatus.WRITING);
+    mine("다음 날", OPEN.plusDays(1), CapsuleStatus.WRITING);
+    join(saveCapsule("남의 캡슐", OPEN, CapsuleStatus.WRITING), friend, MemberStatus.ACTIVE);
+
+    assertThat(
+            ids(
+                timeCapsuleRepository.findMyCapsulesOpeningBetween(
+                    me.getId(), OPEN, OPEN.plusDays(1))))
+        .containsExactly(first.getId(), second.getId(), later.getId());
+  }
+
   private void markOpened(CapsuleMember member) {
     transactionTemplate.executeWithoutResult(
         tx -> capsuleMemberRepository.markOpenedIfAbsent(member.getId(), OPEN));
