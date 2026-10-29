@@ -1,6 +1,5 @@
 package com.momento.server.domain.timecapsule.entity;
 
-import com.momento.server.domain.anniversary.entity.Anniversary;
 import com.momento.server.domain.user.entity.User;
 import com.momento.server.global.common.entity.BaseTimeEntity;
 import jakarta.persistence.Column;
@@ -43,11 +42,6 @@ public class TimeCapsule extends BaseTimeEntity {
   @ManyToOne(fetch = FetchType.LAZY)
   @JoinColumn(name = "creator_id", nullable = false)
   private User creator;
-
-  /** 기념일에 맞춰 만든 캡슐이면 연결된다. 직접 만든 캡슐이면 비어 있다. */
-  @ManyToOne(fetch = FetchType.LAZY)
-  @JoinColumn(name = "anniversary_id")
-  private Anniversary anniversary;
 
   /** 캡슐 대표 아이콘. 값 목록이 확정되지 않아 문자열로 둔다. */
   @Column(name = "icon_type", nullable = false, length = 30)

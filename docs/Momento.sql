@@ -29,7 +29,6 @@ CREATE TABLE `memory_images` (
 CREATE TABLE `time_capsules` (
 	`id`	BIGINT	NOT NULL	AUTO_INCREMENT	COMMENT '타임캡슐 ID',
 	`creator_id`	BIGINT	NOT NULL	COMMENT '타임캡슐 생성자 ID',
-	`anniversary_id`	BIGINT	NULL	COMMENT '연결된 기념일 ID',
 	`icon_type`	VARCHAR(30)	NOT NULL	COMMENT '캡슐 대표 아이콘',
 	`title`	VARCHAR(50)	NOT NULL	COMMENT '타임캡슐 제목',
 	`description`	TEXT	NULL	COMMENT '타임캡슐 설명',
@@ -49,6 +48,10 @@ CREATE TABLE `anniversaries` (
 	`title`	VARCHAR(50)	NOT NULL	COMMENT '기념일 제목',
 	`anniversary_date`	DATE	NOT NULL	COMMENT '기념일 날짜',
 	`repeat_type`	VARCHAR(20)	NOT NULL	DEFAULT 'NONE'	COMMENT '반복 유형: NONE, YEARLY',
+	`memo`	VARCHAR(200)	NULL	COMMENT '메모',
+	`notification_enabled`	BOOLEAN	NOT NULL	DEFAULT FALSE	COMMENT '알림 받기 여부',
+	`notify_time`	TIME	NOT NULL	DEFAULT '09:00:00'	COMMENT '알림 시각',
+	`remind_days_before`	INT	NULL	COMMENT '미리 알림 일수: 1, 3, 5, 7, 10. 알림 받기가 꺼지면 NULL',
 	`created_at`	DATETIME(6)	NOT NULL	COMMENT '생성 일시',
 	`updated_at`	DATETIME(6)	NOT NULL	COMMENT '수정 일시'
 );

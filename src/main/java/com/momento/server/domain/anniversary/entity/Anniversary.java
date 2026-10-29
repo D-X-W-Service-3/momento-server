@@ -14,6 +14,7 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import java.time.LocalDate;
+import java.time.LocalTime;
 import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -51,4 +52,19 @@ public class Anniversary extends BaseTimeEntity {
   @JdbcTypeCode(SqlTypes.VARCHAR)
   @Column(name = "repeat_type", nullable = false, length = 20)
   private RepeatType repeatType = RepeatType.NONE;
+
+  @Column(name = "memo", length = 200)
+  private String memo;
+
+  /** 기념일 당일 알림을 받을지. */
+  @Column(name = "notification_enabled", nullable = false)
+  private boolean notificationEnabled;
+
+  /** 당일 · 미리 알림을 보내는 시각. 알림을 꺼 둔 동안에도 보관해 다시 켜면 이 시각을 쓴다. */
+  @Column(name = "notify_time", nullable = false)
+  private LocalTime notifyTime;
+
+  /** 며칠 전에 미리 알릴지. 미리 알림이 없거나 알림 받기가 꺼져 있으면 비어 있다. */
+  @Column(name = "remind_days_before")
+  private Integer remindDaysBefore;
 }
