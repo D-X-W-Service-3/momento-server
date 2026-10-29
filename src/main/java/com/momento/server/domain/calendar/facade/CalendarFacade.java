@@ -2,13 +2,19 @@ package com.momento.server.domain.calendar.facade;
 
 import com.momento.server.domain.anniversary.service.AnniversaryService;
 import com.momento.server.domain.calendar.dto.CalendarType;
+import com.momento.server.domain.calendar.dto.request.CalendarDailyRequest;
 import com.momento.server.domain.calendar.dto.request.CalendarMonthRequest;
+import com.momento.server.domain.calendar.dto.response.CalendarDailyResponse;
 import com.momento.server.domain.calendar.dto.response.CalendarMonthResponse;
+import com.momento.server.domain.memory.dto.response.MemorySummary;
 import com.momento.server.domain.memory.service.MemoryService;
+import com.momento.server.domain.timecapsule.dto.response.TimeCapsuleCardResponse;
 import com.momento.server.domain.timecapsule.service.TimeCapsuleListService;
+import java.time.Clock;
 import java.time.LocalDate;
 import java.util.Collection;
 import java.util.EnumSet;
+import java.util.List;
 import java.util.SortedMap;
 import java.util.TreeMap;
 import lombok.RequiredArgsConstructor;
@@ -25,6 +31,7 @@ public class CalendarFacade {
   private final TimeCapsuleListService timeCapsuleListService;
   private final AnniversaryService anniversaryService;
   private final MemoryService memoryService;
+  private final Clock clock;
 
   /** 점은 고른 종류만 찍고, 개수는 종류와 상관없이 전체 기간으로 센다. */
   public CalendarMonthResponse getMonth(Long userId, CalendarMonthRequest request) {
@@ -56,6 +63,43 @@ public class CalendarFacade {
             memoryService.countMyMemories(userId),
             anniversaryService.countMine(userId));
     return CalendarMonthResponse.of(year, month, counts, days);
+  }
+
+  /** 고르지 않은 종류는 조회하지 않고 빈 목록이다. D-Day 는 오늘을 기준으로 계산한다. */
+  public CalendarDailyResponse getDaily(Long userId, CalendarDailyRequest request) {
+    LocalDate date = request.date();
+    LocalDate today = LocalDate.now(clock);
+
+    List<TimeCapsuleCardResponse> capsules =
+        includes(request.type(), CalendarType.CAPSULE)
+            ? timeCapsuleListService.getMyCapsulesOpeningOn(userId, date).stream()
+                .map(
+                    summary ->
+                        TimeCapsuleCardResponse.of(
+                            summary.capsule(),
+                            summary.openedByMe(),
+                            summary.memberCount(),
+                            summary.letterCount(),
+                            today))
+                .toList()
+            : List.of();
+    List<CalendarDailyResponse.AnniversaryItem> anniversaries =
+        includes(request.type(), CalendarType.ANNIVERSARY)
+            ? anniversaryService.getAllMine(userId).stream()
+                .filter(
+                    anniversary ->
+                        anniversary.dateIn(date.getYear()).filter(date::equals).isPresent())
+                .map(
+                    anniversary ->
+                        CalendarDailyResponse.AnniversaryItem.of(anniversary, date, today))
+                .toList()
+            : List.of();
+    List<MemorySummary> memories =
+        includes(request.type(), CalendarType.MEMORY)
+            ? memoryService.findMyMemoriesOn(userId, date)
+            : List.of();
+
+    return new CalendarDailyResponse(date, capsules, anniversaries, memories);
   }
 
   /** {@code type} 이 null 이면 전체다. */

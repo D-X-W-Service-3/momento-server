@@ -1,6 +1,8 @@
 package com.momento.server.domain.calendar.controller;
 
+import com.momento.server.domain.calendar.dto.request.CalendarDailyRequest;
 import com.momento.server.domain.calendar.dto.request.CalendarMonthRequest;
+import com.momento.server.domain.calendar.dto.response.CalendarDailyResponse;
 import com.momento.server.domain.calendar.dto.response.CalendarMonthResponse;
 import com.momento.server.global.common.auth.UserPrincipal;
 import com.momento.server.global.common.dto.CommonResponse;
@@ -25,4 +27,16 @@ public interface CalendarApi {
   CommonResponse<CalendarMonthResponse> getMonth(
       @Parameter(hidden = true) UserPrincipal principal,
       @ParameterObject @Valid CalendarMonthRequest request);
+
+  @Operation(
+      summary = "캘린더 날짜별 조회",
+      description =
+          "달력에서 날짜를 누르면 그 날의 타임캡슐 · 기념일 · 아카이브를 종류별로 조회한다. capsules 는 그 날 열리는(개봉일이 그 날인) 내 캡슐로 "
+              + "타임캡슐 목록의 카드와 같은 형태이고 개봉일 순이다. anniversaries 는 그 날이 기념일인 내 기념일로, 기준은 월별 조회와 같다. "
+              + "date 는 조회한 날짜이고 dDay 는 오늘부터 그 날까지 남은 일수다(당일 0, 지나면 음수). memories 는 그 날 추억으로 아카이브 목록의 "
+              + "항목과 같은 형태다. type 을 주면 다른 종류는 빈 목록이다. date 가 없거나 형식(yyyy-MM-dd)이 틀리거나 type 이 없는 값이면 "
+              + "400 INVALID_INPUT_VALUE 다.")
+  CommonResponse<CalendarDailyResponse> getDaily(
+      @Parameter(hidden = true) UserPrincipal principal,
+      @ParameterObject @Valid CalendarDailyRequest request);
 }
