@@ -7,6 +7,7 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
@@ -31,11 +32,22 @@ public class User extends BaseTimeEntity {
   @Column(name = "kakao_id", nullable = false, unique = true, length = 100)
   private String kakaoId;
 
-  @Column(name = "nickname", nullable = false, length = 30)
+  /** 다른 회원과 겹치지 않는다(DB UNIQUE). 탈퇴 회원도 행이 남아 닉네임을 계속 차지한다. */
+  @Column(name = "nickname", nullable = false, unique = true, length = 30)
   private String nickname;
 
   @Column(name = "profile_image_url", length = 500)
   private String profileImageUrl;
+
+  @Column(name = "birthday")
+  private LocalDate birthday;
+
+  @Column(name = "email", length = 100)
+  private String email;
+
+  /** {@code 010-1234-5678} 처럼 하이픈을 넣은 형식. */
+  @Column(name = "phone_number", length = 20)
+  private String phoneNumber;
 
   @Builder.Default
   @Column(name = "notification_enabled", nullable = false)
@@ -53,14 +65,29 @@ public class User extends BaseTimeEntity {
     this.deletedAt = LocalDateTime.now();
   }
 
-  /** 탈퇴했던 회원이 같은 카카오 계정으로 다시 로그인했을 때 카카오 프로필로 되살린다. */
-  public void restore(String nickname, String profileImageUrl) {
+  /**
+   * 탈퇴했던 회원이 같은 카카오 계정으로 다시 로그인했을 때 되살린다. 닉네임 · 프로필 사진은 탈퇴 전 값을 그대로 둔다. 카카오 프로필로 덮으면 사용자가 정한 값이
+   * 사라진다.
+   */
+  public void restore() {
     this.deletedAt = null;
-    this.nickname = nickname;
-    this.profileImageUrl = profileImageUrl;
   }
 
   public void updateNickname(String nickname) {
     this.nickname = nickname;
+  }
+
+  public void updateBirthday(LocalDate birthday) {
+    this.birthday = birthday;
+  }
+
+  /** null 이면 지운다. */
+  public void updateEmail(String email) {
+    this.email = email;
+  }
+
+  /** null 이면 지운다. */
+  public void updatePhoneNumber(String phoneNumber) {
+    this.phoneNumber = phoneNumber;
   }
 }

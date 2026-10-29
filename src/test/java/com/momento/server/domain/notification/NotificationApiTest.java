@@ -184,8 +184,9 @@ class NotificationApiTest {
     return notificationRepository.saveAll(notifications);
   }
 
+  /** 닉네임은 겹치면 안 되므로 카카오 ID 로 만든다. */
   private User kakaoUser(String kakaoId) {
-    return User.builder().kakaoId(kakaoId).nickname("모멘토 친구").build();
+    return User.builder().kakaoId(kakaoId).nickname(kakaoId).build();
   }
 
   private String bearer(String token) {

@@ -63,11 +63,20 @@ public class TimeCapsuleListService {
     boolean hasNext = found.size() > size;
     List<MyCapsule> page = hasNext ? found.subList(0, size) : found;
 
-    Map<CapsuleStatus, Long> countsByStatus =
-        timeCapsuleRepository.countMyCapsulesByStatus(userId, pattern).stream()
-            .collect(Collectors.toMap(CapsuleStatusCount::status, CapsuleStatusCount::count));
+    return new TimeCapsulePage(summarize(page), countByStatus(userId, pattern), hasNext);
+  }
 
-    return new TimeCapsulePage(summarize(page), countsByStatus, hasNext);
+  /**
+   * 내가 속한 캡슐의 상태별 개수. 마이페이지 활동 요약이 쓴다. 목록 조회의 탭별 개수와 같은 기준이라 마이페이지 "전체캡슐" 과 목록 "전체" 숫자가 같다. 캡슐이 없는
+   * 상태는 들어 있지 않다.
+   */
+  public Map<CapsuleStatus, Long> countMyCapsulesByStatus(Long userId) {
+    return countByStatus(userId, null);
+  }
+
+  private Map<CapsuleStatus, Long> countByStatus(Long userId, String keywordPattern) {
+    return timeCapsuleRepository.countMyCapsulesByStatus(userId, keywordPattern).stream()
+        .collect(Collectors.toMap(CapsuleStatusCount::status, CapsuleStatusCount::count));
   }
 
   /**
