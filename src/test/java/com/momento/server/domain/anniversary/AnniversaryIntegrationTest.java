@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.nullValue;
 import static org.mockito.BDDMockito.given;
 import static org.springframework.http.HttpHeaders.AUTHORIZATION;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -364,6 +365,53 @@ class AnniversaryIntegrationTest {
                 .content(FULL_BODY))
         .andExpect(status().isUnauthorized())
         .andExpect(jsonPath("$.code").value("INVALID_ACCESS_TOKEN"));
+  }
+
+  @Test
+  @DisplayName("삭제하면 행이 사라지고 다시 조회하면 404 다")
+  void deletes() throws Exception {
+    Anniversary anniversary =
+        save(me, LocalDate.of(2026, 8, 12), RepeatType.YEARLY, "메모", true, null, 1);
+
+    authorized(delete("/v1/anniversaries/{anniversaryId}", anniversary.getId()))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.data").doesNotExist());
+
+    assertThat(anniversaryRepository.existsById(anniversary.getId())).isFalse();
+    authorized(get("/v1/anniversaries/{anniversaryId}", anniversary.getId()))
+        .andExpect(status().isNotFound())
+        .andExpect(jsonPath("$.code").value("ANNIVERSARY_NOT_FOUND"));
+  }
+
+  @Test
+  @DisplayName("다른 회원의 기념일과 없는 기념일은 지울 수 없고 404 다")
+  void deleteHidesOthersAndMissing() throws Exception {
+    User other =
+        userRepository.save(User.builder().kakaoId("anniversary-other").nickname("남").build());
+    Anniversary others =
+        save(other, LocalDate.of(2026, 8, 12), RepeatType.YEARLY, null, false, null, null);
+
+    authorized(delete("/v1/anniversaries/{anniversaryId}", others.getId()))
+        .andExpect(status().isNotFound())
+        .andExpect(jsonPath("$.code").value("ANNIVERSARY_NOT_FOUND"));
+    authorized(delete("/v1/anniversaries/{anniversaryId}", others.getId() + 1))
+        .andExpect(status().isNotFound())
+        .andExpect(jsonPath("$.code").value("ANNIVERSARY_NOT_FOUND"));
+
+    assertThat(anniversaryRepository.existsById(others.getId())).isTrue();
+  }
+
+  @Test
+  @DisplayName("삭제도 인증이 없으면 401 이다")
+  void deleteRequiresAuthentication() throws Exception {
+    Anniversary anniversary =
+        save(me, LocalDate.of(2026, 8, 12), RepeatType.YEARLY, null, false, null, null);
+
+    mockMvc
+        .perform(delete("/v1/anniversaries/{anniversaryId}", anniversary.getId()))
+        .andExpect(status().isUnauthorized())
+        .andExpect(jsonPath("$.code").value("INVALID_ACCESS_TOKEN"));
+    assertThat(anniversaryRepository.existsById(anniversary.getId())).isTrue();
   }
 
   private ResultActions update(Anniversary anniversary, String body) throws Exception {

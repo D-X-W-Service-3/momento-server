@@ -45,4 +45,13 @@ public interface AnniversaryApi {
       @Parameter(hidden = true) UserPrincipal principal,
       @Parameter(description = "기념일 ID", example = "7") Long anniversaryId,
       @Valid AnniversaryRequest request);
+
+  @Operation(
+      summary = "기념일 삭제",
+      description =
+          "기념일을 지운다. 되살릴 수 없다. 내가 등록한 기념일만 지울 수 있고, 없는 기념일과 다른 회원의 기념일은 똑같이 404 "
+              + "ANNIVERSARY_NOT_FOUND 다. 응답 데이터는 없다.")
+  CommonResponse<?> deleteAnniversary(
+      @Parameter(hidden = true) UserPrincipal principal,
+      @Parameter(description = "기념일 ID", example = "7") Long anniversaryId);
 }

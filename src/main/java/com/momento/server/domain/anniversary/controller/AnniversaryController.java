@@ -11,6 +11,7 @@ import com.momento.server.global.common.dto.CommonResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -47,5 +48,13 @@ public class AnniversaryController implements AnniversaryApi {
       @Valid @RequestBody AnniversaryRequest request) {
     return CommonResponse.ok(
         anniversaryFacade.update(anniversaryId, principal.getUserId(), request));
+  }
+
+  @Override
+  @DeleteMapping("/{anniversaryId}")
+  public CommonResponse<?> deleteAnniversary(
+      @AuthenticationPrincipal UserPrincipal principal, @PathVariable Long anniversaryId) {
+    anniversaryFacade.delete(anniversaryId, principal.getUserId());
+    return CommonResponse.ok();
   }
 }

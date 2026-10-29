@@ -37,4 +37,8 @@ public class AnniversaryFacade {
     return AnniversaryDetailResponse.of(
         anniversaryService.update(anniversaryId, userId, request), LocalDate.now(clock));
   }
+
+  public void delete(Long anniversaryId, Long userId) {
+    anniversaryService.delete(anniversaryId, userId);
+  }
 }
