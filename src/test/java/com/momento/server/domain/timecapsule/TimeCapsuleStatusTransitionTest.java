@@ -72,7 +72,8 @@ class TimeCapsuleStatusTransitionTest {
   @Test
   @DisplayName("공개 시각이 지난 캡슐은 OPENED 가 된다")
   void opensCapsulesPastOpenAt() {
-    TimeCapsule capsule = save(CapsuleStatus.WRITING, TODAY.minusMinutes(1), null, null);
+    TimeCapsule capsule =
+        save(CapsuleStatus.WRITING, TODAY.minusMinutes(1), TODAY.minusDays(1), null);
 
     statusService.transition();
 
@@ -82,7 +83,7 @@ class TimeCapsuleStatusTransitionTest {
   @Test
   @DisplayName("공개 시각 정각에 열린다")
   void opensAtExactOpenAt() {
-    TimeCapsule capsule = save(CapsuleStatus.WRITING, TODAY, null, null);
+    TimeCapsule capsule = save(CapsuleStatus.WRITING, TODAY, TODAY.minusDays(1), null);
 
     statusService.transition();
 
@@ -90,9 +91,10 @@ class TimeCapsuleStatusTransitionTest {
   }
 
   @Test
-  @DisplayName("공개 시각이 아직 안 됐으면 그대로 둔다")
-  void keepsCapsulesBeforeOpenAt() {
-    TimeCapsule capsule = save(CapsuleStatus.WRITING, TODAY.plusSeconds(1), null, null);
+  @DisplayName("편지 마감과 공개 시각이 아직 안 됐으면 그대로 둔다")
+  void keepsCapsulesBeforeDeadline() {
+    TimeCapsule capsule =
+        save(CapsuleStatus.WRITING, TODAY.plusDays(1), TODAY.plusSeconds(1), null);
 
     statusService.transition();
 
@@ -111,16 +113,6 @@ class TimeCapsuleStatusTransitionTest {
   }
 
   @Test
-  @DisplayName("편지 마감이 없으면 LOCKED 를 거치지 않고 공개 시각에 바로 열린다")
-  void skipsLockedWhenDeadlineIsNull() {
-    TimeCapsule capsule = save(CapsuleStatus.WRITING, TODAY, null, null);
-
-    statusService.transition();
-
-    assertThat(statusOf(capsule)).isEqualTo(CapsuleStatus.OPENED);
-  }
-
-  @Test
   @DisplayName("마감과 공개 시각이 모두 지났으면 한 번에 OPENED 가 된다")
   void opensDirectlyWhenBothPassed() {
     TimeCapsule capsule =
@@ -134,7 +126,8 @@ class TimeCapsuleStatusTransitionTest {
   @Test
   @DisplayName("삭제된 캡슐은 전이 대상이 아니다")
   void ignoresDeletedCapsules() {
-    TimeCapsule capsule = save(CapsuleStatus.WRITING, TODAY.minusDays(1), null, TODAY.minusDays(2));
+    TimeCapsule capsule =
+        save(CapsuleStatus.WRITING, TODAY.minusDays(1), TODAY.minusDays(2), TODAY.minusDays(2));
 
     statusService.transition();
 
@@ -145,7 +138,7 @@ class TimeCapsuleStatusTransitionTest {
   @Test
   @DisplayName("여러 번 돌려도 결과가 같고, 이미 열린 캡슐로는 알림 이벤트가 다시 나가지 않는다")
   void isIdempotent() {
-    TimeCapsule capsule = save(CapsuleStatus.WRITING, TODAY.minusDays(1), null, null);
+    TimeCapsule capsule = save(CapsuleStatus.WRITING, TODAY.minusDays(1), TODAY.minusDays(2), null);
 
     statusService.transition();
     statusService.transition();
@@ -158,8 +151,8 @@ class TimeCapsuleStatusTransitionTest {
   @Test
   @DisplayName("열린 캡슐의 ID 가 알림이 붙을 이벤트에 담긴다")
   void publishesOpenedCapsuleIds() {
-    TimeCapsule opened = save(CapsuleStatus.WRITING, TODAY.minusDays(1), null, null);
-    save(CapsuleStatus.WRITING, TODAY.plusDays(1), null, null);
+    TimeCapsule opened = save(CapsuleStatus.WRITING, TODAY.minusDays(1), TODAY.minusDays(2), null);
+    save(CapsuleStatus.WRITING, TODAY.plusDays(1), TODAY.plusHours(1), null);
 
     statusService.transition();
 
@@ -172,7 +165,7 @@ class TimeCapsuleStatusTransitionTest {
   @Test
   @DisplayName("열리고 나면 편지 열람 판정이 통과한다 — 전이 전에는 항상 막혀 있다")
   void openedCapsuleAllowsLetterViewing() {
-    TimeCapsule capsule = save(CapsuleStatus.WRITING, TODAY.minusDays(1), null, null);
+    TimeCapsule capsule = save(CapsuleStatus.WRITING, TODAY.minusDays(1), TODAY.minusDays(2), null);
     assertThat(reload(capsule).canViewLetters(MemberRole.PARTICIPANT)).isFalse();
 
     statusService.transition();
@@ -197,6 +190,7 @@ class TimeCapsuleStatusTransitionTest {
     return timeCapsuleRepository.save(
         TimeCapsule.builder()
             .creator(owner)
+            .iconType("ICE_CREAM")
             .title("캡슐")
             .capsuleType(CapsuleType.GROUP)
             .visibilityType(VisibilityType.ALL_MEMBERS)

@@ -1,8 +1,8 @@
 package com.momento.server.domain.timecapsule.controller;
 
 import com.momento.server.domain.timecapsule.dto.request.TimeCapsuleCreateRequest;
+import com.momento.server.domain.timecapsule.dto.response.TimeCapsuleCreateResponse;
 import com.momento.server.domain.timecapsule.dto.response.TimeCapsuleDetailResponse;
-import com.momento.server.domain.timecapsule.dto.response.TimeCapsuleResponse;
 import com.momento.server.domain.timecapsule.facade.TimeCapsuleFacade;
 import com.momento.server.global.common.annotation.RestApiController;
 import com.momento.server.global.common.auth.UserPrincipal;
@@ -24,7 +24,7 @@ public class TimeCapsuleController implements TimeCapsuleApi {
 
   @Override
   @PostMapping
-  public CommonResponse<TimeCapsuleResponse> createTimeCapsule(
+  public CommonResponse<TimeCapsuleCreateResponse> createTimeCapsule(
       @AuthenticationPrincipal UserPrincipal principal,
       @Valid @RequestBody TimeCapsuleCreateRequest request) {
     return CommonResponse.success(
