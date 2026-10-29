@@ -8,6 +8,7 @@ import com.momento.server.global.common.auth.UserPrincipal;
 import com.momento.server.global.common.dto.CommonResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -26,5 +27,15 @@ public class CapsuleMemberController implements CapsuleMemberApi {
       @RequestParam(required = false) MemberRole role) {
     return CommonResponse.ok(
         capsuleMemberFacade.getMembers(capsuleId, principal.getUserId(), role));
+  }
+
+  @Override
+  @DeleteMapping("/{memberId}")
+  public CommonResponse<?> removeMember(
+      @AuthenticationPrincipal UserPrincipal principal,
+      @PathVariable Long capsuleId,
+      @PathVariable Long memberId) {
+    capsuleMemberFacade.remove(capsuleId, principal.getUserId(), memberId);
+    return CommonResponse.ok();
   }
 }

@@ -28,4 +28,8 @@ public class CapsuleMemberFacade {
 
     return CapsuleMemberListResponse.of(list.role(), list.members(), list.canManage());
   }
+
+  public void remove(Long capsuleId, Long userId, Long memberId) {
+    capsuleMemberService.remove(capsuleId, userId, memberId);
+  }
 }

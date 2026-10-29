@@ -25,4 +25,17 @@ public interface CapsuleMemberApi {
               example = "PARTICIPANT",
               required = true)
           MemberRole role);
+
+  @Operation(
+      summary = "캡슐 멤버 내보내기",
+      description =
+          "방장이 참여자 · 수신자를 내보낸다. 내보낸 사람은 이 캡슐의 상세 · 목록 · 편지 작성에서 404 를 받고, 그 사람이 이 캡슐에 쓴 편지(임시 저장 포함)는 지워진다. "
+              + "다른 사람의 편지는 그대로다. 내보낸 사람도 새 초대 링크로 다시 들어올 수 있다. 응답 데이터는 없다. "
+              + "멤버가 아니거나 없는 캡슐은 404 CAPSULE_NOT_FOUND, 방장이 아니면 403 CAPSULE_OWNER_ONLY, 편지 수정 마감 뒤면 409 CAPSULE_NOT_EDITABLE, "
+              + "자기 자신(방장)이면 400 CANNOT_REMOVE_OWNER, 이 캡슐의 참여 중인 멤버가 아니면 404 CAPSULE_MEMBER_NOT_FOUND 다. "
+              + "방장이 아니면 대상이 있는지와 관계없이 403 이다.")
+  CommonResponse<?> removeMember(
+      @Parameter(hidden = true) UserPrincipal principal,
+      @Parameter(description = "타임캡슐 ID", example = "21") Long capsuleId,
+      @Parameter(description = "내보낼 캡슐 멤버 ID. 멤버 목록의 memberId 다.", example = "102") Long memberId);
 }
