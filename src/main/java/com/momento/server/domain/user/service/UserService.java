@@ -121,6 +121,16 @@ public class UserService {
     throw new IllegalStateException("겹치지 않는 임시 닉네임을 만들지 못했습니다.");
   }
 
+  /**
+   * 회원 행만 소프트 삭제한다. 캡슐 멤버십 · 편지 · 기념일은 건드리지 않아, 같은 카카오 계정으로 다시 로그인하면 그대로 돌아온다. 방장이 탈퇴해도 캡슐은 그대로다.
+   *
+   * <p>이미 발급한 토큰은 인증 필터가 요청마다 회원을 다시 읽어 401 로 거른다.
+   */
+  @Transactional
+  public void withdraw(Long userId) {
+    getActiveUser(userId).withdraw();
+  }
+
   /** 탈퇴했던 회원이면 되살린다. 이미 활성 회원이면 아무것도 하지 않는다. */
   @Transactional
   public User restoreIfWithdrawn(Long userId) {
