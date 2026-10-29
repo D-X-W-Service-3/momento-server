@@ -128,7 +128,11 @@ CREATE TABLE `users` (
 	`birthday`	DATE	NULL	COMMENT '생일',
 	`email`	VARCHAR(100)	NULL	COMMENT '이메일',
 	`phone_number`	VARCHAR(20)	NULL	COMMENT '전화번호 (010-1234-5678)',
-	`notification_enabled`	BOOLEAN	NOT NULL	DEFAULT TRUE	COMMENT '알림 수신 여부',
+	`notify_capsule_opened`	BOOLEAN	NOT NULL	DEFAULT TRUE	COMMENT '개봉 알림',
+	`notify_capsule_d_day`	BOOLEAN	NOT NULL	DEFAULT TRUE	COMMENT 'D-Day 알림',
+	`notify_letter_deadline`	BOOLEAN	NOT NULL	DEFAULT TRUE	COMMENT '수정 마감 알림',
+	`notify_new_member`	BOOLEAN	NOT NULL	DEFAULT TRUE	COMMENT '새 참여자 알림',
+	`notify_memory_reminder`	BOOLEAN	NOT NULL	DEFAULT FALSE	COMMENT '추억 다시보기',
 	`created_at`	DATETIME(6)	NOT NULL	COMMENT '생성 일시',
 	`updated_at`	DATETIME(6)	NOT NULL	COMMENT '수정 일시',
 	`deleted_at`	DATETIME(6)	NULL	COMMENT '탈퇴 일시'
