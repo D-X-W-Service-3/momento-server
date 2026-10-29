@@ -27,11 +27,16 @@ public class GlobalExceptionHandler {
     return CommonResponse.error(errorCode);
   }
 
+  /**
+   * 검증 실패는 필드의 검증 메시지를 싣는다. 쿼리 파라미터를 {@code @ModelAttribute} 로 받을 때 타입 변환에 실패한 값(enum 에 없는 값, 형식이
+   * 틀린 날짜)도 여기로 오는데, 그 메시지에는 내부 클래스명이 섞여 있어 기본 메시지로 바꾼다.
+   */
   @ExceptionHandler(MethodArgumentNotValidException.class)
   public CommonResponse<?> handleValidationException(MethodArgumentNotValidException exception) {
     ErrorCode errorCode = GlobalErrorCode.INVALID_INPUT_VALUE;
     String message =
         Optional.ofNullable(exception.getBindingResult().getFieldError())
+            .filter(fieldError -> !fieldError.isBindingFailure())
             .map(FieldError::getDefaultMessage)
             .orElse(errorCode.getMessage());
 
