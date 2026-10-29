@@ -3,7 +3,10 @@ package com.momento.server.domain.timecapsule.controller;
 import com.momento.server.domain.timecapsule.dto.request.TimeCapsuleCreateRequest;
 import com.momento.server.domain.timecapsule.dto.response.TimeCapsuleCreateResponse;
 import com.momento.server.domain.timecapsule.dto.response.TimeCapsuleDetailResponse;
+import com.momento.server.domain.timecapsule.dto.response.TimeCapsuleListResponse;
 import com.momento.server.domain.timecapsule.dto.response.TimeCapsuleOpenResponse;
+import com.momento.server.domain.timecapsule.dto.response.TimeCapsuleOverviewResponse;
+import com.momento.server.domain.timecapsule.entity.CapsuleStatus;
 import com.momento.server.global.common.auth.UserPrincipal;
 import com.momento.server.global.common.dto.CommonResponse;
 import io.swagger.v3.oas.annotations.Operation;
@@ -22,6 +25,32 @@ public interface TimeCapsuleApi {
               + "나에게 쓰는 캡슐(SELF)은 참여자가 생성자 한 명뿐이라 공개 범위를 ALL_MEMBERS 로만 받는다. 다른 값을 보내면 400 이다.")
   CommonResponse<TimeCapsuleCreateResponse> createTimeCapsule(
       @Parameter(hidden = true) UserPrincipal principal, @Valid TimeCapsuleCreateRequest request);
+
+  @Operation(
+      summary = "타임캡슐 목록 조회",
+      description =
+          "내가 속한(방장 · 참여자 · 수신자) 캡슐을 개봉일 오름차순으로 조회한다. 삭제된 캡슐과 내보내진 캡슐은 나오지 않는다. "
+              + "counts 는 탭에 표시할 상태별 개수로, keyword 는 적용하고 status 는 적용하지 않는다. "
+              + "다음 페이지는 응답의 nextCursor 를 cursor 로 넘겨 받는다. 커서는 해석하지 말고 그대로 넘긴다. "
+              + "dDay · deadlineDDay 는 서버의 한국 시간 날짜 기준이다. "
+              + "size 가 1~100 밖이거나, status 가 없는 값이거나, 커서가 깨졌으면 400 이다.")
+  CommonResponse<TimeCapsuleListResponse> getTimeCapsules(
+      @Parameter(hidden = true) UserPrincipal principal,
+      @Parameter(description = "상태 탭. 없으면 전체", example = "WRITING") CapsuleStatus status,
+      @Parameter(description = "검색어. 캡슐 이름 · 설명 · 멤버 닉네임에서 찾는다", example = "제주") String keyword,
+      @Parameter(description = "다음 페이지 커서. 첫 조회 때는 보내지 않는다") String cursor,
+      @Parameter(description = "한 번에 조회할 개수. 1~100", example = "20") int size);
+
+  @Operation(
+      summary = "타임캡슐 탭 홈 조회",
+      description =
+          "하단 탭 '타임캡슐' 첫 화면의 섹션을 한 번에 조회한다. 섹션마다 최대 5개이고, 원소는 목록 조회의 capsules[] 와 같은 카드다. "
+              + "upcoming 은 내가 아직 확인하지 않은 캡슐을 개봉일이 가까운 순으로, writing 은 편지 마감이 가까운 순으로, "
+              + "locked 는 개봉일이 가까운 순으로, opened 는 최근에 열린 순으로 담는다. 같은 캡슐이 upcoming 과 다른 섹션에 함께 나올 수 있다. "
+              + "각 섹션의 '전체보기' 는 목록 조회를 해당 status 로 호출한다. "
+              + "hasPendingInvite 는 내가 초대 링크를 열고 아직 수락 · 거절하지 않은 초대가 있으면 true 다.")
+  CommonResponse<TimeCapsuleOverviewResponse> getTimeCapsuleOverview(
+      @Parameter(hidden = true) UserPrincipal principal);
 
   @Operation(
       summary = "타임캡슐 상세 조회",

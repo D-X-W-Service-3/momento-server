@@ -79,6 +79,16 @@ CREATE TABLE `capsule_invites` (
 	`updated_at`	DATETIME(6)	NOT NULL	COMMENT '수정 일시'
 );
 
+-- 초대 링크를 연 회원별 대기 기록 (이슈 #42). 공유 링크 하나를 여러 사람이 열 수 있어 (링크, 회원) 마다 한 행이다.
+CREATE TABLE `capsule_invitees` (
+	`id`	BIGINT	NOT NULL	AUTO_INCREMENT	COMMENT '초대 대상 ID',
+	`capsule_invite_id`	BIGINT	NOT NULL	COMMENT '초대 링크 ID',
+	`user_id`	BIGINT	NOT NULL	COMMENT '링크를 연 회원 ID',
+	`status`	VARCHAR(20)	NOT NULL	DEFAULT 'PENDING'	COMMENT '응답 상태: PENDING, ACCEPTED, DECLINED',
+	`created_at`	DATETIME(6)	NOT NULL	COMMENT '링크를 처음 연 일시',
+	`updated_at`	DATETIME(6)	NOT NULL	COMMENT '수정 일시'
+);
+
 CREATE TABLE `notifications` (
 	`id`	BIGINT	NOT NULL	AUTO_INCREMENT	COMMENT '알림 ID',
 	`user_id`	BIGINT	NOT NULL	COMMENT '알림 수신 회원 ID',
@@ -155,6 +165,15 @@ ALTER TABLE `capsule_invites` ADD CONSTRAINT `PK_CAPSULE_INVITES` PRIMARY KEY (
 	`id`
 );
 
+ALTER TABLE `capsule_invitees` ADD CONSTRAINT `PK_CAPSULE_INVITEES` PRIMARY KEY (
+	`id`
+);
+
+ALTER TABLE `capsule_invitees` ADD CONSTRAINT `UK_CAPSULE_INVITEES_INVITE_USER` UNIQUE (
+	`capsule_invite_id`,
+	`user_id`
+);
+
 ALTER TABLE `notifications` ADD CONSTRAINT `PK_NOTIFICATIONS` PRIMARY KEY (
 	`id`
 );
@@ -169,6 +188,12 @@ ALTER TABLE `notifications` ADD INDEX `IDX_NOTIFICATIONS_USER_ID_ID` (
 ALTER TABLE `time_capsules` ADD INDEX `IDX_TIME_CAPSULES_STATUS_OPEN_AT` (
 	`status`,
 	`open_at`
+);
+
+-- 탭 홈 초대 배너 · 받은 초대 목록이 회원별로 대기 중인 초대를 찾는 조회다 (이슈 #42)
+ALTER TABLE `capsule_invitees` ADD INDEX `IDX_CAPSULE_INVITEES_USER_ID_STATUS` (
+	`user_id`,
+	`status`
 );
 
 ALTER TABLE `memories` ADD CONSTRAINT `PK_MEMORIES` PRIMARY KEY (
