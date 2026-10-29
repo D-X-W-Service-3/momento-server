@@ -42,4 +42,28 @@ public class NotificationSettings {
   public static NotificationSettings defaults() {
     return new NotificationSettings(true, true, true, true, false);
   }
+
+  /** 보낸 항목만 바꾼다. null 이면 그대로 둔다. */
+  public void update(
+      Boolean capsuleOpened,
+      Boolean capsuleDDay,
+      Boolean letterDeadline,
+      Boolean newMember,
+      Boolean memoryReminder) {
+    if (capsuleOpened != null) {
+      this.capsuleOpened = capsuleOpened;
+    }
+    if (capsuleDDay != null) {
+      this.capsuleDDay = capsuleDDay;
+    }
+    if (letterDeadline != null) {
+      this.letterDeadline = letterDeadline;
+    }
+    if (newMember != null) {
+      this.newMember = newMember;
+    }
+    if (memoryReminder != null) {
+      this.memoryReminder = memoryReminder;
+    }
+  }
 }
