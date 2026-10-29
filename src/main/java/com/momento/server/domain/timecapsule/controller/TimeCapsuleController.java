@@ -1,6 +1,7 @@
 package com.momento.server.domain.timecapsule.controller;
 
 import com.momento.server.domain.timecapsule.dto.request.TimeCapsuleCreateRequest;
+import com.momento.server.domain.timecapsule.dto.request.TimeCapsuleUpdateRequest;
 import com.momento.server.domain.timecapsule.dto.response.TimeCapsuleCreateResponse;
 import com.momento.server.domain.timecapsule.dto.response.TimeCapsuleDetailResponse;
 import com.momento.server.domain.timecapsule.dto.response.TimeCapsuleListResponse;
@@ -15,7 +16,9 @@ import com.momento.server.global.common.dto.CommonResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -60,6 +63,24 @@ public class TimeCapsuleController implements TimeCapsuleApi {
   public CommonResponse<TimeCapsuleDetailResponse> getTimeCapsule(
       @AuthenticationPrincipal UserPrincipal principal, @PathVariable Long capsuleId) {
     return CommonResponse.ok(timeCapsuleFacade.getDetail(capsuleId, principal.getUserId()));
+  }
+
+  @Override
+  @PatchMapping("/{capsuleId}")
+  public CommonResponse<?> updateTimeCapsule(
+      @AuthenticationPrincipal UserPrincipal principal,
+      @PathVariable Long capsuleId,
+      @Valid @RequestBody TimeCapsuleUpdateRequest request) {
+    timeCapsuleFacade.update(capsuleId, principal.getUserId(), request);
+    return CommonResponse.ok();
+  }
+
+  @Override
+  @DeleteMapping("/{capsuleId}")
+  public CommonResponse<?> deleteTimeCapsule(
+      @AuthenticationPrincipal UserPrincipal principal, @PathVariable Long capsuleId) {
+    timeCapsuleFacade.delete(capsuleId, principal.getUserId());
+    return CommonResponse.ok();
   }
 
   @Override

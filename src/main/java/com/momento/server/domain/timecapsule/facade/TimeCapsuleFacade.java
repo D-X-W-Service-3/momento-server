@@ -1,6 +1,7 @@
 package com.momento.server.domain.timecapsule.facade;
 
 import com.momento.server.domain.timecapsule.dto.request.TimeCapsuleCreateRequest;
+import com.momento.server.domain.timecapsule.dto.request.TimeCapsuleUpdateRequest;
 import com.momento.server.domain.timecapsule.dto.response.TimeCapsuleCardResponse;
 import com.momento.server.domain.timecapsule.dto.response.TimeCapsuleCreateResponse;
 import com.momento.server.domain.timecapsule.dto.response.TimeCapsuleDetailResponse;
@@ -42,6 +43,14 @@ public class TimeCapsuleFacade {
     return TimeCapsuleCreateResponse.from(timeCapsuleService.create(creator, request));
   }
 
+  public void update(Long capsuleId, Long userId, TimeCapsuleUpdateRequest request) {
+    timeCapsuleService.update(capsuleId, userId, request);
+  }
+
+  public void delete(Long capsuleId, Long userId) {
+    timeCapsuleService.delete(capsuleId, userId);
+  }
+
   public TimeCapsuleOpenResponse open(Long capsuleId, Long userId) {
     return new TimeCapsuleOpenResponse(capsuleId, timeCapsuleService.open(capsuleId, userId));
   }
@@ -49,8 +58,7 @@ public class TimeCapsuleFacade {
   public TimeCapsuleDetailResponse getDetail(Long capsuleId, Long userId) {
     TimeCapsuleDetail detail = timeCapsuleService.getDetail(capsuleId, userId);
 
-    return TimeCapsuleDetailResponse.of(
-        detail.capsule(), detail.myRole(), detail.memberCount(), detail.letterCount());
+    return TimeCapsuleDetailResponse.of(detail, LocalDate.now(clock));
   }
 
   /**

@@ -64,4 +64,8 @@ public class CapsuleMember extends BaseTimeEntity {
    */
   @Column(name = "opened_at")
   private LocalDateTime openedAt;
+
+  public boolean isOwner() {
+    return role == MemberRole.OWNER;
+  }
 }

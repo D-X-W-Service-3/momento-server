@@ -1,11 +1,13 @@
 package com.momento.server.domain.timecapsule.repository;
 
 import com.momento.server.domain.timecapsule.entity.CapsuleMember;
+import com.momento.server.domain.timecapsule.entity.MemberRole;
 import com.momento.server.domain.timecapsule.entity.MemberStatus;
 import java.time.LocalDateTime;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
+import org.springframework.data.domain.Limit;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -17,6 +19,23 @@ public interface CapsuleMemberRepository extends JpaRepository<CapsuleMember, Lo
       Long timeCapsuleId, Long userId, MemberStatus status);
 
   long countByTimeCapsuleIdAndStatus(Long timeCapsuleId, MemberStatus status);
+
+  long countByTimeCapsuleIdAndRoleInAndStatus(
+      Long timeCapsuleId, Collection<MemberRole> roles, MemberStatus status);
+
+  /** 상세 화면 미리보기. 방장을 맨 앞에 두고, 나머지는 참여한 순서다. 인원이 많아도 {@code limit} 명만 읽는다. */
+  @Query(
+      "select new com.momento.server.domain.timecapsule.repository.MemberPreview("
+          + "u.id, u.nickname, u.profileImageUrl)"
+          + " from CapsuleMember m join m.user u"
+          + " where m.timeCapsule.id = :capsuleId and m.role in :roles"
+          + " and m.status = com.momento.server.domain.timecapsule.entity.MemberStatus.ACTIVE"
+          + " order by case when m.role = com.momento.server.domain.timecapsule.entity.MemberRole.OWNER"
+          + " then 0 else 1 end, m.joinedAt, m.id")
+  List<MemberPreview> findPreviews(
+      @Param("capsuleId") Long capsuleId,
+      @Param("roles") Collection<MemberRole> roles,
+      Limit limit);
 
   /** {@link #countByTimeCapsuleIdAndStatus} 를 캡슐 여러 개에 한 번에 센다. 해당 멤버가 없는 캡슐은 결과에 없다. */
   @Query(

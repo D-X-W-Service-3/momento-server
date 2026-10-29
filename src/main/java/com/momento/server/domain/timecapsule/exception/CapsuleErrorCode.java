@@ -19,6 +19,15 @@ public enum CapsuleErrorCode implements ErrorCode {
 
   /** 공개 전(WRITING · LOCKED) 캡슐은 개봉 확인을 기록할 수 없다. */
   CAPSULE_NOT_OPENED("아직 공개되지 않은 타임캡슐입니다.", HttpStatus.CONFLICT),
+
+  /** 캡슐 수정 · 삭제, 멤버 내보내기, 초대처럼 방장만 하는 작업. 초대 PR(#38)과 같은 정의다. */
+  CAPSULE_OWNER_ONLY("방장만 할 수 있는 작업입니다.", HttpStatus.FORBIDDEN),
+
+  /** 편지 수정 마감 뒤(LOCKED · OPENED)에는 캡슐을 고치거나 지우거나 멤버를 바꿀 수 없다. 초대 PR(#38)과 같은 정의다. */
+  CAPSULE_NOT_EDITABLE("캡슐이 잠긴 이후에는 진행할 수 없는 작업입니다.", HttpStatus.CONFLICT),
+
+  /** 삭제되지 않은 편지(임시 저장 포함, 방장 편지 포함)가 한 통이라도 있으면 캡슐을 지울 수 없다. */
+  CAPSULE_HAS_LETTERS("편지가 담긴 타임캡슐은 삭제할 수 없습니다.", HttpStatus.CONFLICT),
   ;
 
   private final String message;

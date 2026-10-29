@@ -108,6 +108,34 @@ public class TimeCapsule extends BaseTimeEntity {
     };
   }
 
+  /**
+   * 아이콘 · 이름 · 설명을 고치고, 캡슐을 지우고, 멤버를 바꿀 수 있는지. 편지 수정 마감 전에만 된다.
+   *
+   * <p>저장된 상태와 마감 시각을 함께 본다. 마감이 지나도 스케줄러가 LOCKED 로 바꾸기 전까지(최대 한 주기) 상태는 WRITING 이다. 상태만 보면 그 사이에는
+   * 편지는 못 쓰는데 캡슐은 고치고 지울 수 있게 된다. 편지 작성 판정({@link #getLetterWritingEligibility})과 같은 기준으로 맞춘다.
+   */
+  public boolean isEditable(LocalDateTime now) {
+    return status == CapsuleStatus.WRITING && now.isBefore(letterDeadlineAt);
+  }
+
+  public void updateIconType(String iconType) {
+    this.iconType = iconType;
+  }
+
+  public void updateTitle(String title) {
+    this.title = title;
+  }
+
+  /** null 이면 지운다. */
+  public void updateDescription(String description) {
+    this.description = description;
+  }
+
+  /** 소프트 삭제. 목록 · 탭 홈 · 상세 쿼리가 모두 {@code deletedAt} 이 빈 캡슐만 읽는다. */
+  public void delete(LocalDateTime now) {
+    this.deletedAt = now;
+  }
+
   /** 역할·공개 범위와 작성 시간을 함께 판정한다. 권한이 없으면 시간 조건보다 먼저 거절한다. */
   public LetterWritingEligibility getLetterWritingEligibility(MemberRole role, LocalDateTime now) {
     if (role == MemberRole.RECIPIENT && visibilityType != VisibilityType.ALL_MEMBERS) {
