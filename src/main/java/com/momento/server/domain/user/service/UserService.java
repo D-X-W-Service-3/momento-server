@@ -1,5 +1,6 @@
 package com.momento.server.domain.user.service;
 
+import com.momento.server.domain.user.dto.request.NotificationSettingsUpdateRequest;
 import com.momento.server.domain.user.dto.request.UserUpdateRequest;
 import com.momento.server.domain.user.entity.User;
 import com.momento.server.domain.user.exception.UserErrorCode;
@@ -65,6 +66,19 @@ public class UserService {
     } catch (DataIntegrityViolationException exception) {
       throw new ApiException(UserErrorCode.NICKNAME_DUPLICATED, exception);
     }
+  }
+
+  /** 보낸 항목만 바꾼다. 알림 설정에는 UNIQUE 같은 제약이 없어 dirty checking 으로 저장한다. */
+  @Transactional
+  public void updateNotificationSettings(Long userId, NotificationSettingsUpdateRequest request) {
+    getActiveUser(userId)
+        .getNotificationSettings()
+        .update(
+            request.capsuleOpened(),
+            request.capsuleDDay(),
+            request.letterDeadline(),
+            request.newMember(),
+            request.memoryReminder());
   }
 
   /** 다른 회원이 쓰지 않는 닉네임인지. 지금 내 닉네임이면 사용할 수 있다. */

@@ -2,6 +2,7 @@ package com.momento.server.domain.user.entity;
 
 import com.momento.server.global.common.entity.BaseTimeEntity;
 import jakarta.persistence.Column;
+import jakarta.persistence.Embedded;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -49,9 +50,8 @@ public class User extends BaseTimeEntity {
   @Column(name = "phone_number", length = 20)
   private String phoneNumber;
 
-  @Builder.Default
-  @Column(name = "notification_enabled", nullable = false)
-  private boolean notificationEnabled = true;
+  @Builder.Default @Embedded
+  private NotificationSettings notificationSettings = NotificationSettings.defaults();
 
   @Column(name = "deleted_at")
   private LocalDateTime deletedAt;

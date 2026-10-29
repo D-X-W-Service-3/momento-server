@@ -19,6 +19,7 @@ import com.momento.server.domain.auth.external.KakaoApiClient;
 import com.momento.server.domain.auth.external.KakaoAuthClient;
 import com.momento.server.domain.auth.external.dto.KakaoTokenResponse;
 import com.momento.server.domain.auth.external.dto.KakaoUserResponse;
+import com.momento.server.domain.user.entity.NotificationSettings;
 import com.momento.server.domain.user.entity.User;
 import com.momento.server.domain.user.repository.UserRepository;
 import com.momento.server.domain.user.service.UserService;
@@ -97,7 +98,9 @@ class KakaoLoginIntegrationTest {
     User saved = userRepository.findByKakaoId(String.valueOf(KAKAO_ID)).orElseThrow();
     assertThat(saved.getNickname()).matches(TEMPORARY_NICKNAME).isNotEqualTo(NICKNAME);
     assertThat(saved.getProfileImageUrl()).isEqualTo(PROFILE_IMAGE_URL);
-    assertThat(saved.isNotificationEnabled()).isTrue();
+    assertThat(saved.getNotificationSettings())
+        .usingRecursiveComparison()
+        .isEqualTo(NotificationSettings.defaults());
     assertThat(saved.getDeletedAt()).isNull();
 
     mockMvc
