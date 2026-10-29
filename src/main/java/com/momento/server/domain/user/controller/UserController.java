@@ -1,6 +1,7 @@
 package com.momento.server.domain.user.controller;
 
 import com.momento.server.domain.user.dto.request.NicknameAvailabilityRequest;
+import com.momento.server.domain.user.dto.request.NotificationSettingsUpdateRequest;
 import com.momento.server.domain.user.dto.request.UserUpdateRequest;
 import com.momento.server.domain.user.dto.response.MyProfileResponse;
 import com.momento.server.domain.user.dto.response.NicknameAvailabilityResponse;
@@ -51,5 +52,14 @@ public class UserController implements UserApi {
   public CommonResponse<NotificationSettingsResponse> getNotificationSettings(
       @AuthenticationPrincipal UserPrincipal principal) {
     return CommonResponse.ok(userFacade.getNotificationSettings(principal.getUserId()));
+  }
+
+  @Override
+  @PatchMapping("/me/notification-settings")
+  public CommonResponse<?> updateNotificationSettings(
+      @AuthenticationPrincipal UserPrincipal principal,
+      @RequestBody NotificationSettingsUpdateRequest request) {
+    userFacade.updateNotificationSettings(principal.getUserId(), request);
+    return CommonResponse.ok();
   }
 }

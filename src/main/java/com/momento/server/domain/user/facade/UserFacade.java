@@ -1,6 +1,7 @@
 package com.momento.server.domain.user.facade;
 
 import com.momento.server.domain.timecapsule.service.TimeCapsuleListService;
+import com.momento.server.domain.user.dto.request.NotificationSettingsUpdateRequest;
 import com.momento.server.domain.user.dto.request.UserUpdateRequest;
 import com.momento.server.domain.user.dto.response.MyProfileResponse;
 import com.momento.server.domain.user.dto.response.NicknameAvailabilityResponse;
@@ -39,5 +40,9 @@ public class UserFacade {
   public NotificationSettingsResponse getNotificationSettings(Long userId) {
     return NotificationSettingsResponse.from(
         userService.getActiveUser(userId).getNotificationSettings());
+  }
+
+  public void updateNotificationSettings(Long userId, NotificationSettingsUpdateRequest request) {
+    userService.updateNotificationSettings(userId, request);
   }
 }

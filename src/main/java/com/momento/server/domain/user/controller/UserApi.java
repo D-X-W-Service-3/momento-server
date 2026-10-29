@@ -1,6 +1,7 @@
 package com.momento.server.domain.user.controller;
 
 import com.momento.server.domain.user.dto.request.NicknameAvailabilityRequest;
+import com.momento.server.domain.user.dto.request.NotificationSettingsUpdateRequest;
 import com.momento.server.domain.user.dto.request.UserUpdateRequest;
 import com.momento.server.domain.user.dto.response.MyProfileResponse;
 import com.momento.server.domain.user.dto.response.NicknameAvailabilityResponse;
@@ -53,4 +54,12 @@ public interface UserApi {
               + "추억 다시보기는 꺼져 있다. 기념일 알림은 기념일마다 따로 켜므로 여기 없다.")
   CommonResponse<NotificationSettingsResponse> getNotificationSettings(
       @Parameter(hidden = true) UserPrincipal principal);
+
+  @Operation(
+      summary = "알림 설정 수정",
+      description =
+          "알림 설정 화면에서 토글을 바꿀 때 호출한다. 보낸 항목만 바꾸고, 보내지 않았거나 null 인 항목은 그대로 둔다. "
+              + "빈 Body 도 성공이다. 응답 데이터는 없다.")
+  CommonResponse<?> updateNotificationSettings(
+      @Parameter(hidden = true) UserPrincipal principal, NotificationSettingsUpdateRequest request);
 }
