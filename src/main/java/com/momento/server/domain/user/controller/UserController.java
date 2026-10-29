@@ -13,6 +13,7 @@ import com.momento.server.global.common.dto.CommonResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PatchMapping;
@@ -60,6 +61,13 @@ public class UserController implements UserApi {
       @AuthenticationPrincipal UserPrincipal principal,
       @RequestBody NotificationSettingsUpdateRequest request) {
     userFacade.updateNotificationSettings(principal.getUserId(), request);
+    return CommonResponse.ok();
+  }
+
+  @Override
+  @DeleteMapping("/me")
+  public CommonResponse<?> withdraw(@AuthenticationPrincipal UserPrincipal principal) {
+    userFacade.withdraw(principal.getUserId());
     return CommonResponse.ok();
   }
 }

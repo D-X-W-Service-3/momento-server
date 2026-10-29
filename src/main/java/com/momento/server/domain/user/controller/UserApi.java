@@ -62,4 +62,12 @@ public interface UserApi {
               + "빈 Body 도 성공이다. 응답 데이터는 없다.")
   CommonResponse<?> updateNotificationSettings(
       @Parameter(hidden = true) UserPrincipal principal, NotificationSettingsUpdateRequest request);
+
+  @Operation(
+      summary = "회원 탈퇴",
+      description =
+          "로그인한 회원을 탈퇴 처리한다. 회원 행의 deleted_at 을 채우는 소프트 삭제이고, 같은 카카오 계정으로 다시 로그인하면 계정이 복구된다. "
+              + "캡슐 멤버십 · 편지 · 기념일은 그대로 두며, 방장이 탈퇴해도 캡슐은 그대로다. 탈퇴한 회원은 멤버 목록에 그대로 나온다. "
+              + "탈퇴 뒤 같은 액세스 토큰으로 보낸 요청은 401 INVALID_ACCESS_TOKEN 이다. 응답 데이터는 없다.")
+  CommonResponse<?> withdraw(@Parameter(hidden = true) UserPrincipal principal);
 }

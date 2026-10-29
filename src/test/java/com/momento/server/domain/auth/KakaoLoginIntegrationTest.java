@@ -9,6 +9,8 @@ import static org.mockito.BDDMockito.willAnswer;
 import static org.mockito.BDDMockito.willThrow;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -207,6 +209,29 @@ class KakaoLoginIntegrationTest {
     assertThat(restored.getDeletedAt()).isNull();
     assertThat(restored.getNickname()).isEqualTo("직접정한닉네임");
     assertThat(restored.getProfileImageUrl()).isEqualTo(PROFILE_IMAGE_URL);
+  }
+
+  @Test
+  @DisplayName("탈퇴 API 로 탈퇴한 뒤 같은 카카오 계정으로 로그인하면 같은 회원으로 복구되고 새 토큰을 쓸 수 있다")
+  void loginRestoresUserWithdrawnByApi() throws Exception {
+    String accessToken = login(true);
+    User user = userRepository.findByKakaoId(String.valueOf(KAKAO_ID)).orElseThrow();
+
+    mockMvc
+        .perform(delete("/v1/users/me").header("Authorization", "Bearer " + accessToken))
+        .andExpect(status().isOk());
+    assertThat(userRepository.findById(user.getId()).orElseThrow().isWithdrawn()).isTrue();
+
+    String restoredToken = login(false);
+
+    User restored = userRepository.findById(user.getId()).orElseThrow();
+    assertThat(userRepository.count()).isEqualTo(1);
+    assertThat(restored.isWithdrawn()).isFalse();
+    assertThat(restored.getNickname()).isEqualTo(user.getNickname());
+    mockMvc
+        .perform(get("/v1/users/me").header("Authorization", "Bearer " + restoredToken))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.data.userId").value(user.getId()));
   }
 
   @Test
