@@ -97,6 +97,20 @@ public class TimeCapsuleListService {
             userId, date.atStartOfDay(), date.plusDays(1).atStartOfDay()));
   }
 
+  /**
+   * 통합 검색. 목록 검색과 같은 기준으로 찾고, 개봉일이 그 해인 캡슐만 개봉일 · ID 오름차순으로 카드로 읽는다. 캡슐과 멤버 수 · 편지 수를 같은 시점에 읽도록
+   * 묶는다.
+   *
+   * @param year null 이면 전체 기간
+   */
+  @Transactional(readOnly = true)
+  public List<TimeCapsuleSummary> searchMyCapsules(Long userId, String keyword, Integer year) {
+    LocalDateTime from = year == null ? null : LocalDate.of(year, 1, 1).atStartOfDay();
+    LocalDateTime to = year == null ? null : from.plusYears(1);
+    return summarize(
+        timeCapsuleRepository.searchMyCapsules(userId, LikePattern.contains(keyword), from, to));
+  }
+
   private Map<CapsuleStatus, Long> countByStatus(Long userId, String keywordPattern) {
     return timeCapsuleRepository.countMyCapsulesByStatus(userId, keywordPattern).stream()
         .collect(Collectors.toMap(CapsuleStatusCount::status, CapsuleStatusCount::count));
