@@ -256,6 +256,34 @@ class TimeCapsuleListQueryTest {
         .containsExactly(first.getId(), second.getId(), later.getId());
   }
 
+  @Test
+  @DisplayName("통합 검색은 목록 검색과 같은 기준으로 찾고 개봉일 · ID 오름차순이다")
+  void searchMatchesLikeListInAscendingOrder() {
+    TimeCapsule later = mine("제주 다시", OPEN.plusDays(1), CapsuleStatus.WRITING);
+    TimeCapsule byNickname = mine("캡슐", OPEN, CapsuleStatus.OPENED);
+    join(byNickname, saveUser("search-jeju", "제주사람"), MemberStatus.ACTIVE);
+    TimeCapsule byTitle = mine("제주 여행", OPEN, CapsuleStatus.LOCKED);
+    mine("서울", OPEN, CapsuleStatus.WRITING);
+    join(saveCapsule("남의 제주", OPEN, CapsuleStatus.WRITING), friend, MemberStatus.ACTIVE);
+
+    assertThat(ids(search("제주", null, null)))
+        .containsExactly(byNickname.getId(), byTitle.getId(), later.getId());
+  }
+
+  @Test
+  @DisplayName("통합 검색의 개봉일 범위는 시작을 넣고 끝을 빼며, 비어 있으면 전체 기간이다")
+  void searchFiltersByOpenAtRange() {
+    LocalDateTime from = OPEN;
+    LocalDateTime to = OPEN.plusYears(1);
+    mine("제주 전", from.minusMinutes(1), CapsuleStatus.WRITING);
+    TimeCapsule first = mine("제주 시작", from, CapsuleStatus.WRITING);
+    TimeCapsule last = mine("제주 끝 직전", to.minusMinutes(1), CapsuleStatus.WRITING);
+    mine("제주 끝", to, CapsuleStatus.WRITING);
+
+    assertThat(ids(search("제주", from, to))).containsExactly(first.getId(), last.getId());
+    assertThat(search("제주", null, null)).hasSize(4);
+  }
+
   private void markOpened(CapsuleMember member) {
     transactionTemplate.executeWithoutResult(
         tx -> capsuleMemberRepository.markOpenedIfAbsent(member.getId(), OPEN));
@@ -270,6 +298,11 @@ class TimeCapsuleListQueryTest {
   private List<MyCapsule> findAll(CapsuleStatus status, String keyword) {
     return timeCapsuleRepository.findMyCapsules(
         me.getId(), status, LikePattern.contains(keyword), null, null, ALL);
+  }
+
+  private List<MyCapsule> search(String keyword, LocalDateTime from, LocalDateTime to) {
+    return timeCapsuleRepository.searchMyCapsules(
+        me.getId(), LikePattern.contains(keyword), from, to);
   }
 
   private List<MyCapsule> page(LocalDateTime cursorOpenAt, Long cursorId, Limit limit) {

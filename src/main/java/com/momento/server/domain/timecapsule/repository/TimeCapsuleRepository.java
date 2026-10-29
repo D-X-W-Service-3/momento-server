@@ -115,6 +115,26 @@ public interface TimeCapsuleRepository extends JpaRepository<TimeCapsule, Long> 
       @Param("from") LocalDateTime from,
       @Param("to") LocalDateTime to);
 
+  /**
+   * 통합 검색. 검색어는 목록 검색과 같은 기준이고, 개봉일이 {@code [from, to)} 인 캡슐만 개봉일 · ID 오름차순으로 읽는다. 최신순은 서비스가 뒤집는다.
+   *
+   * @param keyword {@link com.momento.server.global.common.util.LikePattern#contains} 로 만든 패턴
+   * @param from null 이면 처음부터
+   * @param to null 이면 끝까지
+   */
+  @Query(
+      "select new com.momento.server.domain.timecapsule.repository.MyCapsule(c, m.openedAt)"
+          + MY_ACTIVE_CAPSULES
+          + KEYWORD_MATCHES
+          + " and (:from is null or c.openAt >= :from)"
+          + " and (:to is null or c.openAt < :to)"
+          + " order by c.openAt, c.id")
+  List<MyCapsule> searchMyCapsules(
+      @Param("userId") Long userId,
+      @Param("keyword") String keyword,
+      @Param("from") LocalDateTime from,
+      @Param("to") LocalDateTime to);
+
   /** 내가 속한 캡슐의 상태별 개수. 검색어는 적용하고, 상태 탭과 커서는 적용하지 않는다. 캡슐이 없는 상태는 결과에 없다. */
   @Query(
       "select new com.momento.server.domain.timecapsule.repository.CapsuleStatusCount("
