@@ -3,6 +3,7 @@ package com.momento.server.domain.timecapsule.controller;
 import com.momento.server.domain.timecapsule.dto.request.TimeCapsuleCreateRequest;
 import com.momento.server.domain.timecapsule.dto.response.TimeCapsuleCreateResponse;
 import com.momento.server.domain.timecapsule.dto.response.TimeCapsuleDetailResponse;
+import com.momento.server.domain.timecapsule.dto.response.TimeCapsuleOpenResponse;
 import com.momento.server.domain.timecapsule.facade.TimeCapsuleFacade;
 import com.momento.server.global.common.annotation.RestApiController;
 import com.momento.server.global.common.auth.UserPrincipal;
@@ -36,5 +37,12 @@ public class TimeCapsuleController implements TimeCapsuleApi {
   public CommonResponse<TimeCapsuleDetailResponse> getTimeCapsule(
       @AuthenticationPrincipal UserPrincipal principal, @PathVariable Long capsuleId) {
     return CommonResponse.ok(timeCapsuleFacade.getDetail(capsuleId, principal.getUserId()));
+  }
+
+  @Override
+  @PostMapping("/{capsuleId}/open")
+  public CommonResponse<TimeCapsuleOpenResponse> openTimeCapsule(
+      @AuthenticationPrincipal UserPrincipal principal, @PathVariable Long capsuleId) {
+    return CommonResponse.ok(timeCapsuleFacade.open(capsuleId, principal.getUserId()));
   }
 }

@@ -60,6 +60,7 @@ CREATE TABLE `capsule_members` (
 	`role`	VARCHAR(20)	NOT NULL	COMMENT '참여 역할: OWNER, RECIPIENT, PARTICIPANT',
 	`status`	VARCHAR(20)	NOT NULL	DEFAULT 'ACTIVE'	COMMENT '참여 상태: ACTIVE, LEFT, REMOVED',
 	`joined_at`	DATETIME(6)	NULL	COMMENT '참여 일시',
+	`opened_at`	DATETIME(6)	NULL	COMMENT '열린 캡슐을 처음 확인한 일시',
 	`created_at`	DATETIME(6)	NOT NULL	COMMENT '생성 일시',
 	`updated_at`	DATETIME(6)	NOT NULL	COMMENT '수정 일시'
 );

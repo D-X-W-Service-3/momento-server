@@ -3,6 +3,7 @@ package com.momento.server.domain.timecapsule.controller;
 import com.momento.server.domain.timecapsule.dto.request.TimeCapsuleCreateRequest;
 import com.momento.server.domain.timecapsule.dto.response.TimeCapsuleCreateResponse;
 import com.momento.server.domain.timecapsule.dto.response.TimeCapsuleDetailResponse;
+import com.momento.server.domain.timecapsule.dto.response.TimeCapsuleOpenResponse;
 import com.momento.server.global.common.auth.UserPrincipal;
 import com.momento.server.global.common.dto.CommonResponse;
 import io.swagger.v3.oas.annotations.Operation;
@@ -29,4 +30,14 @@ public interface TimeCapsuleApi {
   CommonResponse<TimeCapsuleDetailResponse> getTimeCapsule(
       @Parameter(hidden = true) UserPrincipal principal,
       @Parameter(description = "타임캡슐 ID", example = "12") Long capsuleId);
+
+  @Operation(
+      summary = "타임캡슐 개봉 확인",
+      description =
+          "열린 캡슐의 개봉 화면에서 '타임캡슐 확인하기' 를 누르면 호출한다. 로그인한 멤버가 이 캡슐을 확인했다고 기록하고, 처음 확인한 일시를 돌려준다. "
+              + "이미 확인한 캡슐에 다시 호출해도 200 이고 openedAt 은 처음 값 그대로다. 역할과 관계없이 멤버면 확인할 수 있다. "
+              + "아직 공개되지 않은 캡슐은 409 CAPSULE_NOT_OPENED, 멤버가 아니거나 없는 캡슐은 404 CAPSULE_NOT_FOUND 다.")
+  CommonResponse<TimeCapsuleOpenResponse> openTimeCapsule(
+      @Parameter(hidden = true) UserPrincipal principal,
+      @Parameter(description = "타임캡슐 ID", example = "21") Long capsuleId);
 }

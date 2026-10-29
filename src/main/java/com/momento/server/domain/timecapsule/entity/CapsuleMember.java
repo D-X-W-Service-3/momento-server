@@ -57,4 +57,11 @@ public class CapsuleMember extends BaseTimeEntity {
 
   @Column(name = "joined_at")
   private LocalDateTime joinedAt;
+
+  /**
+   * 이 멤버가 열린 캡슐을 처음 확인한 일시. 아직 확인하지 않았으면 비어 있다. 같은 캡슐이라도 사람마다 "개봉 가능" 과 "개봉됨" 이 갈려 멤버 행에 둔다. 동시에 두
+   * 번 확인해도 처음 값이 남도록 조건부 UPDATE 로만 기록한다.
+   */
+  @Column(name = "opened_at")
+  private LocalDateTime openedAt;
 }

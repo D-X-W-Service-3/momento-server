@@ -4,6 +4,7 @@ import com.momento.server.domain.letter.entity.LetterStatus;
 import com.momento.server.domain.timecapsule.dto.request.TimeCapsuleCreateRequest;
 import com.momento.server.domain.timecapsule.entity.CapsuleMember;
 import com.momento.server.domain.timecapsule.entity.CapsuleSchedule;
+import com.momento.server.domain.timecapsule.entity.CapsuleStatus;
 import com.momento.server.domain.timecapsule.entity.CapsuleType;
 import com.momento.server.domain.timecapsule.entity.MemberRole;
 import com.momento.server.domain.timecapsule.entity.MemberStatus;
@@ -16,8 +17,10 @@ import com.momento.server.domain.user.entity.User;
 import com.momento.server.global.common.exception.ApiException;
 import java.time.Clock;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
@@ -91,6 +94,29 @@ public class TimeCapsuleService {
         timeCapsuleRepository.countLettersByStatus(capsuleId, LetterStatus.SUBMITTED);
 
     return new TimeCapsuleDetail(capsule, me.getRole(), memberCount, letterCount);
+  }
+
+  /**
+   * 열린 캡슐을 확인했다고 기록하고, 처음 확인한 일시를 돌려준다. 이미 확인한 캡슐이면 기록을 바꾸지 않고 처음 일시를 그대로 돌려준다.
+   *
+   * <p>멤버인지를 공개 여부보다 먼저 본다. 반대로 하면 멤버가 아닌 사람도 409 와 404 의 차이로 캡슐의 공개 여부를 알 수 있다. 공개 여부는 스케줄러가 바꿔 둔
+   * {@code status} 를 믿고, 여기서 공개 시각과 현재 시각을 다시 비교하지 않는다.
+   *
+   * <p>격리 수준을 READ_COMMITTED 로 둔다. 같은 멤버의 요청이 동시에 오면 늦은 쪽의 조건부 UPDATE 는 0행이 되는데, REPEATABLE READ
+   * 에서는 이어지는 조회가 트랜잭션 첫 조회 시점의 스냅샷을 읽어 {@code opened_at} 이 비어 보인다. READ_COMMITTED 면 먼저 커밋된 처음 일시를
+   * 읽는다.
+   */
+  @Transactional(isolation = Isolation.READ_COMMITTED)
+  public LocalDateTime open(Long capsuleId, Long userId) {
+    TimeCapsule capsule = getActiveCapsule(capsuleId);
+    CapsuleMember me = requireActiveMember(capsuleId, userId);
+
+    if (capsule.getStatus() != CapsuleStatus.OPENED) {
+      throw new ApiException(CapsuleErrorCode.CAPSULE_NOT_OPENED);
+    }
+
+    capsuleMemberRepository.markOpenedIfAbsent(me.getId(), LocalDateTime.now(clock));
+    return capsuleMemberRepository.findById(me.getId()).orElseThrow().getOpenedAt();
   }
 
   public TimeCapsule getActiveCapsule(Long capsuleId) {
