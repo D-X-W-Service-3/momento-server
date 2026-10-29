@@ -4,6 +4,7 @@ import com.momento.server.domain.timecapsule.service.TimeCapsuleListService;
 import com.momento.server.domain.user.dto.request.UserUpdateRequest;
 import com.momento.server.domain.user.dto.response.MyProfileResponse;
 import com.momento.server.domain.user.dto.response.NicknameAvailabilityResponse;
+import com.momento.server.domain.user.dto.response.NotificationSettingsResponse;
 import com.momento.server.domain.user.entity.User;
 import com.momento.server.domain.user.service.UserService;
 import lombok.RequiredArgsConstructor;
@@ -33,5 +34,10 @@ public class UserFacade {
   public NicknameAvailabilityResponse checkNickname(Long userId, String nickname) {
     return new NicknameAvailabilityResponse(
         nickname, userService.isNicknameAvailable(userId, nickname));
+  }
+
+  public NotificationSettingsResponse getNotificationSettings(Long userId) {
+    return NotificationSettingsResponse.from(
+        userService.getActiveUser(userId).getNotificationSettings());
   }
 }

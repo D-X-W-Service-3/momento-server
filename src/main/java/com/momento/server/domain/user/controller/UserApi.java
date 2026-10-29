@@ -4,6 +4,7 @@ import com.momento.server.domain.user.dto.request.NicknameAvailabilityRequest;
 import com.momento.server.domain.user.dto.request.UserUpdateRequest;
 import com.momento.server.domain.user.dto.response.MyProfileResponse;
 import com.momento.server.domain.user.dto.response.NicknameAvailabilityResponse;
+import com.momento.server.domain.user.dto.response.NotificationSettingsResponse;
 import com.momento.server.global.common.auth.UserPrincipal;
 import com.momento.server.global.common.dto.CommonResponse;
 import io.swagger.v3.oas.annotations.Operation;
@@ -44,4 +45,12 @@ public interface UserApi {
   CommonResponse<NicknameAvailabilityResponse> checkNickname(
       @Parameter(hidden = true) UserPrincipal principal,
       @ParameterObject @Valid NicknameAvailabilityRequest request);
+
+  @Operation(
+      summary = "알림 설정 조회",
+      description =
+          "알림 설정 화면에서 알림 종류별 수신 여부를 조회한다. 새 회원은 개봉 · D-Day · 수정 마감 · 새 참여자 알림이 켜져 있고 "
+              + "추억 다시보기는 꺼져 있다. 기념일 알림은 기념일마다 따로 켜므로 여기 없다.")
+  CommonResponse<NotificationSettingsResponse> getNotificationSettings(
+      @Parameter(hidden = true) UserPrincipal principal);
 }

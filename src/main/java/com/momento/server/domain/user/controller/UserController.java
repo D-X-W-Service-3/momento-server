@@ -4,6 +4,7 @@ import com.momento.server.domain.user.dto.request.NicknameAvailabilityRequest;
 import com.momento.server.domain.user.dto.request.UserUpdateRequest;
 import com.momento.server.domain.user.dto.response.MyProfileResponse;
 import com.momento.server.domain.user.dto.response.NicknameAvailabilityResponse;
+import com.momento.server.domain.user.dto.response.NotificationSettingsResponse;
 import com.momento.server.domain.user.facade.UserFacade;
 import com.momento.server.global.common.annotation.RestApiController;
 import com.momento.server.global.common.auth.UserPrincipal;
@@ -43,5 +44,12 @@ public class UserController implements UserApi {
       @AuthenticationPrincipal UserPrincipal principal,
       @Valid @ModelAttribute NicknameAvailabilityRequest request) {
     return CommonResponse.ok(userFacade.checkNickname(principal.getUserId(), request.nickname()));
+  }
+
+  @Override
+  @GetMapping("/me/notification-settings")
+  public CommonResponse<NotificationSettingsResponse> getNotificationSettings(
+      @AuthenticationPrincipal UserPrincipal principal) {
+    return CommonResponse.ok(userFacade.getNotificationSettings(principal.getUserId()));
   }
 }
