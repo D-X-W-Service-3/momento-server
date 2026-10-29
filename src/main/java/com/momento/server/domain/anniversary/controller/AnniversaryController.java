@@ -12,6 +12,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -36,5 +37,15 @@ public class AnniversaryController implements AnniversaryApi {
   public CommonResponse<AnniversaryDetailResponse> getAnniversary(
       @AuthenticationPrincipal UserPrincipal principal, @PathVariable Long anniversaryId) {
     return CommonResponse.ok(anniversaryFacade.getDetail(anniversaryId, principal.getUserId()));
+  }
+
+  @Override
+  @PatchMapping("/{anniversaryId}")
+  public CommonResponse<AnniversaryDetailResponse> updateAnniversary(
+      @AuthenticationPrincipal UserPrincipal principal,
+      @PathVariable Long anniversaryId,
+      @Valid @RequestBody AnniversaryRequest request) {
+    return CommonResponse.ok(
+        anniversaryFacade.update(anniversaryId, principal.getUserId(), request));
   }
 }

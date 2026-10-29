@@ -33,4 +33,16 @@ public interface AnniversaryApi {
   CommonResponse<AnniversaryDetailResponse> getAnniversary(
       @Parameter(hidden = true) UserPrincipal principal,
       @Parameter(description = "기념일 ID", example = "7") Long anniversaryId);
+
+  @Operation(
+      summary = "기념일 수정",
+      description =
+          "기념일 수정 화면의 '수정하기' 로 저장한다. 등록과 같은 Body 를 받아 모든 값을 통째로 바꾼다. 보내지 않았거나 null 인 선택값은 "
+              + "\"없음\" 이라, 메모 · 미리 알림을 null 로 보내면 지워지고 알림 시각을 보내지 않으면 09:00 이 된다. 검증 규칙은 등록과 같다. "
+              + "내가 등록한 기념일만 고칠 수 있고, 없는 기념일과 다른 회원의 기념일은 똑같이 404 ANNIVERSARY_NOT_FOUND 다. "
+              + "수정 후 상세 조회와 같은 형태를 돌려준다.")
+  CommonResponse<AnniversaryDetailResponse> updateAnniversary(
+      @Parameter(hidden = true) UserPrincipal principal,
+      @Parameter(description = "기념일 ID", example = "7") Long anniversaryId,
+      @Valid AnniversaryRequest request);
 }

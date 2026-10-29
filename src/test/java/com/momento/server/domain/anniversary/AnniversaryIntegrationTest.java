@@ -5,6 +5,7 @@ import static org.hamcrest.Matchers.nullValue;
 import static org.mockito.BDDMockito.given;
 import static org.springframework.http.HttpHeaders.AUTHORIZATION;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -247,6 +248,129 @@ class AnniversaryIntegrationTest {
         .perform(get("/v1/anniversaries/{anniversaryId}", anniversary.getId()))
         .andExpect(status().isUnauthorized())
         .andExpect(jsonPath("$.code").value("INVALID_ACCESS_TOKEN"));
+  }
+
+  @Test
+  @DisplayName("수정은 모든 값을 바꾸고 상세와 같은 형태를 돌려준다")
+  void updates() throws Exception {
+    Anniversary anniversary =
+        save(me, LocalDate.of(2026, 5, 4), RepeatType.NONE, null, false, null, null);
+
+    update(anniversary, FULL_BODY)
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.data.anniversaryId").value(anniversary.getId()))
+        .andExpect(jsonPath("$.data.title").value("우리 100일"))
+        .andExpect(jsonPath("$.data.notifyTime").value("20:30"))
+        .andExpect(jsonPath("$.data.nextDate").value("2027-08-12"))
+        .andExpect(jsonPath("$.data.dDay").value(287));
+
+    Anniversary updated = anniversaryRepository.findById(anniversary.getId()).orElseThrow();
+    assertThat(updated.getAnniversaryDate()).isEqualTo(LocalDate.of(2026, 8, 12));
+    assertThat(updated.getRepeatType()).isEqualTo(RepeatType.YEARLY);
+    assertThat(updated.getMemo()).isEqualTo("처음 만난 카페에 다시 가기");
+    assertThat(updated.isNotificationEnabled()).isTrue();
+    assertThat(updated.getNotifyTime()).isEqualTo(LocalTime.of(20, 30));
+    assertThat(updated.getRemindDaysBefore()).isEqualTo(3);
+  }
+
+  @Test
+  @DisplayName("수정에서 보내지 않은 선택값은 지워지고 알림 시각은 09:00 이 된다")
+  void updateReplacesOmittedValues() throws Exception {
+    Anniversary anniversary =
+        save(me, LocalDate.of(2026, 8, 12), RepeatType.YEARLY, "메모", true, LocalTime.of(20, 30), 3);
+
+    update(
+            anniversary,
+            """
+            {"title": "우리 100일", "anniversaryDate": "2026-08-12", "repeatType": "YEARLY",
+             "memo": null, "notificationEnabled": true, "remindDaysBefore": null}
+            """)
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.data.memo").value(nullValue()))
+        .andExpect(jsonPath("$.data.notifyTime").value("09:00"))
+        .andExpect(jsonPath("$.data.remindDaysBefore").value(nullValue()));
+
+    Anniversary updated = anniversaryRepository.findById(anniversary.getId()).orElseThrow();
+    assertThat(updated.getMemo()).isNull();
+    assertThat(updated.getNotifyTime()).isEqualTo(LocalTime.of(9, 0));
+    assertThat(updated.getRemindDaysBefore()).isNull();
+  }
+
+  @Test
+  @DisplayName("수정에서 알림 받기를 끄면 미리 알림은 지우고 알림 시각은 보관한다")
+  void updateDisablesNotification() throws Exception {
+    Anniversary anniversary =
+        save(me, LocalDate.of(2026, 8, 12), RepeatType.YEARLY, null, true, LocalTime.of(9, 0), 1);
+
+    update(
+            anniversary,
+            FULL_BODY.replace("\"notificationEnabled\": true", "\"notificationEnabled\": false"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.data.notificationEnabled").value(false))
+        .andExpect(jsonPath("$.data.notifyTime").value("20:30"))
+        .andExpect(jsonPath("$.data.remindDaysBefore").value(nullValue()));
+  }
+
+  @Test
+  @DisplayName("수정도 등록과 같은 규칙으로 검증하고, 실패하면 바꾸지 않는다")
+  void updateValidatesLikeCreate() throws Exception {
+    Anniversary anniversary =
+        save(me, LocalDate.of(2026, 5, 4), RepeatType.NONE, "메모", true, null, 1);
+
+    update(anniversary, FULL_BODY.replace("\"remindDaysBefore\": 3", "\"remindDaysBefore\": 2"))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.code").value("INVALID_INPUT_VALUE"));
+    update(anniversary, FULL_BODY.replace("\"우리 100일\"", "\"  \""))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.code").value("INVALID_INPUT_VALUE"));
+
+    Anniversary unchanged = anniversaryRepository.findById(anniversary.getId()).orElseThrow();
+    assertThat(unchanged.getAnniversaryDate()).isEqualTo(LocalDate.of(2026, 5, 4));
+    assertThat(unchanged.getRemindDaysBefore()).isEqualTo(1);
+  }
+
+  @Test
+  @DisplayName("다른 회원의 기념일과 없는 기념일은 수정할 수 없고 404 다")
+  void updateHidesOthersAndMissing() throws Exception {
+    User other =
+        userRepository.save(User.builder().kakaoId("anniversary-other").nickname("남").build());
+    Anniversary others =
+        save(other, LocalDate.of(2026, 5, 4), RepeatType.NONE, null, false, null, null);
+
+    update(others, FULL_BODY)
+        .andExpect(status().isNotFound())
+        .andExpect(jsonPath("$.code").value("ANNIVERSARY_NOT_FOUND"));
+    authorized(
+            patch("/v1/anniversaries/{anniversaryId}", others.getId() + 1)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(FULL_BODY))
+        .andExpect(status().isNotFound())
+        .andExpect(jsonPath("$.code").value("ANNIVERSARY_NOT_FOUND"));
+
+    assertThat(anniversaryRepository.findById(others.getId()).orElseThrow().getAnniversaryDate())
+        .isEqualTo(LocalDate.of(2026, 5, 4));
+  }
+
+  @Test
+  @DisplayName("수정도 인증이 없으면 401 이다")
+  void updateRequiresAuthentication() throws Exception {
+    Anniversary anniversary =
+        save(me, LocalDate.of(2026, 5, 4), RepeatType.NONE, null, false, null, null);
+
+    mockMvc
+        .perform(
+            patch("/v1/anniversaries/{anniversaryId}", anniversary.getId())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(FULL_BODY))
+        .andExpect(status().isUnauthorized())
+        .andExpect(jsonPath("$.code").value("INVALID_ACCESS_TOKEN"));
+  }
+
+  private ResultActions update(Anniversary anniversary, String body) throws Exception {
+    return authorized(
+        patch("/v1/anniversaries/{anniversaryId}", anniversary.getId())
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(body));
   }
 
   private Anniversary save(

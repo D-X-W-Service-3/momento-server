@@ -30,4 +30,11 @@ public class AnniversaryFacade {
     return AnniversaryDetailResponse.of(
         anniversaryService.getMine(anniversaryId, userId), LocalDate.now(clock));
   }
+
+  /** 수정 후 상세와 같은 형태를 돌려준다. 수정 화면이 저장 뒤 다시 조회하지 않아도 되게 한다. */
+  public AnniversaryDetailResponse update(
+      Long anniversaryId, Long userId, AnniversaryRequest request) {
+    return AnniversaryDetailResponse.of(
+        anniversaryService.update(anniversaryId, userId, request), LocalDate.now(clock));
+  }
 }
