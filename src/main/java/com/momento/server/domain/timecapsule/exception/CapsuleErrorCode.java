@@ -28,6 +28,12 @@ public enum CapsuleErrorCode implements ErrorCode {
 
   /** 삭제되지 않은 편지(임시 저장 포함, 방장 편지 포함)가 한 통이라도 있으면 캡슐을 지울 수 없다. */
   CAPSULE_HAS_LETTERS("편지가 담긴 타임캡슐은 삭제할 수 없습니다.", HttpStatus.CONFLICT),
+
+  /** 방장은 한 명뿐이라 내보내면 캡슐을 관리할 사람이 없어진다. */
+  CANNOT_REMOVE_OWNER("방장은 내보낼 수 없습니다.", HttpStatus.BAD_REQUEST),
+
+  /** 없는 멤버, 다른 캡슐의 멤버, 이미 나간 멤버를 구분하지 않는다. */
+  CAPSULE_MEMBER_NOT_FOUND("캡슐 멤버를 찾을 수 없습니다.", HttpStatus.NOT_FOUND),
   ;
 
   private final String message;

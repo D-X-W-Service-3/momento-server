@@ -2,9 +2,11 @@ package com.momento.server.domain.letter.repository;
 
 import com.momento.server.domain.letter.entity.Letter;
 import jakarta.persistence.LockModeType;
+import java.time.LocalDateTime;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -26,4 +28,19 @@ public interface LetterRepository extends JpaRepository<Letter, Long> {
       "select l from Letter l where l.timeCapsule.id = :capsuleId and l.author.id = :authorId and l.deletedAt is null")
   Optional<Letter> findActiveForUpdate(
       @Param("capsuleId") Long capsuleId, @Param("authorId") Long authorId);
+
+  /**
+   * 내보낸 멤버가 이 캡슐에 쓴 편지(임시 저장 포함)를 소프트 삭제한다. 일괄 UPDATE 는 JPA Auditing 을 거치지 않아 {@code updatedAt} 도
+   * 직접 채운다. 앞서 바꾼 멤버 상태를 먼저 flush 하고, 끝나면 영속성 컨텍스트를 비워 지운 편지가 1차 캐시에 남지 않게 한다.
+   *
+   * @return 지운 편지 수
+   */
+  @Modifying(clearAutomatically = true, flushAutomatically = true)
+  @Query(
+      "update Letter l set l.deletedAt = :now, l.updatedAt = :now"
+          + " where l.timeCapsule.id = :capsuleId and l.author.id = :authorId and l.deletedAt is null")
+  int softDeleteByAuthor(
+      @Param("capsuleId") Long capsuleId,
+      @Param("authorId") Long authorId,
+      @Param("now") LocalDateTime now);
 }
