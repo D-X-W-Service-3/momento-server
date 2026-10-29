@@ -60,7 +60,7 @@ public class User extends BaseTimeEntity {
     return deletedAt != null;
   }
 
-  /** 탈퇴 처리. kakao_id 가 유니크라 같은 계정으로 재가입하면 {@link #restore} 로 되살린다. 탈퇴 API 는 별도 이슈에서 붙인다. */
+  /** 탈퇴 처리. kakao_id 가 유니크라 같은 계정으로 재가입하면 {@link #restore} 로 되살린다. */
   public void withdraw() {
     this.deletedAt = LocalDateTime.now();
   }

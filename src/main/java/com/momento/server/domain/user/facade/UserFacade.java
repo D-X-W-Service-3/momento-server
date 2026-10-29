@@ -45,4 +45,8 @@ public class UserFacade {
   public void updateNotificationSettings(Long userId, NotificationSettingsUpdateRequest request) {
     userService.updateNotificationSettings(userId, request);
   }
+
+  public void withdraw(Long userId) {
+    userService.withdraw(userId);
+  }
 }
