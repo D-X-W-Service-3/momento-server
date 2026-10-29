@@ -1,0 +1,6 @@
+# 테스트에서만 덮어쓸 값. classpath:/config/ 아래에 두면 main 의 application.yml 과 합쳐 읽힌다.
+# src/test/resources/application.yml 로 두면 main 파일을 통째로 가리므로 그 위치에 두지 않는다.
+momento:
+  scheduling:
+    # 테스트 컨텍스트들이 H2 하나를 같이 쓴다. 스케줄러가 돌면 다른 테스트가 만든 캡슐 상태를 바꾼다.
+    enabled: false

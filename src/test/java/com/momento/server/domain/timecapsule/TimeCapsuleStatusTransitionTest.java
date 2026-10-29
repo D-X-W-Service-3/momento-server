@@ -24,19 +24,17 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.context.event.ApplicationEvents;
 import org.springframework.test.context.event.RecordApplicationEvents;
 
 /**
- * 상태 전이 규칙을 검증한다. 스케줄러가 실제로 도는 것을 기다리면 느리고 불안정해서, 주기를 길게 밀어 두고 서비스를 직접 부른다.
+ * 상태 전이 규칙을 검증한다. 스케줄러가 실제로 도는 것을 기다리면 느리고 불안정해서 서비스를 직접 부른다. 테스트에서는 스케줄링이 꺼져 있다.
  *
  * <p>{@link Clock} 을 고정해 공개 시각 정각 같은 경계를 확인한다.
  */
 @SpringBootTest
 @RecordApplicationEvents
-@TestPropertySource(properties = "momento.capsule.status-transition-interval=1h")
 class TimeCapsuleStatusTransitionTest {
 
   private static final Instant NOW = Instant.parse("2026-12-25T20:00:00Z");
