@@ -108,6 +108,24 @@ public interface TimeCapsuleRepository extends JpaRepository<TimeCapsule, Long> 
           + " order by c.openAt desc, c.id desc")
   List<MyCapsule> findMyOpenedCapsules(@Param("userId") Long userId, Limit limit);
 
+  /** 캘린더 월별 점. 개봉일이 {@code [from, to)} 인 내 캡슐의 개봉일만 읽는다. 같은 날 여러 캡슐이면 그 날짜가 여러 번 나온다. */
+  @Query("select c.openAt" + MY_ACTIVE_CAPSULES + " and c.openAt >= :from and c.openAt < :to")
+  List<LocalDateTime> findMyOpenAtBetween(
+      @Param("userId") Long userId,
+      @Param("from") LocalDateTime from,
+      @Param("to") LocalDateTime to);
+
+  /** 캘린더 날짜별 캡슐. 개봉일이 {@code [from, to)} 인 내 캡슐을 개봉일 · ID 오름차순으로 읽는다. */
+  @Query(
+      "select new com.momento.server.domain.timecapsule.repository.MyCapsule(c, m.openedAt)"
+          + MY_ACTIVE_CAPSULES
+          + " and c.openAt >= :from and c.openAt < :to"
+          + " order by c.openAt, c.id")
+  List<MyCapsule> findMyCapsulesOpeningBetween(
+      @Param("userId") Long userId,
+      @Param("from") LocalDateTime from,
+      @Param("to") LocalDateTime to);
+
   /** 내가 속한 캡슐의 상태별 개수. 검색어는 적용하고, 상태 탭과 커서는 적용하지 않는다. 캡슐이 없는 상태는 결과에 없다. */
   @Query(
       "select new com.momento.server.domain.timecapsule.repository.CapsuleStatusCount("

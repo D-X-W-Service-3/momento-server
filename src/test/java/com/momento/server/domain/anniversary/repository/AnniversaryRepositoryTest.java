@@ -82,6 +82,24 @@ class AnniversaryRepositoryTest {
     assertThat(anniversaryRepository.findByIdAndUserId(others.getId() + 1, me.getId())).isEmpty();
   }
 
+  @Test
+  @DisplayName("내 기념일 전체는 등록 순으로 나오고 개수도 내 것만 센다")
+  void findsAllMineInIdOrder() {
+    Anniversary first = save(me, "첫 만남", LocalDate.of(2026, 12, 1));
+    Anniversary second = save(me, "우리 100일", LocalDate.of(2026, 1, 1));
+    save(other, "남의 기념일", LocalDate.of(2026, 6, 1));
+
+    assertThat(anniversaryRepository.findByUserIdOrderByIdAsc(me.getId()))
+        .extracting(Anniversary::getId)
+        .containsExactly(first.getId(), second.getId());
+    assertThat(anniversaryRepository.countByUserId(me.getId())).isEqualTo(2);
+  }
+
+  private Anniversary save(User user, String title, LocalDate date) {
+    return anniversaryRepository.save(
+        Anniversary.create(user, title, date, RepeatType.YEARLY, null, false, null, null));
+  }
+
   private User saveUser(String kakaoId, String nickname) {
     return userRepository.save(User.builder().kakaoId(kakaoId).nickname(nickname).build());
   }

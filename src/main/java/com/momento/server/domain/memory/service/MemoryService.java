@@ -1,6 +1,7 @@
 package com.momento.server.domain.memory.service;
 
 import com.momento.server.domain.memory.dto.request.MemoryCreateRequest;
+import com.momento.server.domain.memory.dto.response.MemorySummary;
 import com.momento.server.domain.memory.entity.Memory;
 import com.momento.server.domain.memory.entity.MemoryImage;
 import com.momento.server.domain.memory.repository.MemoryImageRepository;
@@ -82,6 +83,28 @@ public class MemoryService {
         memoryRepository.findMyMemories(userId, keyword, startDate, endDate, pageable);
 
     return new MemoryPage(memories, findImagesByMemory(memories.getContent()));
+  }
+
+  /** 캘린더 월별 점. 아카이브 목록과 같은 추억 중 날짜가 {@code [from, to)} 인 것의 날짜다. */
+  public List<LocalDate> findMyMemoryDates(Long userId, LocalDate from, LocalDate to) {
+    return memoryRepository.findMyMemoryDatesBetween(userId, from, to);
+  }
+
+  /** 캘린더 날짜별 추억. 아카이브 목록과 같은 항목 형태로 만든다. */
+  public List<MemorySummary> findMyMemoriesOn(Long userId, LocalDate date) {
+    List<Memory> memories = memoryRepository.findMyMemoriesOn(userId, date);
+    Map<Long, List<MemoryImage>> imagesByMemory = findImagesByMemory(memories);
+
+    return memories.stream()
+        .map(
+            memory ->
+                MemorySummary.of(memory, imagesByMemory.getOrDefault(memory.getId(), List.of())))
+        .toList();
+  }
+
+  /** 캘린더 탭 개수. 아카이브 목록에 검색 조건 없이 나오는 추억의 수다. */
+  public long countMyMemories(Long userId) {
+    return memoryRepository.countMyMemories(userId);
   }
 
   /** 추억은 사람이 겪은 일이라 1900~2100 밖의 연도는 오타로 본다. LocalDate.of() 예외로 500 이 나는 것도 함께 막는다. */

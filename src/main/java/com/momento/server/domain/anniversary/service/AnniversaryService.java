@@ -6,6 +6,7 @@ import com.momento.server.domain.anniversary.exception.AnniversaryErrorCode;
 import com.momento.server.domain.anniversary.repository.AnniversaryRepository;
 import com.momento.server.domain.user.entity.User;
 import com.momento.server.global.common.exception.ApiException;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -35,6 +36,15 @@ public class AnniversaryService {
     return anniversaryRepository
         .findByIdAndUserId(anniversaryId, userId)
         .orElseThrow(() -> new ApiException(AnniversaryErrorCode.ANNIVERSARY_NOT_FOUND));
+  }
+
+  /** 캘린더용. 날짜는 {@link Anniversary#dateIn} 으로 계산하므로 내 기념일을 모두 읽는다. */
+  public List<Anniversary> getAllMine(Long userId) {
+    return anniversaryRepository.findByUserIdOrderByIdAsc(userId);
+  }
+
+  public long countMine(Long userId) {
+    return anniversaryRepository.countByUserId(userId);
   }
 
   /** 등록과 같은 값으로 통째로 바꾼다. */

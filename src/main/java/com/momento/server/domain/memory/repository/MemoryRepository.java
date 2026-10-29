@@ -2,6 +2,7 @@ package com.momento.server.domain.memory.repository;
 
 import com.momento.server.domain.memory.entity.Memory;
 import java.time.LocalDate;
+import java.util.List;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -39,4 +40,39 @@ public interface MemoryRepository extends JpaRepository<Memory, Long> {
       @Param("startDate") LocalDate startDate,
       @Param("endDate") LocalDate endDate,
       Pageable pageable);
+
+  /** 캘린더 월별 점. {@link #findMyMemories} 와 같은 추억 중 날짜가 {@code [from, to)} 인 것의 날짜만 읽는다. */
+  @Query(
+      """
+          SELECT m.memoryDate FROM Memory m
+          WHERE m.user.id = :userId
+            AND m.deletedAt IS NULL
+            AND m.timeCapsule IS NULL
+            AND m.memoryDate >= :from
+            AND m.memoryDate < :to
+          """)
+  List<LocalDate> findMyMemoryDatesBetween(
+      @Param("userId") Long userId, @Param("from") LocalDate from, @Param("to") LocalDate to);
+
+  /** 캘린더 날짜별 추억. {@link #findMyMemories} 와 같은 추억 중 그 날 것을 등록 순으로 읽는다. */
+  @Query(
+      """
+          SELECT m FROM Memory m
+          WHERE m.user.id = :userId
+            AND m.deletedAt IS NULL
+            AND m.timeCapsule IS NULL
+            AND m.memoryDate = :date
+          ORDER BY m.id
+          """)
+  List<Memory> findMyMemoriesOn(@Param("userId") Long userId, @Param("date") LocalDate date);
+
+  /** 캘린더 탭 개수. {@link #findMyMemories} 에 검색 조건 없이 나오는 추억의 수다. */
+  @Query(
+      """
+          SELECT COUNT(m) FROM Memory m
+          WHERE m.user.id = :userId
+            AND m.deletedAt IS NULL
+            AND m.timeCapsule IS NULL
+          """)
+  long countMyMemories(@Param("userId") Long userId);
 }

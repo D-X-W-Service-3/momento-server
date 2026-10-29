@@ -74,6 +74,28 @@ public class TimeCapsuleListService {
     return countByStatus(userId, null);
   }
 
+  /** 캘린더 탭 개수. 목록 "전체" 와 같은 수다. */
+  public long countMyCapsules(Long userId) {
+    return countByStatus(userId, null).values().stream().mapToLong(Long::longValue).sum();
+  }
+
+  /** 캘린더 월별 점. 개봉일이 {@code [from, to)} 인 내 캡슐의 개봉 날짜다. 같은 날 캡슐이 여러 개면 여러 번 나온다. */
+  public List<LocalDate> getMyOpenDates(Long userId, LocalDate from, LocalDate to) {
+    return timeCapsuleRepository
+        .findMyOpenAtBetween(userId, from.atStartOfDay(), to.atStartOfDay())
+        .stream()
+        .map(LocalDateTime::toLocalDate)
+        .toList();
+  }
+
+  /** 캘린더 날짜별 캡슐. 그 날 열리는 내 캡슐을 카드로 읽는다. 캡슐과 멤버 수 · 편지 수를 같은 시점에 읽도록 묶는다. */
+  @Transactional(readOnly = true)
+  public List<TimeCapsuleSummary> getMyCapsulesOpeningOn(Long userId, LocalDate date) {
+    return summarize(
+        timeCapsuleRepository.findMyCapsulesOpeningBetween(
+            userId, date.atStartOfDay(), date.plusDays(1).atStartOfDay()));
+  }
+
   private Map<CapsuleStatus, Long> countByStatus(Long userId, String keywordPattern) {
     return timeCapsuleRepository.countMyCapsulesByStatus(userId, keywordPattern).stream()
         .collect(Collectors.toMap(CapsuleStatusCount::status, CapsuleStatusCount::count));

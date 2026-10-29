@@ -74,6 +74,63 @@ class AnniversaryTest {
   }
 
   @Nested
+  @DisplayName("그 해의 기념일 날짜")
+  class DateIn {
+
+    @Test
+    @DisplayName("반복하지 않으면 등록한 해에는 등록한 날짜다")
+    void noneSameYear() {
+      LocalDate date = LocalDate.of(2026, 8, 12);
+
+      assertThat(anniversary(date, RepeatType.NONE).dateIn(2026)).contains(date);
+    }
+
+    @Test
+    @DisplayName("반복하지 않으면 다른 해에는 없다")
+    void noneOtherYear() {
+      Anniversary anniversary = anniversary(LocalDate.of(2026, 8, 12), RepeatType.NONE);
+
+      assertThat(anniversary.dateIn(2027)).isEmpty();
+      assertThat(anniversary.dateIn(2025)).isEmpty();
+    }
+
+    @Test
+    @DisplayName("매년 반복이면 등록한 해에는 등록한 날짜다")
+    void yearlySameYear() {
+      LocalDate date = LocalDate.of(2026, 8, 12);
+
+      assertThat(yearly(date).dateIn(2026)).contains(date);
+    }
+
+    @Test
+    @DisplayName("매년 반복이면 이후 해에는 같은 월 · 일이다")
+    void yearlyLaterYear() {
+      assertThat(yearly(LocalDate.of(2026, 8, 12)).dateIn(2030))
+          .contains(LocalDate.of(2030, 8, 12));
+    }
+
+    @Test
+    @DisplayName("매년 반복이어도 등록한 해보다 앞선 해에는 없다")
+    void yearlyEarlierYear() {
+      assertThat(yearly(LocalDate.of(2030, 5, 1)).dateIn(2029)).isEmpty();
+    }
+
+    @Test
+    @DisplayName("2월 29일은 평년에 2월 28일이다")
+    void leapDayInCommonYear() {
+      assertThat(yearly(LocalDate.of(2024, 2, 29)).dateIn(2027))
+          .contains(LocalDate.of(2027, 2, 28));
+    }
+
+    @Test
+    @DisplayName("2월 29일은 윤년에 2월 29일이다")
+    void leapDayInLeapYear() {
+      assertThat(yearly(LocalDate.of(2024, 2, 29)).dateIn(2028))
+          .contains(LocalDate.of(2028, 2, 29));
+    }
+  }
+
+  @Nested
   @DisplayName("알림 설정")
   class Notification {
 
