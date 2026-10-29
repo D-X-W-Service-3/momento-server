@@ -15,6 +15,7 @@ import com.momento.server.domain.timecapsule.entity.TimeCapsule;
 import com.momento.server.domain.timecapsule.entity.VisibilityType;
 import com.momento.server.domain.user.entity.User;
 import com.momento.server.domain.user.repository.UserRepository;
+import com.momento.server.global.common.util.LikePattern;
 import java.time.LocalDateTime;
 import java.util.List;
 import org.junit.jupiter.api.AfterEach;
@@ -167,14 +168,6 @@ class TimeCapsuleListQueryTest {
   }
 
   @Test
-  @DisplayName("검색어가 비어 있거나 공백뿐이면 검색하지 않는다")
-  void blankKeywordMeansNoSearch() {
-    assertThat(TimeCapsuleRepository.containsPattern(null)).isNull();
-    assertThat(TimeCapsuleRepository.containsPattern("  ")).isNull();
-    assertThat(TimeCapsuleRepository.containsPattern(" 제주 ")).isEqualTo("%제주%");
-  }
-
-  @Test
   @DisplayName("상태별 개수는 검색어를 적용하고, 캡슐이 없는 상태는 나오지 않는다")
   void countsByStatusWithKeyword() {
     mine("제주 1", OPEN, CapsuleStatus.WRITING);
@@ -183,8 +176,7 @@ class TimeCapsuleListQueryTest {
     mine("서울", OPEN, CapsuleStatus.LOCKED);
 
     assertThat(
-            timeCapsuleRepository.countMyCapsulesByStatus(
-                me.getId(), TimeCapsuleRepository.containsPattern("제주")))
+            timeCapsuleRepository.countMyCapsulesByStatus(me.getId(), LikePattern.contains("제주")))
         .extracting(CapsuleStatusCount::status, CapsuleStatusCount::count)
         .containsExactlyInAnyOrder(
             tuple(CapsuleStatus.WRITING, 2L), tuple(CapsuleStatus.OPENED, 1L));
@@ -277,7 +269,7 @@ class TimeCapsuleListQueryTest {
 
   private List<MyCapsule> findAll(CapsuleStatus status, String keyword) {
     return timeCapsuleRepository.findMyCapsules(
-        me.getId(), status, TimeCapsuleRepository.containsPattern(keyword), null, null, ALL);
+        me.getId(), status, LikePattern.contains(keyword), null, null, ALL);
   }
 
   private List<MyCapsule> page(LocalDateTime cursorOpenAt, Long cursorId, Limit limit) {
