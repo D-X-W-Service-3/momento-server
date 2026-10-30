@@ -221,7 +221,7 @@ class MemoryIntegrationTest {
   }
 
   @Test
-  @DisplayName("목록은 본인 추억만 memoryDate 내림차순으로, 대표 이미지 1장만 담아 반환한다")
+  @DisplayName("목록은 본인 추억만 memoryDate 내림차순으로, 대표 사진 1장 · 사진 수 · 작성자 닉네임을 담아 반환한다")
   void findMyMemories() throws Exception {
     User other = userRepository.save(User.builder().kakaoId("kakao-other").nickname("남").build());
     saveMemory(other, "남의 추억", LocalDate.of(2026, 12, 31));
@@ -255,7 +255,9 @@ class MemoryIntegrationTest {
         .andExpect(jsonPath("$.data.memories[1].title").value("생일 파티"))
         .andExpect(jsonPath("$.data.memories[1].thumbnailUrl").isEmpty())
         .andExpect(jsonPath("$.data.memories[0].imageCount").value(2))
-        .andExpect(jsonPath("$.data.memories[1].imageCount").value(0));
+        .andExpect(jsonPath("$.data.memories[1].imageCount").value(0))
+        .andExpect(jsonPath("$.data.memories[0].authorNickname").value("서현"))
+        .andExpect(jsonPath("$.data.hasReceivedMemory").value(false));
   }
 
   @Test

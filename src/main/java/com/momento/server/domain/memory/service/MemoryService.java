@@ -136,6 +136,7 @@ public class MemoryService {
                 MemorySummary.of(
                     memory,
                     imagesByMemory.getOrDefault(memory.getId(), List.of()),
+                    memory.getUser().getNickname(),
                     presignedUrlProvider::viewUrl))
         .toList();
   }

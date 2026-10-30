@@ -29,13 +29,14 @@ public class MemoryFacade {
   public MemoryListResponse findMyMemories(
       Long userId, String keyword, Integer year, int page, int size) {
     MemoryPage result = memoryService.findMyMemories(userId, keyword, year, page, size);
+    String nickname = userService.getActiveUser(userId).getNickname();
 
     List<MemorySummary> summaries =
         result.memories().getContent().stream()
             .map(
                 memory ->
                     MemorySummary.of(
-                        memory, result.imagesOf(memory), presignedUrlProvider::viewUrl))
+                        memory, result.imagesOf(memory), nickname, presignedUrlProvider::viewUrl))
             .toList();
 
     return MemoryListResponse.of(result.memories(), summaries);
