@@ -1,6 +1,7 @@
 package com.momento.server.domain.memory;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.containsString;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -232,12 +233,12 @@ class MemoryIntegrationTest {
         List.of(
             MemoryImage.builder()
                 .memory(newer)
-                .imageUrl("https://cdn.test/second.jpg")
+                .imageUrl("memories/1/second.jpg")
                 .displayOrder(1)
                 .build(),
             MemoryImage.builder()
                 .memory(newer)
-                .imageUrl("https://cdn.test/first.jpg")
+                .imageUrl("memories/1/first.jpg")
                 .displayOrder(0)
                 .build()));
 
@@ -246,7 +247,11 @@ class MemoryIntegrationTest {
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.data.totalElements").value(2))
         .andExpect(jsonPath("$.data.memories[0].title").value("제주도 여행"))
-        .andExpect(jsonPath("$.data.memories[0].thumbnailUrl").value("https://cdn.test/first.jpg"))
+        .andExpect(
+            jsonPath("$.data.memories[0].thumbnailUrl")
+                .value(containsString("/memories/1/first.jpg?")))
+        .andExpect(
+            jsonPath("$.data.memories[0].thumbnailUrl").value(containsString("X-Amz-Signature=")))
         .andExpect(jsonPath("$.data.memories[1].title").value("생일 파티"))
         .andExpect(jsonPath("$.data.memories[1].thumbnailUrl").isEmpty())
         .andExpect(jsonPath("$.data.memories[0].imageCount").value(2))

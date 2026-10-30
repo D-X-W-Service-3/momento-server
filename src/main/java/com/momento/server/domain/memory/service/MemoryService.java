@@ -12,6 +12,7 @@ import com.momento.server.domain.memory.repository.MemoryRepository;
 import com.momento.server.domain.user.entity.User;
 import com.momento.server.global.common.code.GlobalErrorCode;
 import com.momento.server.global.common.exception.ApiException;
+import com.momento.server.global.common.storage.PresignedUrlProvider;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -36,6 +37,7 @@ public class MemoryService {
 
   private final MemoryRepository memoryRepository;
   private final MemoryImageRepository memoryImageRepository;
+  private final PresignedUrlProvider presignedUrlProvider;
 
   /** 추억 하나와 첨부 이미지를 저장한다. 공개 범위는 요청으로 받지 않고 엔티티 기본값(PRIVATE)을 쓴다. */
   @Transactional
@@ -131,7 +133,10 @@ public class MemoryService {
     return memories.stream()
         .map(
             memory ->
-                MemorySummary.of(memory, imagesByMemory.getOrDefault(memory.getId(), List.of())))
+                MemorySummary.of(
+                    memory,
+                    imagesByMemory.getOrDefault(memory.getId(), List.of()),
+                    presignedUrlProvider::viewUrl))
         .toList();
   }
 
