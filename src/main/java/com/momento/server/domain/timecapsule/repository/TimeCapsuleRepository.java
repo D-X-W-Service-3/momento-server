@@ -81,6 +81,15 @@ public interface TimeCapsuleRepository extends JpaRepository<TimeCapsule, Long> 
   List<MyCapsule> findMyUnopenedCapsules(
       @Param("userId") Long userId, @Param("openedSince") LocalDateTime openedSince, Limit limit);
 
+  /** 홈 "가장 먼저 열리는 캡슐". 아직 열리지 않은 캡슐을 개봉일이 가까운 순으로 읽는다. 열린 캡슐은 개봉까지 남은 시간을 보여주는 카드에 맞지 않아 넣지 않는다. */
+  @Query(
+      "select c"
+          + MY_ACTIVE_CAPSULES
+          + " and c.status in (com.momento.server.domain.timecapsule.entity.CapsuleStatus.WRITING,"
+          + " com.momento.server.domain.timecapsule.entity.CapsuleStatus.LOCKED)"
+          + " order by c.openAt, c.id")
+  List<TimeCapsule> findMyNextCapsules(@Param("userId") Long userId, Limit limit);
+
   /** 탭 홈 "수정할 수 있어요". 작성 중인 캡슐을 편지 마감이 가까운 순으로 읽는다. */
   @Query(
       "select new com.momento.server.domain.timecapsule.repository.MyCapsule(c, m.openedAt)"
