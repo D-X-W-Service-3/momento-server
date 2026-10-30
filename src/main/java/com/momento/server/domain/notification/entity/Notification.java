@@ -14,6 +14,7 @@ import jakarta.persistence.Index;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
 import java.time.LocalDateTime;
 import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
@@ -27,7 +28,11 @@ import org.hibernate.type.SqlTypes;
 @Entity
 @Table(
     name = "notifications",
-    indexes = @Index(name = "IDX_NOTIFICATIONS_USER_ID_ID", columnList = "user_id, id"))
+    indexes = @Index(name = "IDX_NOTIFICATIONS_USER_ID_ID", columnList = "user_id, id"),
+    uniqueConstraints =
+        @UniqueConstraint(
+            name = "UK_NOTIFICATIONS_USER_ID_DEDUP_KEY",
+            columnNames = {"user_id", "dedup_key"}))
 @Getter
 @Builder
 @AllArgsConstructor
@@ -61,6 +66,13 @@ public class Notification extends BaseCreatedTimeEntity {
 
   @Column(name = "content", length = 500)
   private String content;
+
+  /**
+   * 같은 알림을 두 번 보내지 않기 위한 키. 회원마다 유일하다. 날짜가 기준인 알림은 보낸 날짜를 넣어 하루에 한 번만 가게 한다(예: {@code
+   * CAPSULE_D_DAY:21:2027-12-05}). 비어 있으면 중복을 막지 않는다.
+   */
+  @Column(name = "dedup_key", length = 100)
+  private String dedupKey;
 
   @Builder.Default
   @Column(name = "is_read", nullable = false)

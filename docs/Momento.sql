@@ -95,10 +95,11 @@ CREATE TABLE `notifications` (
 	`user_id`	BIGINT	NOT NULL	COMMENT '알림 수신 회원 ID',
 	`reference_type`	VARCHAR(30)	NULL	COMMENT '알림이 가리키는 리소스 종류',
 	`reference_id`	BIGINT	NULL	COMMENT '알림이 가리키는 리소스 ID',
-	`notification_type`	VARCHAR(30)	NOT NULL	COMMENT '알림 유형: CAPSULE_RECEIVED, LETTER_MILESTONE, LETTER_DEADLINE,
-CAPSULE_OPENED, IMAGE_GENERATED, ANNIVERSARY_REMINDER (CAPSULE_INVITE 없음 — 초대는 링크 수락 방식이라 알림 대상이 없음)',
+	`notification_type`	VARCHAR(30)	NOT NULL	COMMENT '알림 유형: CAPSULE_OPENED, CAPSULE_D_DAY, LETTER_DEADLINE, NEW_MEMBER,
+MEMORY_REMINDER, ANNIVERSARY_REMINDER, LETTER_MILESTONE, IMAGE_GENERATED (알림 설정과 1:1. CAPSULE_INVITE 없음 — 초대는 링크 수락 방식이라 알림 대상이 없음)',
 	`title`	VARCHAR(100)	NOT NULL	COMMENT '알림 제목',
 	`content`	VARCHAR(500)	NULL	COMMENT '알림 내용',
+	`dedup_key`	VARCHAR(100)	NULL	COMMENT '중복 방지 키. 회원마다 유일하다',
 	`is_read`	BOOLEAN	NOT NULL	DEFAULT FALSE	COMMENT '알림 읽음 여부',
 	`read_at`	DATETIME(6)	NULL	COMMENT '알림 확인 일시',
 	`created_at`	DATETIME(6)	NOT NULL	COMMENT '알림 생성 일시'
@@ -190,6 +191,12 @@ ALTER TABLE `notifications` ADD CONSTRAINT `PK_NOTIFICATIONS` PRIMARY KEY (
 ALTER TABLE `notifications` ADD INDEX `IDX_NOTIFICATIONS_USER_ID_ID` (
 	`user_id`,
 	`id`
+);
+
+-- 날짜가 기준인 알림을 스케줄러가 다시 훑어도 한 번만 보낸다 (이슈 #65)
+ALTER TABLE `notifications` ADD CONSTRAINT `UK_NOTIFICATIONS_USER_ID_DEDUP_KEY` UNIQUE (
+	`user_id`,
+	`dedup_key`
 );
 
 -- 상태 전이 스케줄러가 주기마다 도는 조회다 (이슈 #30)
