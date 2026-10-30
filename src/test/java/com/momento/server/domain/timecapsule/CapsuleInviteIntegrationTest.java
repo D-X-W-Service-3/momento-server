@@ -8,6 +8,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.momento.server.domain.notification.repository.NotificationRepository;
 import com.momento.server.domain.timecapsule.entity.CapsuleInvite;
 import com.momento.server.domain.timecapsule.entity.CapsuleMember;
 import com.momento.server.domain.timecapsule.entity.CapsuleStatus;
@@ -59,6 +60,7 @@ class CapsuleInviteIntegrationTest {
   @Autowired private CapsuleMemberRepository capsuleMemberRepository;
   @Autowired private CapsuleInviteRepository capsuleInviteRepository;
   @Autowired private CapsuleInviteeRepository capsuleInviteeRepository;
+  @Autowired private NotificationRepository notificationRepository;
   @Autowired private EntityManager entityManager;
   @Autowired private TransactionTemplate transactionTemplate;
 
@@ -869,6 +871,7 @@ class CapsuleInviteIntegrationTest {
   }
 
   private void cleanUp() {
+    notificationRepository.deleteAllInBatch();
     capsuleInviteeRepository.deleteAllInBatch();
     capsuleInviteRepository.deleteAllInBatch();
     capsuleMemberRepository.deleteAllInBatch();
