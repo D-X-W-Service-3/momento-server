@@ -6,6 +6,7 @@ import com.momento.server.domain.anniversary.entity.Anniversary;
 import com.momento.server.domain.anniversary.entity.RepeatType;
 import com.momento.server.domain.user.entity.User;
 import com.momento.server.domain.user.repository.UserRepository;
+import com.momento.server.global.common.util.LikePattern;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import org.junit.jupiter.api.AfterEach;
@@ -93,6 +94,23 @@ class AnniversaryRepositoryTest {
         .extracting(Anniversary::getId)
         .containsExactly(first.getId(), second.getId());
     assertThat(anniversaryRepository.countByUserId(me.getId())).isEqualTo(2);
+  }
+
+  @Test
+  @DisplayName("검색은 이름에 검색어가 든 내 기념일을 등록 순으로 찾고, % 는 글자 그대로 찾는다")
+  void searchesMineByTitle() {
+    Anniversary first = save(me, "우리 100일", LocalDate.of(2026, 1, 1));
+    Anniversary second = save(me, "200일 파티", LocalDate.of(2026, 2, 1));
+    save(me, "첫 만남", LocalDate.of(2026, 3, 1));
+    save(other, "남의 100일", LocalDate.of(2026, 4, 1));
+    Anniversary percent = save(me, "100% 사랑", LocalDate.of(2026, 5, 1));
+
+    assertThat(anniversaryRepository.searchMine(me.getId(), LikePattern.contains("00일")))
+        .extracting(Anniversary::getId)
+        .containsExactly(first.getId(), second.getId());
+    assertThat(anniversaryRepository.searchMine(me.getId(), LikePattern.contains("%")))
+        .extracting(Anniversary::getId)
+        .containsExactly(percent.getId());
   }
 
   private Anniversary save(User user, String title, LocalDate date) {
