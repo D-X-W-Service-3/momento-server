@@ -13,6 +13,21 @@ import org.springframework.data.repository.query.Param;
 public interface LetterRepository extends JpaRepository<Letter, Long> {
   Optional<Letter> findByTimeCapsuleIdAndAuthorIdAndDeletedAtIsNull(Long capsuleId, Long authorId);
 
+  /** 캡슐을 먼저 잠그기 위한 식별자 조회. 편지 엔티티를 1차 캐시에 올리지 않는다. */
+  @Query(
+      "select l.timeCapsule.id from Letter l where l.id = :letterId and l.author.id = :authorId and l.deletedAt is null")
+  Optional<Long> findCapsuleIdForDeletion(
+      @Param("letterId") Long letterId, @Param("authorId") Long authorId);
+
+  /** 캡슐 잠금 뒤 요청한 ID의 편지만 현재 읽기로 재확인한다. 새로 작성한 다른 편지를 지우지 않는다. */
+  @Lock(LockModeType.PESSIMISTIC_WRITE)
+  @Query(
+      "select l from Letter l where l.id = :letterId and l.author.id = :authorId and l.timeCapsule.id = :capsuleId and l.deletedAt is null")
+  Optional<Letter> findActiveByIdForUpdate(
+      @Param("letterId") Long letterId,
+      @Param("authorId") Long authorId,
+      @Param("capsuleId") Long capsuleId);
+
   /** 이 캡슐에 내 편지가 있는지. 임시 저장도 편지로 본다. 편지는 1인 1통이라 있으면 더 쓸 수 없다. */
   boolean existsByTimeCapsuleIdAndAuthorIdAndDeletedAtIsNull(Long capsuleId, Long authorId);
 
