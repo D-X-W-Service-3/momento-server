@@ -3,6 +3,7 @@ package com.momento.server.domain.letter.repository;
 import com.momento.server.domain.letter.entity.Letter;
 import jakarta.persistence.LockModeType;
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
@@ -11,6 +12,16 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 public interface LetterRepository extends JpaRepository<Letter, Long> {
+  /** 권한 범위를 DB에서 제한하고 작성자를 함께 읽어 목록 변환 시 추가 조회를 방지한다. */
+  @Query(
+      "select l from Letter l join fetch l.author where l.timeCapsule.id = :capsuleId"
+          + " and l.deletedAt is null and l.status = com.momento.server.domain.letter.entity.LetterStatus.SUBMITTED"
+          + " and (:viewAll = true or l.author.id = :userId) order by l.createdAt asc, l.id asc")
+  List<Letter> findVisibleSubmittedLetters(
+      @Param("capsuleId") Long capsuleId,
+      @Param("userId") Long userId,
+      @Param("viewAll") boolean viewAll);
+
   Optional<Letter> findByTimeCapsuleIdAndAuthorIdAndDeletedAtIsNull(Long capsuleId, Long authorId);
 
   /** 캡슐을 먼저 잠그기 위한 식별자 조회. 편지 엔티티를 1차 캐시에 올리지 않는다. */
