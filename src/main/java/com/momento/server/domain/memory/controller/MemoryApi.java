@@ -1,6 +1,7 @@
 package com.momento.server.domain.memory.controller;
 
 import com.momento.server.domain.memory.dto.request.MemoryCreateRequest;
+import com.momento.server.domain.memory.dto.response.MemoryDetailResponse;
 import com.momento.server.domain.memory.dto.response.MemoryListResponse;
 import com.momento.server.global.common.auth.UserPrincipal;
 import com.momento.server.global.common.dto.CommonResponse;
@@ -22,6 +23,17 @@ public interface MemoryApi {
               + " 공개 범위는 요청으로 받지 않고 항상 PRIVATE 로 저장된다. 등록 후 목록을 다시 조회하므로 응답 데이터는 없다.")
   CommonResponse<?> create(
       @Parameter(hidden = true) UserPrincipal principal, @Valid MemoryCreateRequest request);
+
+  @Operation(
+      summary = "아카이브 상세 조회",
+      description =
+          "아카이브 상세 화면(사진 슬라이드 · 날짜 · 이름 · 내용 · 사진 목록)을 조회한다. 본인이 등록한 아카이브만 조회할 수 있다. 사진은 displayOrder"
+              + " 오름차순이고 첫 사진이 대표 사진(isRepresentative)이다. imageUrl 은 조회 시점에 만든 1시간짜리 presigned GET URL,"
+              + " imageKey 는 수정 요청에 그대로 보내는 값이다. 없는 아카이브 · 삭제된 아카이브 · 다른 회원의 아카이브는 똑같이 404"
+              + " MEMORY_NOT_FOUND 다.")
+  CommonResponse<MemoryDetailResponse> getMemory(
+      @Parameter(hidden = true) UserPrincipal principal,
+      @Parameter(description = "아카이브 식별자", example = "3") Long memoryId);
 
   @Operation(
       summary = "추억 목록 조회",

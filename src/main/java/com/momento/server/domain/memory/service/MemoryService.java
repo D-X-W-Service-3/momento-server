@@ -58,6 +58,21 @@ public class MemoryService {
     saveImages(memory, imageKeys);
   }
 
+  /** 아카이브 상세. 사진은 표시 순서대로다. */
+  public MemoryDetail getDetail(Long memoryId, Long userId) {
+    Memory memory = getMine(memoryId, userId);
+
+    return new MemoryDetail(
+        memory, memoryImageRepository.findByMemoryIdOrderByDisplayOrderAsc(memory.getId()));
+  }
+
+  /** 내 아카이브를 찾는다. 없는 아카이브 · 삭제된 아카이브 · 다른 회원의 아카이브는 똑같이 404 다. */
+  private Memory getMine(Long memoryId, Long userId) {
+    return memoryRepository
+        .findByIdAndUserIdAndDeletedAtIsNull(memoryId, userId)
+        .orElseThrow(() -> new ApiException(MemoryErrorCode.MEMORY_NOT_FOUND));
+  }
+
   /**
    * 저장할 사진 순서를 정한다. 대표 사진은 display_order 0 번으로 옮기고, 나머지는 보낸 순서를 지킨다. 대표 사진 컬럼을 따로 두지 않고 0 번을 대표
    * 사진으로 본다(명세: 대표 사진은 첫 사진).
