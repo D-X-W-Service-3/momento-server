@@ -90,6 +90,13 @@ CREATE TABLE `capsule_invitees` (
 	`updated_at`	DATETIME(6)	NOT NULL	COMMENT '수정 일시'
 );
 
+CREATE TABLE `user_visits` (
+	`id`	BIGINT	NOT NULL	AUTO_INCREMENT	COMMENT '방문 기록 ID',
+	`user_id`	BIGINT	NOT NULL	COMMENT '방문한 회원 ID',
+	`visit_date`	DATE	NOT NULL	COMMENT '방문한 날짜',
+	`created_at`	DATETIME(6)	NOT NULL	COMMENT '그날 처음 방문한 일시'
+);
+
 CREATE TABLE `notifications` (
 	`id`	BIGINT	NOT NULL	AUTO_INCREMENT	COMMENT '알림 ID',
 	`user_id`	BIGINT	NOT NULL	COMMENT '알림 수신 회원 ID',
@@ -182,6 +189,16 @@ ALTER TABLE `capsule_invitees` ADD CONSTRAINT `PK_CAPSULE_INVITEES` PRIMARY KEY 
 ALTER TABLE `capsule_invitees` ADD CONSTRAINT `UK_CAPSULE_INVITEES_INVITE_USER` UNIQUE (
 	`capsule_invite_id`,
 	`user_id`
+);
+
+ALTER TABLE `user_visits` ADD CONSTRAINT `PK_USER_VISITS` PRIMARY KEY (
+	`id`
+);
+
+-- 홈 방문 기록은 회원 · 날짜마다 한 행이다 (이슈 #79)
+ALTER TABLE `user_visits` ADD CONSTRAINT `UK_USER_VISITS_USER_DATE` UNIQUE (
+	`user_id`,
+	`visit_date`
 );
 
 ALTER TABLE `notifications` ADD CONSTRAINT `PK_NOTIFICATIONS` PRIMARY KEY (
