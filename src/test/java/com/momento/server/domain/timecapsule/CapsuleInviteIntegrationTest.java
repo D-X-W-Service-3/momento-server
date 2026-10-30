@@ -13,11 +13,13 @@ import com.momento.server.domain.timecapsule.entity.CapsuleMember;
 import com.momento.server.domain.timecapsule.entity.CapsuleStatus;
 import com.momento.server.domain.timecapsule.entity.CapsuleType;
 import com.momento.server.domain.timecapsule.entity.InviteStatus;
+import com.momento.server.domain.timecapsule.entity.InviteeStatus;
 import com.momento.server.domain.timecapsule.entity.MemberRole;
 import com.momento.server.domain.timecapsule.entity.MemberStatus;
 import com.momento.server.domain.timecapsule.entity.TimeCapsule;
 import com.momento.server.domain.timecapsule.entity.VisibilityType;
 import com.momento.server.domain.timecapsule.repository.CapsuleInviteRepository;
+import com.momento.server.domain.timecapsule.repository.CapsuleInviteeRepository;
 import com.momento.server.domain.timecapsule.repository.CapsuleMemberRepository;
 import com.momento.server.domain.timecapsule.repository.TimeCapsuleRepository;
 import com.momento.server.domain.user.entity.User;
@@ -35,6 +37,7 @@ import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMock
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.ResultActions;
 import org.springframework.transaction.support.TransactionTemplate;
 
 /**
@@ -55,6 +58,7 @@ class CapsuleInviteIntegrationTest {
   @Autowired private TimeCapsuleRepository timeCapsuleRepository;
   @Autowired private CapsuleMemberRepository capsuleMemberRepository;
   @Autowired private CapsuleInviteRepository capsuleInviteRepository;
+  @Autowired private CapsuleInviteeRepository capsuleInviteeRepository;
   @Autowired private EntityManager entityManager;
   @Autowired private TransactionTemplate transactionTemplate;
 
@@ -250,39 +254,19 @@ class CapsuleInviteIntegrationTest {
   }
 
   @Test
-  @DisplayName("거절했던 회원도 재생성된 새 링크로는 다시 참여할 수 있다")
-  void rejecterCanJoinViaRegeneratedLink() throws Exception {
+  @DisplayName("거절한 링크로는 참여할 수 없고, 재생성된 새 링크로는 다시 참여할 수 있다")
+  void rejecterCanJoinOnlyViaRegeneratedLink() throws Exception {
     User rejecter = saveUser("rejecter-kakao-id", "민건");
     String firstToken = issue(ownerToken, capsule.getId(), "PARTICIPANT");
-    mockMvc
-        .perform(
-            get("/v1/invites/{inviteToken}", firstToken)
-                .header(AUTHORIZATION, bearer(tokenOf(rejecter))))
-        .andExpect(status().isOk());
-    mockMvc
-        .perform(
-            post("/v1/invites/{inviteToken}/reject", firstToken)
-                .header(AUTHORIZATION, bearer(tokenOf(rejecter))))
-        .andExpect(status().isOk());
+    preview(firstToken, rejecter);
+    reject(firstToken, rejecter).andExpect(status().isOk());
+    accept(firstToken, rejecter).andExpect(status().isNotFound());
 
-    String response =
-        mockMvc
-            .perform(
-                post("/v1/time-capsules/{capsuleId}/invites/regenerate", capsule.getId())
-                    .header(AUTHORIZATION, bearer(ownerToken))
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .content(body("PARTICIPANT")))
-            .andExpect(status().isCreated())
-            .andReturn()
-            .getResponse()
-            .getContentAsString();
-    String newToken = JSON.readTree(response).path("data").path("inviteToken").asText();
+    String newToken = regenerate("PARTICIPANT");
 
-    mockMvc
-        .perform(
-            post("/v1/invites/{inviteToken}/accept", newToken)
-                .header(AUTHORIZATION, bearer(tokenOf(rejecter))))
-        .andExpect(status().isOk());
+    accept(newToken, rejecter).andExpect(status().isOk());
+    assertThat(inviteeStatus(firstToken, rejecter)).isEqualTo(InviteeStatus.DECLINED);
+    assertThat(inviteeStatus(newToken, rejecter)).isEqualTo(InviteeStatus.ACCEPTED);
   }
 
   @Test
@@ -301,11 +285,11 @@ class CapsuleInviteIntegrationTest {
         .andExpect(jsonPath("$.code").value("CAPSULE_OWNER_ONLY"));
   }
 
-  // ---------- 미리보기 (선점) ----------
+  // ---------- 미리보기 ----------
 
   @Test
-  @DisplayName("처음 여는 회원에게 고정되고, 캡슐 정보·참여자 미리보기가 함께 내려온다")
-  void previewClaimsLinkAndReturnsCapsuleSummary() throws Exception {
+  @DisplayName("링크를 열면 대기 중으로 기록되고, 캡슐 정보 · 참여자 미리보기가 함께 내려온다")
+  void previewRecordsPendingAndReturnsCapsuleSummary() throws Exception {
     String token = issue(ownerToken, capsule.getId(), "PARTICIPANT");
     User viewer = saveUser("viewer-kakao-id", "민건");
 
@@ -326,12 +310,39 @@ class CapsuleInviteIntegrationTest {
         .andExpect(jsonPath("$.data.capsule.participants.previews[0].userId").value(owner.getId()))
         .andExpect(jsonPath("$.data.capsule.recipients.count").value(0));
 
-    assertThat(capsuleInviteRepository.findByInviteToken(token).orElseThrow().getInvitee().getId())
-        .isEqualTo(viewer.getId());
+    assertThat(inviteeStatus(token, viewer)).isEqualTo(InviteeStatus.PENDING);
   }
 
   @Test
-  @DisplayName("이미 캡슐 멤버인 회원이 미리보면 alreadyJoined 가 true 다")
+  @DisplayName("링크 하나를 여러 명이 열 수 있고, 각자 대기 중으로 기록된다")
+  void sharedLinkCanBeOpenedByManyMembers() throws Exception {
+    String token = issue(ownerToken, capsule.getId(), "PARTICIPANT");
+    User first = saveUser("first-kakao-id", "민건");
+    User second = saveUser("second-kakao-id", "서현");
+
+    preview(token, first);
+    preview(token, second);
+
+    assertThat(inviteeStatus(token, first)).isEqualTo(InviteeStatus.PENDING);
+    assertThat(inviteeStatus(token, second)).isEqualTo(InviteeStatus.PENDING);
+    assertThat(capsuleInviteRepository.findByInviteToken(token).orElseThrow().getStatus())
+        .isEqualTo(InviteStatus.ACTIVE);
+  }
+
+  @Test
+  @DisplayName("같은 회원이 다시 열어도 기록은 하나다")
+  void previewIsIdempotentForSameUser() throws Exception {
+    String token = issue(ownerToken, capsule.getId(), "PARTICIPANT");
+    User viewer = saveUser("viewer-kakao-id", "민건");
+
+    preview(token, viewer);
+    preview(token, viewer);
+
+    assertThat(capsuleInviteeRepository.findAll()).hasSize(1);
+  }
+
+  @Test
+  @DisplayName("이미 캡슐 멤버인 회원이 열면 alreadyJoined 가 true 이고 대기 중으로 기록하지 않는다")
   void previewReflectsAlreadyJoined() throws Exception {
     User participant = saveUser("participant-kakao-id", "민건");
     saveMember(capsule, participant, MemberRole.PARTICIPANT, MemberStatus.ACTIVE);
@@ -343,6 +354,8 @@ class CapsuleInviteIntegrationTest {
                 .header(AUTHORIZATION, bearer(tokenOf(participant))))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.data.alreadyJoined").value(true));
+
+    assertThat(capsuleInviteeRepository.findAll()).isEmpty();
   }
 
   @Test
@@ -370,38 +383,26 @@ class CapsuleInviteIntegrationTest {
   }
 
   @Test
-  @DisplayName("이미 다른 회원이 선점한 링크를 다른 사람이 열면 404 다")
-  void previewRejectsAfterClaimedByAnotherUser() throws Exception {
-    String token = issue(ownerToken, capsule.getId(), "PARTICIPANT");
-    User first = saveUser("first-kakao-id", "민건");
-    User second = saveUser("second-kakao-id", "서현");
-
-    mockMvc
-        .perform(
-            get("/v1/invites/{inviteToken}", token).header(AUTHORIZATION, bearer(tokenOf(first))))
-        .andExpect(status().isOk());
-
-    mockMvc
-        .perform(
-            get("/v1/invites/{inviteToken}", token).header(AUTHORIZATION, bearer(tokenOf(second))))
-        .andExpect(status().isNotFound())
-        .andExpect(jsonPath("$.code").value("INVITE_NOT_FOUND"));
-  }
-
-  @Test
-  @DisplayName("같은 회원이 다시 열어도 문제없다")
-  void previewIsIdempotentForSameUser() throws Exception {
-    String token = issue(ownerToken, capsule.getId(), "PARTICIPANT");
+  @DisplayName("재생성으로 무효가 된 링크, 만료된 링크, 삭제된 캡슐의 링크는 404 다")
+  void previewRejectsUnusableLinks() throws Exception {
     User viewer = saveUser("viewer-kakao-id", "민건");
+    String revoked = issue(ownerToken, capsule.getId(), "PARTICIPANT");
+    regenerate("PARTICIPANT");
+    String expired = saveExpiredInvite(capsule, owner, MemberRole.PARTICIPANT).getInviteToken();
+    TimeCapsule deleted = saveCapsule(CapsuleType.GROUP, CapsuleStatus.WRITING);
+    saveMember(deleted, owner, MemberRole.OWNER, MemberStatus.ACTIVE);
+    String ofDeleted = issue(ownerToken, deleted.getId(), "PARTICIPANT");
+    deleteCapsule(deleted);
 
-    mockMvc
-        .perform(
-            get("/v1/invites/{inviteToken}", token).header(AUTHORIZATION, bearer(tokenOf(viewer))))
-        .andExpect(status().isOk());
-    mockMvc
-        .perform(
-            get("/v1/invites/{inviteToken}", token).header(AUTHORIZATION, bearer(tokenOf(viewer))))
-        .andExpect(status().isOk());
+    for (String token : new String[] {revoked, expired, ofDeleted}) {
+      mockMvc
+          .perform(
+              get("/v1/invites/{inviteToken}", token)
+                  .header(AUTHORIZATION, bearer(tokenOf(viewer))))
+          .andExpect(status().isNotFound())
+          .andExpect(jsonPath("$.code").value("INVITE_NOT_FOUND"));
+    }
+    assertThat(capsuleInviteeRepository.findAll()).isEmpty();
   }
 
   @Test
@@ -426,38 +427,49 @@ class CapsuleInviteIntegrationTest {
   // ---------- 받은 초대 목록 조회 ----------
 
   @Test
-  @DisplayName("미리보기로 선점한 초대만 받은 목록에 뜨고, 수락하면 빠진다")
-  void receivedInvitesTracksClaimedThenClearsOnAccept() throws Exception {
-    User me = saveUser("me-kakao-id", "동승환");
-    String token = issue(ownerToken, capsule.getId(), "PARTICIPANT");
+  @DisplayName("연 링크가 받은 목록에 뜨고, 수락하면 빠진다")
+  void receivedInvitesTracksOpenedThenClearsOnAccept() throws Exception {
+    String token = issue(ownerToken, capsule.getId(), "RECIPIENT");
+    User invitee = saveUser("invitee-kakao-id", "민건");
+    String inviteeToken = tokenOf(invitee);
 
     mockMvc
-        .perform(get("/v1/invites/received").header(AUTHORIZATION, bearer(tokenOf(me))))
+        .perform(get("/v1/invites/received").header(AUTHORIZATION, bearer(inviteeToken)))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.data.invites.length()").value(0));
 
-    mockMvc
-        .perform(get("/v1/invites/{inviteToken}", token).header(AUTHORIZATION, bearer(tokenOf(me))))
-        .andExpect(status().isOk());
+    preview(token, invitee);
 
     mockMvc
-        .perform(get("/v1/invites/received").header(AUTHORIZATION, bearer(tokenOf(me))))
+        .perform(get("/v1/invites/received").header(AUTHORIZATION, bearer(inviteeToken)))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.data.invites.length()").value(1))
         .andExpect(jsonPath("$.data.invites[0].inviteToken").value(token))
-        .andExpect(jsonPath("$.data.invites[0].targetRole").value("PARTICIPANT"))
+        .andExpect(jsonPath("$.data.invites[0].targetRole").value("RECIPIENT"))
         .andExpect(jsonPath("$.data.invites[0].inviterNickname").value("상래"))
         .andExpect(jsonPath("$.data.invites[0].capsuleId").value(capsule.getId()))
-        .andExpect(jsonPath("$.data.invites[0].capsuleTitle").value("캡슐"));
+        .andExpect(jsonPath("$.data.invites[0].capsuleTitle").value("캡슐"))
+        .andExpect(jsonPath("$.data.invites[0].openAt").value(formatted(capsule.getOpenAt())));
+
+    accept(token, invitee).andExpect(status().isOk());
 
     mockMvc
-        .perform(
-            post("/v1/invites/{inviteToken}/accept", token)
-                .header(AUTHORIZATION, bearer(tokenOf(me))))
-        .andExpect(status().isOk());
+        .perform(get("/v1/invites/received").header(AUTHORIZATION, bearer(inviteeToken)))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.data.invites.length()").value(0));
+  }
+
+  @Test
+  @DisplayName("거절한 초대는 받은 목록에서 빠진다")
+  void receivedInvitesClearsOnReject() throws Exception {
+    String token = issue(ownerToken, capsule.getId(), "PARTICIPANT");
+    User invitee = saveUser("invitee-kakao-id", "민건");
+    preview(token, invitee);
+
+    reject(token, invitee).andExpect(status().isOk());
 
     mockMvc
-        .perform(get("/v1/invites/received").header(AUTHORIZATION, bearer(tokenOf(me))))
+        .perform(get("/v1/invites/received").header(AUTHORIZATION, bearer(tokenOf(invitee))))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.data.invites.length()").value(0));
   }
@@ -471,16 +483,12 @@ class CapsuleInviteIntegrationTest {
   // ---------- 수락 ----------
 
   @Test
-  @DisplayName("초대를 수락하면(미리보기 없이 바로 호출해도) 캡슐에 참여한다")
-  void acceptInviteJoinsCapsuleEvenWithoutPreviewFirst() throws Exception {
+  @DisplayName("초대를 수락하면(미리보기 없이 바로 호출해도) 캡슐에 참여하고 내 기록은 ACCEPTED 다")
+  void acceptJoinsCapsuleEvenWithoutPreviewFirst() throws Exception {
     User invitee = saveUser("invitee-kakao-id", "민건");
     String token = issue(ownerToken, capsule.getId(), "PARTICIPANT");
 
-    mockMvc
-        .perform(
-            post("/v1/invites/{inviteToken}/accept", token)
-                .header(AUTHORIZATION, bearer(tokenOf(invitee))))
-        .andExpect(status().isOk());
+    accept(token, invitee).andExpect(status().isOk());
 
     CapsuleMember member =
         capsuleMemberRepository
@@ -488,6 +496,27 @@ class CapsuleInviteIntegrationTest {
                 capsule.getId(), invitee.getId(), MemberStatus.ACTIVE)
             .orElseThrow();
     assertThat(member.getRole()).isEqualTo(MemberRole.PARTICIPANT);
+    assertThat(inviteeStatus(token, invitee)).isEqualTo(InviteeStatus.ACCEPTED);
+  }
+
+  @Test
+  @DisplayName("한 명이 수락해도 링크는 그대로라 다른 사람도 같은 링크로 참여한다")
+  void acceptKeepsLinkForOthers() throws Exception {
+    String token = issue(ownerToken, capsule.getId(), "PARTICIPANT");
+    User first = saveUser("first-kakao-id", "민건");
+    User second = saveUser("second-kakao-id", "서현");
+    preview(token, first);
+    preview(token, second);
+
+    accept(token, first).andExpect(status().isOk());
+    accept(token, second).andExpect(status().isOk());
+
+    assertThat(capsuleInviteRepository.findByInviteToken(token).orElseThrow().getStatus())
+        .isEqualTo(InviteStatus.ACTIVE);
+    assertThat(
+            capsuleMemberRepository.countByTimeCapsuleIdAndStatus(
+                capsule.getId(), MemberStatus.ACTIVE))
+        .isEqualTo(3);
   }
 
   @Test
@@ -497,11 +526,7 @@ class CapsuleInviteIntegrationTest {
     saveMember(capsule, rejoiner, MemberRole.PARTICIPANT, MemberStatus.LEFT);
     String token = issue(ownerToken, capsule.getId(), "RECIPIENT");
 
-    mockMvc
-        .perform(
-            post("/v1/invites/{inviteToken}/accept", token)
-                .header(AUTHORIZATION, bearer(tokenOf(rejoiner))))
-        .andExpect(status().isOk());
+    accept(token, rejoiner).andExpect(status().isOk());
 
     CapsuleMember member =
         capsuleMemberRepository
@@ -519,31 +544,19 @@ class CapsuleInviteIntegrationTest {
     saveMember(capsule, participant, MemberRole.PARTICIPANT, MemberStatus.ACTIVE);
     String token = issue(ownerToken, capsule.getId(), "PARTICIPANT");
 
-    mockMvc
-        .perform(
-            post("/v1/invites/{inviteToken}/accept", token)
-                .header(AUTHORIZATION, bearer(tokenOf(participant))))
+    accept(token, participant)
         .andExpect(status().isConflict())
         .andExpect(jsonPath("$.code").value("ALREADY_CAPSULE_MEMBER"));
   }
 
   @Test
-  @DisplayName("다른 회원이 이미 선점한 링크는 수락할 수 없다")
-  void acceptRejectsAfterClaimedByAnotherUser() throws Exception {
+  @DisplayName("거절한 링크로는 수락할 수 없다")
+  void acceptRejectsDeclinedLink() throws Exception {
     String token = issue(ownerToken, capsule.getId(), "PARTICIPANT");
-    User first = saveUser("first-kakao-id", "민건");
-    User second = saveUser("second-kakao-id", "서현");
+    User invitee = saveUser("invitee-kakao-id", "민건");
+    reject(token, invitee).andExpect(status().isOk());
 
-    mockMvc
-        .perform(
-            post("/v1/invites/{inviteToken}/accept", token)
-                .header(AUTHORIZATION, bearer(tokenOf(first))))
-        .andExpect(status().isOk());
-
-    mockMvc
-        .perform(
-            post("/v1/invites/{inviteToken}/accept", token)
-                .header(AUTHORIZATION, bearer(tokenOf(second))))
+    accept(token, invitee)
         .andExpect(status().isNotFound())
         .andExpect(jsonPath("$.code").value("INVITE_NOT_FOUND"));
   }
@@ -552,18 +565,9 @@ class CapsuleInviteIntegrationTest {
   @DisplayName("재생성으로 무효가 된 링크를 수락하면 404 다")
   void acceptRejectsRevokedInvite() throws Exception {
     String token = issue(ownerToken, capsule.getId(), "PARTICIPANT");
-    mockMvc
-        .perform(
-            post("/v1/time-capsules/{capsuleId}/invites/regenerate", capsule.getId())
-                .header(AUTHORIZATION, bearer(ownerToken))
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(body("PARTICIPANT")))
-        .andExpect(status().isCreated());
+    regenerate("PARTICIPANT");
 
-    mockMvc
-        .perform(
-            post("/v1/invites/{inviteToken}/accept", token)
-                .header(AUTHORIZATION, bearer(tokenOf(saveUser("late-kakao-id", "늦참")))))
+    accept(token, saveUser("late-kakao-id", "늦참"))
         .andExpect(status().isNotFound())
         .andExpect(jsonPath("$.code").value("INVITE_NOT_FOUND"));
   }
@@ -572,12 +576,8 @@ class CapsuleInviteIntegrationTest {
   @DisplayName("만료된 링크를 수락하면 404 다")
   void acceptRejectsExpiredInvite() throws Exception {
     CapsuleInvite expired = saveExpiredInvite(capsule, owner, MemberRole.PARTICIPANT);
-    User invitee = saveUser("invitee-kakao-id", "민건");
 
-    mockMvc
-        .perform(
-            post("/v1/invites/{inviteToken}/accept", expired.getInviteToken())
-                .header(AUTHORIZATION, bearer(tokenOf(invitee))))
+    accept(expired.getInviteToken(), saveUser("invitee-kakao-id", "민건"))
         .andExpect(status().isNotFound())
         .andExpect(jsonPath("$.code").value("INVITE_NOT_FOUND"));
   }
@@ -587,17 +587,11 @@ class CapsuleInviteIntegrationTest {
   void acceptRejectsWhenCapsuleNotEditable() throws Exception {
     String token = issue(ownerToken, capsule.getId(), "PARTICIPANT");
     User invitee = saveUser("invitee-kakao-id", "민건");
-    mockMvc
-        .perform(
-            get("/v1/invites/{inviteToken}", token).header(AUTHORIZATION, bearer(tokenOf(invitee))))
-        .andExpect(status().isOk());
+    preview(token, invitee);
 
     lockCapsule(capsule);
 
-    mockMvc
-        .perform(
-            post("/v1/invites/{inviteToken}/accept", token)
-                .header(AUTHORIZATION, bearer(tokenOf(invitee))))
+    accept(token, invitee)
         .andExpect(status().isConflict())
         .andExpect(jsonPath("$.code").value("CAPSULE_NOT_EDITABLE"));
   }
@@ -608,10 +602,7 @@ class CapsuleInviteIntegrationTest {
     String token = issue(ownerToken, capsule.getId(), "PARTICIPANT");
     passDeadline(capsule);
 
-    mockMvc
-        .perform(
-            post("/v1/invites/{inviteToken}/accept", token)
-                .header(AUTHORIZATION, bearer(tokenOf(saveUser("invitee-kakao-id", "민건")))))
+    accept(token, saveUser("invitee-kakao-id", "민건"))
         .andExpect(status().isConflict())
         .andExpect(jsonPath("$.code").value("CAPSULE_NOT_EDITABLE"));
   }
@@ -619,10 +610,7 @@ class CapsuleInviteIntegrationTest {
   @Test
   @DisplayName("존재하지 않는 토큰을 수락하면 404 다")
   void acceptUnknownTokenIsNotFound() throws Exception {
-    mockMvc
-        .perform(
-            post("/v1/invites/{inviteToken}/accept", "no-such-token")
-                .header(AUTHORIZATION, bearer(ownerToken)))
+    accept("no-such-token", owner)
         .andExpect(status().isNotFound())
         .andExpect(jsonPath("$.code").value("INVITE_NOT_FOUND"));
   }
@@ -640,58 +628,45 @@ class CapsuleInviteIntegrationTest {
   // ---------- 거절 ----------
 
   @Test
-  @DisplayName("미리 선점한 회원이 거절하면 200 이고 링크는 REVOKED 된다")
-  void rejectRevokesClaimedInvite() throws Exception {
-    User rejecter = saveUser("rejecter-kakao-id", "민건");
+  @DisplayName("거절하면 내 기록만 DECLINED 가 되고 링크는 그대로다")
+  void rejectDeclinesOnlyMyRecord() throws Exception {
     String token = issue(ownerToken, capsule.getId(), "PARTICIPANT");
+    User rejecter = saveUser("rejecter-kakao-id", "민건");
+    User other = saveUser("other-kakao-id", "서현");
+    preview(token, rejecter);
+    preview(token, other);
+
+    reject(token, rejecter).andExpect(status().isOk());
+
+    assertThat(inviteeStatus(token, rejecter)).isEqualTo(InviteeStatus.DECLINED);
+    assertThat(inviteeStatus(token, other)).isEqualTo(InviteeStatus.PENDING);
+    assertThat(capsuleInviteRepository.findByInviteToken(token).orElseThrow().getStatus())
+        .isEqualTo(InviteStatus.ACTIVE);
+    accept(token, other).andExpect(status().isOk());
+  }
+
+  @Test
+  @DisplayName("열지 않은 링크도 바로 거절할 수 있다")
+  void rejectWithoutPreview() throws Exception {
+    String token = issue(ownerToken, capsule.getId(), "PARTICIPANT");
+    User rejecter = saveUser("rejecter-kakao-id", "민건");
+
+    reject(token, rejecter).andExpect(status().isOk());
+
+    assertThat(inviteeStatus(token, rejecter)).isEqualTo(InviteeStatus.DECLINED);
+  }
+
+  @Test
+  @DisplayName("거절한 링크를 다시 열면 404 다")
+  void previewRejectsDeclinedLink() throws Exception {
+    String token = issue(ownerToken, capsule.getId(), "PARTICIPANT");
+    User rejecter = saveUser("rejecter-kakao-id", "민건");
+    reject(token, rejecter).andExpect(status().isOk());
+
     mockMvc
         .perform(
             get("/v1/invites/{inviteToken}", token)
                 .header(AUTHORIZATION, bearer(tokenOf(rejecter))))
-        .andExpect(status().isOk());
-
-    mockMvc
-        .perform(
-            post("/v1/invites/{inviteToken}/reject", token)
-                .header(AUTHORIZATION, bearer(tokenOf(rejecter))))
-        .andExpect(status().isOk());
-
-    assertThat(capsuleInviteRepository.findByInviteToken(token).orElseThrow().getStatus())
-        .isEqualTo(InviteStatus.REVOKED);
-  }
-
-  @Test
-  @DisplayName("한 번도 안 연 링크를 거절하면 그 회원에게 선점되면서 바로 거절 처리된다")
-  void rejectClaimsUnopenedInviteThenRevokesIt() throws Exception {
-    String token = issue(ownerToken, capsule.getId(), "PARTICIPANT");
-    User rejecter = saveUser("rejecter-kakao-id", "민건");
-
-    mockMvc
-        .perform(
-            post("/v1/invites/{inviteToken}/reject", token)
-                .header(AUTHORIZATION, bearer(tokenOf(rejecter))))
-        .andExpect(status().isOk());
-
-    CapsuleInvite invite = capsuleInviteRepository.findByInviteToken(token).orElseThrow();
-    assertThat(invite.getStatus()).isEqualTo(InviteStatus.REVOKED);
-    assertThat(invite.getInvitee().getId()).isEqualTo(rejecter.getId());
-  }
-
-  @Test
-  @DisplayName("다른 회원이 이미 선점한 링크는 거절할 수 없다")
-  void rejectRejectsAfterClaimedByAnotherUser() throws Exception {
-    String token = issue(ownerToken, capsule.getId(), "PARTICIPANT");
-    User first = saveUser("first-kakao-id", "민건");
-    User second = saveUser("second-kakao-id", "서현");
-    mockMvc
-        .perform(
-            get("/v1/invites/{inviteToken}", token).header(AUTHORIZATION, bearer(tokenOf(first))))
-        .andExpect(status().isOk());
-
-    mockMvc
-        .perform(
-            post("/v1/invites/{inviteToken}/reject", token)
-                .header(AUTHORIZATION, bearer(tokenOf(second))))
         .andExpect(status().isNotFound())
         .andExpect(jsonPath("$.code").value("INVITE_NOT_FOUND"));
   }
@@ -699,28 +674,31 @@ class CapsuleInviteIntegrationTest {
   @Test
   @DisplayName("이미 거절한 초대를 다시 거절해도 에러 없이 성공한다")
   void rejectIsIdempotent() throws Exception {
+    String token = issue(ownerToken, capsule.getId(), "PARTICIPANT");
     User rejecter = saveUser("rejecter-kakao-id", "민건");
+
+    reject(token, rejecter).andExpect(status().isOk());
+    reject(token, rejecter).andExpect(status().isOk());
+
+    assertThat(capsuleInviteeRepository.findAll()).hasSize(1);
+  }
+
+  @Test
+  @DisplayName("이미 캡슐 멤버면 거절할 수 없다")
+  void rejectRejectsAlreadyActiveMember() throws Exception {
+    User participant = saveUser("participant-kakao-id", "민건");
+    saveMember(capsule, participant, MemberRole.PARTICIPANT, MemberStatus.ACTIVE);
     String token = issue(ownerToken, capsule.getId(), "PARTICIPANT");
 
-    mockMvc
-        .perform(
-            post("/v1/invites/{inviteToken}/reject", token)
-                .header(AUTHORIZATION, bearer(tokenOf(rejecter))))
-        .andExpect(status().isOk());
-    mockMvc
-        .perform(
-            post("/v1/invites/{inviteToken}/reject", token)
-                .header(AUTHORIZATION, bearer(tokenOf(rejecter))))
-        .andExpect(status().isOk());
+    reject(token, participant)
+        .andExpect(status().isConflict())
+        .andExpect(jsonPath("$.code").value("ALREADY_CAPSULE_MEMBER"));
   }
 
   @Test
   @DisplayName("존재하지 않는 토큰을 거절하면 404 다")
   void rejectUnknownTokenIsNotFound() throws Exception {
-    mockMvc
-        .perform(
-            post("/v1/invites/{inviteToken}/reject", "no-such-token")
-                .header(AUTHORIZATION, bearer(ownerToken)))
+    reject("no-such-token", owner)
         .andExpect(status().isNotFound())
         .andExpect(jsonPath("$.code").value("INVITE_NOT_FOUND"));
   }
@@ -753,6 +731,50 @@ class CapsuleInviteIntegrationTest {
     return JSON.readTree(response).path("data").path("inviteToken").asText();
   }
 
+  private String regenerate(String targetRole) throws Exception {
+    String response =
+        mockMvc
+            .perform(
+                post("/v1/time-capsules/{capsuleId}/invites/regenerate", capsule.getId())
+                    .header(AUTHORIZATION, bearer(ownerToken))
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(body(targetRole)))
+            .andExpect(status().isCreated())
+            .andReturn()
+            .getResponse()
+            .getContentAsString();
+
+    return JSON.readTree(response).path("data").path("inviteToken").asText();
+  }
+
+  private void preview(String inviteToken, User user) throws Exception {
+    mockMvc
+        .perform(
+            get("/v1/invites/{inviteToken}", inviteToken)
+                .header(AUTHORIZATION, bearer(tokenOf(user))))
+        .andExpect(status().isOk());
+  }
+
+  private ResultActions accept(String inviteToken, User user) throws Exception {
+    return mockMvc.perform(
+        post("/v1/invites/{inviteToken}/accept", inviteToken)
+            .header(AUTHORIZATION, bearer(tokenOf(user))));
+  }
+
+  private ResultActions reject(String inviteToken, User user) throws Exception {
+    return mockMvc.perform(
+        post("/v1/invites/{inviteToken}/reject", inviteToken)
+            .header(AUTHORIZATION, bearer(tokenOf(user))));
+  }
+
+  private InviteeStatus inviteeStatus(String inviteToken, User user) {
+    Long inviteId = capsuleInviteRepository.findByInviteToken(inviteToken).orElseThrow().getId();
+    return capsuleInviteeRepository
+        .findByCapsuleInviteIdAndUserId(inviteId, user.getId())
+        .orElseThrow()
+        .getStatus();
+  }
+
   private static String body(String targetRole) {
     return "{\"targetRole\":" + (targetRole == null ? "null" : "\"" + targetRole + "\"") + "}";
   }
@@ -779,6 +801,16 @@ class CapsuleInviteIntegrationTest {
             entityManager
                 .createQuery("update TimeCapsule c set c.status = :status where c.id = :id")
                 .setParameter("status", CapsuleStatus.LOCKED)
+                .setParameter("id", capsule.getId())
+                .executeUpdate());
+  }
+
+  private void deleteCapsule(TimeCapsule capsule) {
+    transactionTemplate.executeWithoutResult(
+        tx ->
+            entityManager
+                .createQuery("update TimeCapsule c set c.deletedAt = :at where c.id = :id")
+                .setParameter("at", LocalDateTime.now())
                 .setParameter("id", capsule.getId())
                 .executeUpdate());
   }
@@ -837,6 +869,7 @@ class CapsuleInviteIntegrationTest {
   }
 
   private void cleanUp() {
+    capsuleInviteeRepository.deleteAllInBatch();
     capsuleInviteRepository.deleteAllInBatch();
     capsuleMemberRepository.deleteAllInBatch();
     timeCapsuleRepository.deleteAllInBatch();

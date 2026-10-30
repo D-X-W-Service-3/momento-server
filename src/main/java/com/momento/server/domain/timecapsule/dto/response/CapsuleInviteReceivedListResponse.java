@@ -1,18 +1,17 @@
 package com.momento.server.domain.timecapsule.dto.response;
 
-import com.momento.server.domain.timecapsule.entity.CapsuleInvite;
 import com.momento.server.domain.timecapsule.entity.MemberRole;
-import com.momento.server.domain.timecapsule.entity.TimeCapsule;
+import com.momento.server.domain.timecapsule.repository.ReceivedInvite;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.LocalDateTime;
 import java.util.List;
 
 @Schema(description = "받은 초대 목록 응답")
 public record CapsuleInviteReceivedListResponse(
-    @Schema(description = "응답 대기 중인 초대 목록(최신순)") List<Item> invites) {
+    @Schema(description = "링크를 열고 아직 수락 · 거절하지 않은 초대. 최근에 연 링크가 먼저다.") List<Item> invites) {
 
-  public static CapsuleInviteReceivedListResponse of(List<Item> invites) {
-    return new CapsuleInviteReceivedListResponse(invites);
+  public static CapsuleInviteReceivedListResponse from(List<ReceivedInvite> received) {
+    return new CapsuleInviteReceivedListResponse(received.stream().map(Item::from).toList());
   }
 
   @Schema(description = "받은 초대 한 건")
@@ -25,14 +24,14 @@ public record CapsuleInviteReceivedListResponse(
       @Schema(description = "캡슐 이름", example = "2024 우리, 다시 만나는 날") String capsuleTitle,
       @Schema(description = "개봉 일시", example = "2027-12-12T00:00:00") LocalDateTime openAt) {
 
-    public static Item of(CapsuleInvite invite, TimeCapsule capsule) {
+    static Item from(ReceivedInvite received) {
       return new Item(
-          invite.getInviteToken(),
-          invite.getTargetRole(),
-          invite.getInviter().getNickname(),
-          capsule.getId(),
-          capsule.getTitle(),
-          capsule.getOpenAt());
+          received.inviteToken(),
+          received.targetRole(),
+          received.inviterNickname(),
+          received.capsuleId(),
+          received.capsuleTitle(),
+          received.openAt());
     }
   }
 }

@@ -2,42 +2,55 @@ package com.momento.server.domain.timecapsule.service;
 
 import com.momento.server.domain.timecapsule.dto.request.CapsuleInviteCreateRequest;
 import com.momento.server.domain.timecapsule.entity.CapsuleInvite;
+import com.momento.server.domain.timecapsule.entity.CapsuleInvitee;
 import com.momento.server.domain.timecapsule.entity.CapsuleMember;
 import com.momento.server.domain.timecapsule.entity.CapsuleType;
 import com.momento.server.domain.timecapsule.entity.InviteStatus;
+import com.momento.server.domain.timecapsule.entity.InviteeStatus;
 import com.momento.server.domain.timecapsule.entity.MemberRole;
 import com.momento.server.domain.timecapsule.entity.MemberStatus;
 import com.momento.server.domain.timecapsule.entity.TimeCapsule;
 import com.momento.server.domain.timecapsule.exception.CapsuleErrorCode;
 import com.momento.server.domain.timecapsule.repository.CapsuleInviteRepository;
+import com.momento.server.domain.timecapsule.repository.CapsuleInviteeRepository;
 import com.momento.server.domain.timecapsule.repository.CapsuleMemberRepository;
+import com.momento.server.domain.timecapsule.repository.ReceivedInvite;
+import com.momento.server.domain.timecapsule.repository.TimeCapsuleRepository;
 import com.momento.server.domain.user.entity.User;
 import com.momento.server.domain.user.service.UserService;
 import com.momento.server.global.common.exception.ApiException;
 import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.Objects;
+import java.util.Optional;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+/**
+ * 초대 링크 발급 · 재생성과, 링크를 받은 회원의 미리보기 · 수락 · 거절 · 받은 목록.
+ *
+ * <p>링크 하나는 단톡방에 공유돼 여러 명이 열 수 있다. 그래서 응답은 링크가 아니라 (링크, 회원) 마다 한 행인 {@code capsule_invitees} 에
+ * 기록하고, 링크 자체는 수락 · 거절해도 그대로 둔다. 링크를 끝내는 것은 재생성뿐이다.
+ *
+ * <p>받는 쪽 API 는 다음 경우를 모두 같은 404({@code INVITE_NOT_FOUND})로 돌려준다 — 없는 토큰, 재생성으로 무효가 된 링크, 만료된 링크,
+ * 삭제된 캡슐의 링크, 내가 거절한 링크. 구분하면 토큰만으로 캡슐의 상태가 드러난다.
+ */
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
 public class CapsuleInviteService {
 
   private final CapsuleInviteRepository capsuleInviteRepository;
+  private final CapsuleInviteeRepository capsuleInviteeRepository;
   private final CapsuleMemberRepository capsuleMemberRepository;
+  private final TimeCapsuleRepository timeCapsuleRepository;
   private final TimeCapsuleService timeCapsuleService;
   private final UserService userService;
   private final Clock clock;
 
-  /**
-   * 해당 역할의 활성 링크가 있으면 그 링크를 그대로 돌려주고(캡슐 상세를 다시 열어도 같은 링크가 보이도록), 없으면 새로 만든다. 항상 아직 아무도 선점하지 않은 공유
-   * 링크로 만든다 — 대상은 발급 시점이 아니라 누군가 이 링크로 처음 들어올 때 정해진다({@link CapsuleInvite#claim}).
-   */
+  /** 해당 역할의 활성 링크가 있으면 그 링크를 그대로 돌려주고(캡슐 상세를 다시 열어도 같은 링크가 보이도록), 없으면 새로 만든다. */
   @Transactional
   public CapsuleInvite issue(Long capsuleId, Long userId, CapsuleInviteCreateRequest request) {
     TimeCapsule capsule = timeCapsuleService.getActiveCapsuleForUpdate(capsuleId);
@@ -51,8 +64,8 @@ public class CapsuleInviteService {
   }
 
   /**
-   * 해당 역할의 기존 활성 링크는 무효(REVOKED)로 만들고 새 링크를 발급한다. 거절은 그 초대(토큰)에 묶이므로, 거절했던 사람도 재생성된 새 링크로는 다시 참여할 수
-   * 있다. 캡슐 행에 쓰기 잠금을 먼저 걸어, 동시에 들어온 두 요청이 함께 기존 링크를 못 보고 활성 링크를 두 개 만드는 걸 막는다.
+   * 해당 역할의 기존 활성 링크는 무효(REVOKED)로 만들고 새 링크를 발급한다. 거절은 그 링크에 대한 기록이라, 거절했던 회원도 새 링크로는 다시 받을 수 있다. 캡슐
+   * 행에 쓰기 잠금을 먼저 걸어, 동시에 들어온 두 요청이 함께 기존 링크를 못 보고 활성 링크를 두 개 만드는 걸 막는다.
    */
   @Transactional
   public CapsuleInvite regenerate(Long capsuleId, Long userId, CapsuleInviteCreateRequest request) {
@@ -69,19 +82,23 @@ public class CapsuleInviteService {
   }
 
   /**
-   * 로그인한 회원이 이 링크를 처음 열면 그 회원에게 고정한다({@link CapsuleInvite#claim}). 이미 다른 회원이 선점한 링크면 존재하지 않는 것과 똑같이
-   * 404 다 — "누가 이미 선점했다"는 사실 자체를 드러내지 않는다.
+   * 링크를 연 회원을 대기 중(PENDING)으로 기록하고 초대 화면을 돌려준다. 이미 기록이 있으면 그대로 두고, 이미 이 캡슐의 멤버면 기록하지 않는다(대기 중이
+   * 아니다).
+   *
+   * <p>링크 행을 잠그고 기록 여부를 확인한다. 같은 회원이 링크를 동시에 두 번 열어도 (링크, 회원) UNIQUE 에 걸려 500 이 나지 않게 하기 위해서다.
    */
   @Transactional
   public CapsuleInvitePreview getPreview(String inviteToken, Long userId) {
-    CapsuleInvite invite = claimAndAuthorize(inviteToken, userId);
+    CapsuleInvite invite = getUsableInviteForUpdate(inviteToken);
+    TimeCapsule capsule = getCapsuleOf(invite);
+    Optional<CapsuleInvitee> mine = findMine(invite, userId);
+    rejectIfDeclined(mine);
 
-    TimeCapsule capsule = timeCapsuleService.getActiveCapsule(invite.getTimeCapsule().getId());
     Long capsuleId = capsule.getId();
-    boolean alreadyJoined =
-        capsuleMemberRepository
-            .findByTimeCapsuleIdAndUserIdAndStatus(capsuleId, userId, MemberStatus.ACTIVE)
-            .isPresent();
+    boolean alreadyJoined = isActiveMember(capsuleId, userId);
+    if (!alreadyJoined && mine.isEmpty()) {
+      capsuleInviteeRepository.save(newInvitee(invite, userId, InviteeStatus.PENDING));
+    }
 
     return new CapsuleInvitePreview(
         invite,
@@ -94,84 +111,114 @@ public class CapsuleInviteService {
   }
 
   /**
-   * 링크를 처음 여는 것이면 수락도 그 회원에게 고정하면서 진행한다(미리보기를 거치지 않고 바로 수락을 호출한 경우 대비). 나갔거나 제외됐던 회원이면 기존 행을
-   * 재활성화하고, 이미 ACTIVE 참여자면 409 다.
+   * 캡슐에 참여한다. 나갔거나 내보내졌던 회원이면 기존 멤버 행을 되살리고, 내 기록은 ACCEPTED 로 바꾼다. 미리보기를 거치지 않고 바로 수락해도 된다.
+   *
+   * <p>캡슐 행 → 링크 행 순서로 잠근다. 캡슐을 잠가 같은 회원의 수락이 겹쳐 멤버 행이 두 개 생기는 것과, 내보내기 · 상태 전이와 엇갈리는 것을 막는다. 순서는
+   * 재생성과 같아 교착이 생기지 않는다. 링크 엔티티는 잠근 뒤에 처음 읽어, 그사이 재생성으로 무효가 된 링크를 옛 값으로 보지 않는다.
    */
   @Transactional
   public void accept(String inviteToken, Long userId) {
-    CapsuleInvite invite = claimAndAuthorize(inviteToken, userId);
+    Long capsuleId =
+        capsuleInviteRepository
+            .findCapsuleIdByInviteToken(inviteToken)
+            .orElseThrow(() -> new ApiException(CapsuleErrorCode.INVITE_NOT_FOUND));
+    TimeCapsule capsule =
+        timeCapsuleRepository
+            .findActiveByIdForUpdate(capsuleId)
+            .orElseThrow(() -> new ApiException(CapsuleErrorCode.INVITE_NOT_FOUND));
+    CapsuleInvite invite = getUsableInviteForUpdate(inviteToken);
+    Optional<CapsuleInvitee> mine = findMine(invite, userId);
+    rejectIfDeclined(mine);
 
-    TimeCapsule capsule = timeCapsuleService.getActiveCapsule(invite.getTimeCapsule().getId());
     LocalDateTime now = LocalDateTime.now(clock);
-    if (!invite.isUsable(now)) {
-      throw new ApiException(CapsuleErrorCode.INVITE_NOT_FOUND);
-    }
     if (!capsule.isEditable(now)) {
       throw new ApiException(CapsuleErrorCode.CAPSULE_NOT_EDITABLE);
     }
 
-    User user = userService.getActiveUser(userId);
-
     capsuleMemberRepository
-        .findByTimeCapsuleIdAndUserId(capsule.getId(), userId)
+        .findByTimeCapsuleIdAndUserId(capsuleId, userId)
         .ifPresentOrElse(
             existing -> reactivateOrReject(existing, invite.getTargetRole(), now),
             () ->
                 capsuleMemberRepository.save(
                     CapsuleMember.builder()
                         .timeCapsule(capsule)
-                        .user(user)
+                        .user(userService.getActiveUser(userId))
                         .role(invite.getTargetRole())
                         .joinedAt(now)
                         .build()));
 
-    // 각 링크는 정확히 한 회원에게 선점되므로, 수락도 거절·취소와 마찬가지로 그 링크의 "생애"를 끝낸다 — 안 그러면 수락한 초대가
-    // 받은 목록에 계속 남는다(상태를 안 바꾸면 isUsable() 이 계속 true).
-    invite.revoke();
+    mine.ifPresentOrElse(
+        CapsuleInvitee::accept,
+        () -> capsuleInviteeRepository.save(newInvitee(invite, userId, InviteeStatus.ACCEPTED)));
   }
 
   /**
-   * 지정형 개념이 없어지고 "선점"으로 바뀌면서, 거절도 마찬가지로 아직 아무도 선점하지 않은 링크면 거절 호출 자체가 선점으로 이어진다 — 그리고 바로 거절 처리된다. 대상
-   * 본인이 아니면(이미 다른 회원이 선점) 404. 이미 처리된 초대를 다시 거절해도 에러 없이 성공한다.
+   * 내 기록을 DECLINED 로 바꾼다. 미리보기를 거치지 않았으면 기록을 새로 만든다. 이미 거절했으면 그대로 성공한다. 이미 이 캡슐의 멤버면 거절할 대상이 없어 409
+   * 다.
    */
   @Transactional
   public void reject(String inviteToken, Long userId) {
-    CapsuleInvite invite = claimAndAuthorize(inviteToken, userId);
-
-    invite.revoke();
-  }
-
-  /** 나에게 고정된, 아직 응답 대기 중인(수락·거절·만료되지 않은) 초대만 최신순으로 보여준다. */
-  public List<ReceivedInvite> getReceived(Long userId) {
-    return capsuleInviteRepository.findByInviteeIdOrderByCreatedAtDesc(userId).stream()
-        .filter(invite -> invite.isUsable(LocalDateTime.now(clock)))
-        .map(this::tryBuildReceivedDetail)
-        .filter(Objects::nonNull)
-        .toList();
-  }
-
-  private ReceivedInvite tryBuildReceivedDetail(CapsuleInvite invite) {
-    try {
-      TimeCapsule capsule = timeCapsuleService.getActiveCapsule(invite.getTimeCapsule().getId());
-      return new ReceivedInvite(invite, capsule);
-    } catch (ApiException exception) {
-      return null;
+    CapsuleInvite invite = getUsableInviteForUpdate(inviteToken);
+    TimeCapsule capsule = getCapsuleOf(invite);
+    if (isActiveMember(capsule.getId(), userId)) {
+      throw new ApiException(CapsuleErrorCode.ALREADY_CAPSULE_MEMBER);
     }
+
+    findMine(invite, userId)
+        .ifPresentOrElse(
+            CapsuleInvitee::decline,
+            () ->
+                capsuleInviteeRepository.save(newInvitee(invite, userId, InviteeStatus.DECLINED)));
   }
 
-  /** 미리보기·거절이 공유하는 "선점하고 본인 확인" 절차. */
-  private CapsuleInvite claimAndAuthorize(String inviteToken, Long userId) {
+  /** 내가 열고 아직 응답하지 않은 초대. 탭 홈 배너와 같은 조건이다. */
+  public List<ReceivedInvite> getReceived(Long userId) {
+    return capsuleInviteeRepository.findPendingFor(userId, LocalDateTime.now(clock));
+  }
+
+  /** 재생성으로 무효가 됐거나 만료된 링크는 없는 링크와 똑같이 404 다. */
+  private CapsuleInvite getUsableInviteForUpdate(String inviteToken) {
     CapsuleInvite invite =
         capsuleInviteRepository
             .findByInviteTokenForUpdate(inviteToken)
             .orElseThrow(() -> new ApiException(CapsuleErrorCode.INVITE_NOT_FOUND));
-
-    User user = userService.getActiveUser(userId);
-    invite.claim(user);
-    if (!invite.isTargetedTo(userId)) {
+    if (!invite.isUsable(LocalDateTime.now(clock))) {
       throw new ApiException(CapsuleErrorCode.INVITE_NOT_FOUND);
     }
     return invite;
+  }
+
+  /** 삭제된 캡슐의 링크는 없는 링크와 똑같이 404 다. */
+  private TimeCapsule getCapsuleOf(CapsuleInvite invite) {
+    return timeCapsuleRepository
+        .findByIdAndDeletedAtIsNull(invite.getTimeCapsule().getId())
+        .orElseThrow(() -> new ApiException(CapsuleErrorCode.INVITE_NOT_FOUND));
+  }
+
+  private Optional<CapsuleInvitee> findMine(CapsuleInvite invite, Long userId) {
+    return capsuleInviteeRepository.findByCapsuleInviteIdAndUserId(invite.getId(), userId);
+  }
+
+  /** 거절한 링크로는 다시 볼 수도 참여할 수도 없다. 방장이 재생성한 새 링크로는 다시 받을 수 있다. */
+  private void rejectIfDeclined(Optional<CapsuleInvitee> mine) {
+    if (mine.filter(CapsuleInvitee::isDeclined).isPresent()) {
+      throw new ApiException(CapsuleErrorCode.INVITE_NOT_FOUND);
+    }
+  }
+
+  private boolean isActiveMember(Long capsuleId, Long userId) {
+    return capsuleMemberRepository
+        .findByTimeCapsuleIdAndUserIdAndStatus(capsuleId, userId, MemberStatus.ACTIVE)
+        .isPresent();
+  }
+
+  private CapsuleInvitee newInvitee(CapsuleInvite invite, Long userId, InviteeStatus status) {
+    return CapsuleInvitee.builder()
+        .capsuleInvite(invite)
+        .user(userService.getActiveUser(userId))
+        .status(status)
+        .build();
   }
 
   private void reactivateOrReject(
@@ -222,7 +269,4 @@ public class CapsuleInviteService {
   private String generateToken() {
     return UUID.randomUUID().toString().replace("-", "");
   }
-
-  /** 받은 초대 목록 한 줄. */
-  public record ReceivedInvite(CapsuleInvite invite, TimeCapsule capsule) {}
 }

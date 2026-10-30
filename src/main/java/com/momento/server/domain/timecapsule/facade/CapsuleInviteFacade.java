@@ -3,7 +3,6 @@ package com.momento.server.domain.timecapsule.facade;
 import com.momento.server.domain.timecapsule.dto.request.CapsuleInviteCreateRequest;
 import com.momento.server.domain.timecapsule.dto.response.CapsuleInvitePreviewResponse;
 import com.momento.server.domain.timecapsule.dto.response.CapsuleInviteReceivedListResponse;
-import com.momento.server.domain.timecapsule.dto.response.CapsuleInviteReceivedListResponse.Item;
 import com.momento.server.domain.timecapsule.dto.response.CapsuleInviteResponse;
 import com.momento.server.domain.timecapsule.service.CapsuleInviteService;
 import lombok.RequiredArgsConstructor;
@@ -38,9 +37,6 @@ public class CapsuleInviteFacade {
   }
 
   public CapsuleInviteReceivedListResponse getReceived(Long userId) {
-    return CapsuleInviteReceivedListResponse.of(
-        capsuleInviteService.getReceived(userId).stream()
-            .map(received -> Item.of(received.invite(), received.capsule()))
-            .toList());
+    return CapsuleInviteReceivedListResponse.from(capsuleInviteService.getReceived(userId));
   }
 }
