@@ -2,6 +2,8 @@ package com.momento.server.domain.timecapsule.repository;
 
 import com.momento.server.domain.timecapsule.entity.CapsuleInvitee;
 import java.time.LocalDateTime;
+import java.util.List;
+import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -9,16 +11,15 @@ import org.springframework.data.repository.query.Param;
 public interface CapsuleInviteeRepository extends JpaRepository<CapsuleInvitee, Long> {
 
   /**
-   * 내가 링크를 열고 아직 수락 · 거절하지 않은 초대가 있는지. 탭 홈의 "참여 요청받은 타임캡슐이 있어요" 배너에 쓴다.
+   * 대기 중인 초대의 조건. 탭 홈 배너({@link #existsPendingFor})와 받은 초대 목록({@link #findPendingFor})이 같이 쓴다. 따로
+   * 두면 한쪽만 고쳐져 배너는 뜨는데 목록이 비는 일이 생긴다.
    *
    * <p>내 PENDING 행 중, 링크가 ACTIVE 이고 만료되지 않았으며 캡슐이 삭제되지 않은 것을 찾는다. 만료는 저장된 상태가 아니라 {@code expiresAt}
    * 으로 판단한다. 수락은 캡슐이 WRITING 일 때만 되므로, 잠기거나 열린 캡슐의 초대는 눌러도 참여할 수 없어 뺀다. 이미 그 캡슐의 ACTIVE 멤버여도 대기 중이
    * 아니므로 뺀다.
    */
-  @Query(
-      "select case when count(v) > 0 then true else false end"
-          + " from CapsuleInvitee v join v.capsuleInvite i join i.timeCapsule c"
-          + " where v.user.id = :userId"
+  String PENDING_FOR_USER =
+      " v.user.id = :userId"
           + " and v.status = com.momento.server.domain.timecapsule.entity.InviteeStatus.PENDING"
           + " and i.status = com.momento.server.domain.timecapsule.entity.InviteStatus.ACTIVE"
           + " and (i.expiresAt is null or i.expiresAt > :now)"
@@ -26,6 +27,27 @@ public interface CapsuleInviteeRepository extends JpaRepository<CapsuleInvitee, 
           + " and c.status = com.momento.server.domain.timecapsule.entity.CapsuleStatus.WRITING"
           + " and not exists (select cm.id from CapsuleMember cm"
           + " where cm.timeCapsule = c and cm.user.id = :userId"
-          + " and cm.status = com.momento.server.domain.timecapsule.entity.MemberStatus.ACTIVE)")
+          + " and cm.status = com.momento.server.domain.timecapsule.entity.MemberStatus.ACTIVE)";
+
+  /** 내가 링크를 열고 아직 수락 · 거절하지 않은 초대가 있는지. 탭 홈의 "참여 요청받은 타임캡슐이 있어요" 배너에 쓴다. */
+  @Query(
+      "select case when count(v) > 0 then true else false end"
+          + " from CapsuleInvitee v join v.capsuleInvite i join i.timeCapsule c"
+          + " where"
+          + PENDING_FOR_USER)
   boolean existsPendingFor(@Param("userId") Long userId, @Param("now") LocalDateTime now);
+
+  /** 받은 초대 목록. 배너와 같은 조건이고, 최근에 연 링크가 먼저다. 초대한 사람의 닉네임까지 한 번에 읽는다. */
+  @Query(
+      "select new com.momento.server.domain.timecapsule.repository.ReceivedInvite("
+          + "i.inviteToken, i.targetRole, u.nickname, c.id, c.title, c.openAt)"
+          + " from CapsuleInvitee v join v.capsuleInvite i join i.timeCapsule c join i.inviter u"
+          + " where"
+          + PENDING_FOR_USER
+          + " order by v.createdAt desc, v.id desc")
+  List<ReceivedInvite> findPendingFor(
+      @Param("userId") Long userId, @Param("now") LocalDateTime now);
+
+  /** 이 링크에 대한 내 응답 기록. 링크를 처음 열 때 만들어진다. */
+  Optional<CapsuleInvitee> findByCapsuleInviteIdAndUserId(Long capsuleInviteId, Long userId);
 }
