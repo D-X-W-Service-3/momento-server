@@ -35,7 +35,7 @@ public class MemoryService {
 
   /** 추억 하나와 첨부 이미지를 저장한다. 공개 범위는 요청으로 받지 않고 엔티티 기본값(PRIVATE)을 쓴다. */
   @Transactional
-  public MemoryDetail create(User user, MemoryCreateRequest request) {
+  public void create(User user, MemoryCreateRequest request) {
     Memory memory =
         memoryRepository.save(
             Memory.builder()
@@ -45,13 +45,11 @@ public class MemoryService {
                 .memoryDate(request.memoryDate())
                 .build());
 
-    List<MemoryImage> images = saveImages(memory, request.imageUrlsOrEmpty());
-
-    return new MemoryDetail(memory, images);
+    saveImages(memory, request.imageUrlsOrEmpty());
   }
 
   /** 보낸 순서를 display_order 0, 1, 2... 로 저장한다. 0번이 목록의 대표 이미지가 된다. */
-  private List<MemoryImage> saveImages(Memory memory, List<String> imageUrls) {
+  private void saveImages(Memory memory, List<String> imageUrls) {
     List<MemoryImage> images = new ArrayList<>();
 
     for (int order = 0; order < imageUrls.size(); order++) {
@@ -63,7 +61,7 @@ public class MemoryService {
               .build());
     }
 
-    return memoryImageRepository.saveAll(images);
+    memoryImageRepository.saveAll(images);
   }
 
   /** 아카이브 탭 목록. 연도는 그 해의 1월 1일 ~ 12월 31일 범위로 바꿔 넘긴다. */

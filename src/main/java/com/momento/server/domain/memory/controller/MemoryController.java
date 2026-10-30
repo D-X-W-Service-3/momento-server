@@ -2,7 +2,6 @@ package com.momento.server.domain.memory.controller;
 
 import com.momento.server.domain.memory.dto.request.MemoryCreateRequest;
 import com.momento.server.domain.memory.dto.response.MemoryListResponse;
-import com.momento.server.domain.memory.dto.response.MemoryResponse;
 import com.momento.server.domain.memory.facade.MemoryFacade;
 import com.momento.server.global.common.annotation.RestApiController;
 import com.momento.server.global.common.auth.UserPrincipal;
@@ -24,11 +23,11 @@ public class MemoryController implements MemoryApi {
 
   @Override
   @PostMapping
-  public CommonResponse<MemoryResponse> create(
+  public CommonResponse<?> create(
       @AuthenticationPrincipal UserPrincipal principal,
       @Valid @RequestBody MemoryCreateRequest request) {
-    return CommonResponse.success(
-        SuccessCode.CREATED, memoryFacade.create(principal.getUserId(), request));
+    memoryFacade.create(principal.getUserId(), request);
+    return CommonResponse.success(SuccessCode.CREATED);
   }
 
   @Override

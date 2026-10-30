@@ -67,7 +67,7 @@ class MemoryIntegrationTest {
   }
 
   @Test
-  @DisplayName("추억을 등록하면 201 과 함께 PRIVATE 로 저장되고 이미지가 보낸 순서대로 붙는다")
+  @DisplayName("추억을 등록하면 data 없는 201 이고, PRIVATE 로 저장되며 이미지가 보낸 순서대로 붙는다")
   void createMemory() throws Exception {
     String body =
         """
@@ -86,15 +86,12 @@ class MemoryIntegrationTest {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(body))
         .andExpect(status().isCreated())
-        .andExpect(jsonPath("$.data.title").value("제주도 여행"))
-        .andExpect(jsonPath("$.data.isShared").value(false))
-        .andExpect(jsonPath("$.data.images[0].imageId").isNumber())
-        .andExpect(jsonPath("$.data.images[0].imageUrl").value("https://cdn.test/a.jpg"))
-        .andExpect(jsonPath("$.data.images[0].displayOrder").value(0))
-        .andExpect(jsonPath("$.data.images[1].imageUrl").value("https://cdn.test/b.jpg"))
-        .andExpect(jsonPath("$.data.images[1].displayOrder").value(1));
+        .andExpect(jsonPath("$.code").value("SUCCESS"))
+        .andExpect(jsonPath("$.data").doesNotExist());
 
     Memory saved = memoryRepository.findAll().get(0);
+    assertThat(saved.getTitle()).isEqualTo("제주도 여행");
+    assertThat(saved.getContent()).isEqualTo("바다가 정말 예뻤다");
     assertThat(saved.getVisibilityType()).isEqualTo(MemoryVisibilityType.PRIVATE);
     assertThat(saved.getTimeCapsule()).isNull();
 
@@ -119,8 +116,10 @@ class MemoryIntegrationTest {
                 .header("Authorization", "Bearer " + token)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(body))
-        .andExpect(status().isCreated())
-        .andExpect(jsonPath("$.data.images").isEmpty());
+        .andExpect(status().isCreated());
+
+    Memory saved = memoryRepository.findAll().get(0);
+    assertThat(memoryImageRepository.findByMemoryIdOrderByDisplayOrderAsc(saved.getId())).isEmpty();
   }
 
   @Test
@@ -150,6 +149,33 @@ class MemoryIntegrationTest {
         .andExpect(jsonPath("$.code").value("INVALID_INPUT_VALUE"));
 
     assertThat(memoryRepository.count()).isZero();
+  }
+
+  @Test
+  @DisplayName("이름이 15자 · 내용이 45자를 넘으면 400 이고, 딱 그 길이까지는 받는다")
+  void titleAndContentLengthsAreLimited() throws Exception {
+    String body = "{\"title\":\"%s\",\"content\":\"%s\",\"memoryDate\":\"2026-08-15\"}";
+
+    for (String tooLong :
+        List.of(body.formatted("가".repeat(16), "내용"), body.formatted("이름", "가".repeat(46)))) {
+      mockMvc
+          .perform(
+              post("/v1/memories")
+                  .header("Authorization", "Bearer " + token)
+                  .contentType(MediaType.APPLICATION_JSON)
+                  .content(tooLong))
+          .andExpect(status().isBadRequest())
+          .andExpect(jsonPath("$.code").value("INVALID_INPUT_VALUE"));
+    }
+    assertThat(memoryRepository.count()).isZero();
+
+    mockMvc
+        .perform(
+            post("/v1/memories")
+                .header("Authorization", "Bearer " + token)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(body.formatted("가".repeat(15), "가".repeat(45))))
+        .andExpect(status().isCreated());
   }
 
   @Test

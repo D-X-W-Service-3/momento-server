@@ -2,7 +2,6 @@ package com.momento.server.domain.memory.controller;
 
 import com.momento.server.domain.memory.dto.request.MemoryCreateRequest;
 import com.momento.server.domain.memory.dto.response.MemoryListResponse;
-import com.momento.server.domain.memory.dto.response.MemoryResponse;
 import com.momento.server.global.common.auth.UserPrincipal;
 import com.momento.server.global.common.dto.CommonResponse;
 import io.swagger.v3.oas.annotations.Operation;
@@ -16,10 +15,10 @@ public interface MemoryApi {
   @Operation(
       summary = "추억 등록",
       description =
-          "제목·내용·추억 날짜와, 클라이언트가 이미 업로드해 확보한 이미지 URL 목록(최대 10장)을 받아 저장한다. "
-              + "이미지 파일 업로드 자체는 이 API 의 범위가 아니다. 공개 범위는 요청으로 받지 않고 항상 PRIVATE 로 저장된다.")
-  CommonResponse<MemoryResponse> create(
-      UserPrincipal principal, @Valid MemoryCreateRequest request);
+          "아카이브 추가 화면에서 이름 · 내용 · 추억 날짜와 이미지 URL 목록(최대 10장)을 받아 저장한다. 이름은 15자, 내용은 45자까지다."
+              + " 공개 범위는 요청으로 받지 않고 항상 PRIVATE 로 저장된다. 등록 후 목록을 다시 조회하므로 응답 데이터는 없다.")
+  CommonResponse<?> create(
+      @Parameter(hidden = true) UserPrincipal principal, @Valid MemoryCreateRequest request);
 
   @Operation(
       summary = "추억 목록 조회",

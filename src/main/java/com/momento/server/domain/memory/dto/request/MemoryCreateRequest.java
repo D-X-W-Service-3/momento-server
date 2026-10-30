@@ -9,11 +9,16 @@ import java.util.List;
 
 @Schema(description = "추억 등록 요청")
 public record MemoryCreateRequest(
-    @Schema(description = "추억 제목", example = "제주도 여행", requiredMode = Schema.RequiredMode.REQUIRED)
-        @NotBlank(message = "제목은 필수입니다.")
-        @Size(max = 100, message = "제목은 100자를 넘을 수 없습니다.")
+    @Schema(
+            description = "아카이브 이름. 최대 15자",
+            example = "첫 도전 성공",
+            requiredMode = Schema.RequiredMode.REQUIRED)
+        @NotBlank(message = "아카이브 이름은 필수입니다.")
+        @Size(max = 15, message = "아카이브 이름은 15자를 넘을 수 없습니다.")
         String title,
-    @Schema(description = "추억 내용", example = "바다가 정말 예뻤다") String content,
+    @Schema(description = "추억 내용. 최대 45자", example = "오늘 친구들과 카페에서 오랜만에 만났다")
+        @Size(max = 45, message = "추억 내용은 45자를 넘을 수 없습니다.")
+        String content,
     @Schema(
             description = "추억이 있었던 날짜. 캘린더 노출 기준이라 필수다.",
             example = "2026-08-15",
