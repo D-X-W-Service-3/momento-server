@@ -3,6 +3,7 @@ package com.momento.server.domain.timecapsule.service;
 import com.momento.server.domain.letter.entity.LetterStatus;
 import com.momento.server.domain.timecapsule.entity.CapsuleStatus;
 import com.momento.server.domain.timecapsule.entity.MemberStatus;
+import com.momento.server.domain.timecapsule.entity.TimeCapsule;
 import com.momento.server.domain.timecapsule.repository.CapsuleCount;
 import com.momento.server.domain.timecapsule.repository.CapsuleInviteeRepository;
 import com.momento.server.domain.timecapsule.repository.CapsuleMemberRepository;
@@ -16,6 +17,7 @@ import java.time.LocalDateTime;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import lombok.RequiredArgsConstructor;
@@ -34,6 +36,8 @@ import org.springframework.transaction.annotation.Transactional;
 public class TimeCapsuleListService {
 
   private static final int OVERVIEW_SECTION_SIZE = 5;
+
+  private static final int HOME_PREVIEW_SIZE = 3;
 
   /** "곧 만날 타임캡슐" 에 열린 캡슐을 개봉 후 며칠까지 남겨 둘지. 당일을 0 일로 센다. */
   private static final int UPCOMING_OPENED_DAYS = 7;
@@ -111,6 +115,19 @@ public class TimeCapsuleListService {
         timeCapsuleRepository.searchMyCapsules(userId, LikePattern.contains(keyword), from, to));
   }
 
+  /** 홈 "가장 먼저 열리는 캡슐". 작성 중 · 잠긴 캡슐 중 개봉일이 가장 가까운 것이다. */
+  public Optional<TimeCapsule> getNextCapsule(Long userId) {
+    return timeCapsuleRepository.findMyNextCapsules(userId, Limit.of(1)).stream().findFirst();
+  }
+
+  /** 홈 타임캡슐 미리보기. 탭 홈 "곧 만날 타임캡슐" 과 같은 캡슐을 같은 순서로 읽는다. */
+  @Transactional(readOnly = true)
+  public List<TimeCapsuleSummary> getHomePreview(Long userId) {
+    return summarize(
+        timeCapsuleRepository.findMyUnopenedCapsules(
+            userId, upcomingOpenedSince(), Limit.of(HOME_PREVIEW_SIZE)));
+  }
+
   private Map<CapsuleStatus, Long> countByStatus(Long userId, String keywordPattern) {
     return timeCapsuleRepository.countMyCapsulesByStatus(userId, keywordPattern).stream()
         .collect(Collectors.toMap(CapsuleStatusCount::status, CapsuleStatusCount::count));
@@ -123,9 +140,8 @@ public class TimeCapsuleListService {
   @Transactional(readOnly = true)
   public TimeCapsuleOverview getOverview(Long userId) {
     Limit section = Limit.of(OVERVIEW_SECTION_SIZE);
-    LocalDateTime openedSince = LocalDate.now(clock).minusDays(UPCOMING_OPENED_DAYS).atStartOfDay();
     List<MyCapsule> upcoming =
-        timeCapsuleRepository.findMyUnopenedCapsules(userId, openedSince, section);
+        timeCapsuleRepository.findMyUnopenedCapsules(userId, upcomingOpenedSince(), section);
     List<MyCapsule> writing = timeCapsuleRepository.findMyWritingCapsules(userId, section);
     List<MyCapsule> locked =
         timeCapsuleRepository.findMyCapsules(
@@ -149,6 +165,11 @@ public class TimeCapsuleListService {
         pick(writing, summaries),
         pick(locked, summaries),
         pick(opened, summaries));
+  }
+
+  /** "곧 만날 타임캡슐" 에 넣을 열린 캡슐의 개봉 시각 하한. 탭 홈과 홈이 같은 값을 쓴다. */
+  private LocalDateTime upcomingOpenedSince() {
+    return LocalDate.now(clock).minusDays(UPCOMING_OPENED_DAYS).atStartOfDay();
   }
 
   private List<TimeCapsuleSummary> pick(
