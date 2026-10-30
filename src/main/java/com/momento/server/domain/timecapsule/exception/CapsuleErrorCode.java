@@ -38,13 +38,10 @@ public enum CapsuleErrorCode implements ErrorCode {
   /** {@code targetRole} 로 OWNER 를 보냈거나, 캡슐 유형(SELF/FRIEND/GROUP)에서 허용하지 않는 역할이다. */
   INVALID_INVITE_ROLE("이 캡슐에서는 해당 역할로 초대할 수 없습니다.", HttpStatus.BAD_REQUEST),
 
-  /**
-   * 다음을 모두 같은 코드로 묶는다 — 존재하지 않는 토큰, 취소·만료된 링크, 다른 회원이 이미 선점한 링크. 세분화하면 "이미 남이 선점했다" 같은 정보가 새어나간다.
-   * 없는 토큰과 구분할 이유가 없어 전부 404 다.
-   */
+  /** 없는 토큰, 재생성으로 무효가 된 링크, 만료된 링크, 삭제된 캡슐의 링크, 내가 거절한 링크를 구분하지 않는다. 구분하면 토큰만으로 캡슐의 상태가 드러난다. */
   INVITE_NOT_FOUND("유효하지 않은 초대 링크입니다.", HttpStatus.NOT_FOUND),
 
-  /** 이미 ACTIVE 상태로 참여 중인 회원이 같은 캡슐 초대를 다시 수락한 경우. */
+  /** 이미 ACTIVE 상태로 참여 중인 캡슐의 초대를 수락 · 거절하는 경우. */
   ALREADY_CAPSULE_MEMBER("이미 참여 중인 타임캡슐입니다.", HttpStatus.CONFLICT),
   ;
 

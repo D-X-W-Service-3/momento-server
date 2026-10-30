@@ -59,7 +59,8 @@ public class CapsuleInviteService {
     validateTargetRole(capsule.getCapsuleType(), request.targetRole());
 
     return capsuleInviteRepository
-        .findActiveSlot(capsuleId, request.targetRole(), null, InviteStatus.ACTIVE)
+        .findByTimeCapsuleIdAndTargetRoleAndStatus(
+            capsuleId, request.targetRole(), InviteStatus.ACTIVE)
         .orElseGet(() -> createInvite(capsule, me.getUser(), request.targetRole()));
   }
 
@@ -75,7 +76,8 @@ public class CapsuleInviteService {
     validateTargetRole(capsule.getCapsuleType(), request.targetRole());
 
     capsuleInviteRepository
-        .findActiveSlot(capsuleId, request.targetRole(), null, InviteStatus.ACTIVE)
+        .findByTimeCapsuleIdAndTargetRoleAndStatus(
+            capsuleId, request.targetRole(), InviteStatus.ACTIVE)
         .ifPresent(CapsuleInvite::revoke);
 
     return createInvite(capsule, me.getUser(), request.targetRole());
@@ -236,14 +238,8 @@ public class CapsuleInviteService {
             .inviter(inviter)
             .inviteToken(generateToken())
             .targetRole(targetRole)
-            .expiresAt(expiresAt(capsule))
+            .expiresAt(capsule.getLetterDeadlineAt())
             .build());
-  }
-
-  private LocalDateTime expiresAt(TimeCapsule capsule) {
-    return capsule.getLetterDeadlineAt() != null
-        ? capsule.getLetterDeadlineAt()
-        : capsule.getOpenAt();
   }
 
   /**

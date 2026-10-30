@@ -72,7 +72,6 @@ CREATE TABLE `capsule_invites` (
 	`id`	BIGINT	NOT NULL	AUTO_INCREMENT	COMMENT '초대 링크 ID',
 	`time_capsule_id`	BIGINT	NOT NULL	COMMENT '타임캡슐 ID',
 	`inviter_id`	BIGINT	NOT NULL	COMMENT '초대 링크 생성자 ID',
-	`invitee_id`	BIGINT	NULL	COMMENT '이 링크를 선점한 회원 ID. 발급 시점엔 NULL(공유 링크)이고, 로그인한 회원이 처음 열면 그 회원으로 고정된다',
 	`invite_token`	VARCHAR(100)	NOT NULL	UNIQUE	COMMENT '초대 링크 식별 토큰',
 	`target_role`	VARCHAR(20)	NOT NULL	DEFAULT 'PARTICIPANT'	COMMENT '초대 대상 역할: RECIPIENT, PARTICIPANT',
 	`status`	VARCHAR(20)	NOT NULL	DEFAULT 'ACTIVE'	COMMENT '초대 링크 상태: ACTIVE, EXPIRED, REVOKED',
@@ -202,12 +201,6 @@ ALTER TABLE `time_capsules` ADD INDEX `IDX_TIME_CAPSULES_STATUS_OPEN_AT` (
 -- 탭 홈 초대 배너 · 받은 초대 목록이 회원별로 대기 중인 초대를 찾는 조회다 (이슈 #42)
 ALTER TABLE `capsule_invitees` ADD INDEX `IDX_CAPSULE_INVITEES_USER_ID_STATUS` (
 	`user_id`,
-	`status`
-);
-
--- 받은 초대 목록 조회가 회원별로 지정형 초대를 찾는 조회다
-ALTER TABLE `capsule_invites` ADD INDEX `IDX_CAPSULE_INVITES_INVITEE_ID_STATUS` (
-	`invitee_id`,
 	`status`
 );
 
