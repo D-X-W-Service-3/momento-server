@@ -2,7 +2,6 @@ package com.momento.server.domain.timecapsule;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.http.HttpHeaders.AUTHORIZATION;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -287,51 +286,6 @@ class CapsuleInviteIntegrationTest {
         .andExpect(jsonPath("$.code").value("CAPSULE_OWNER_ONLY"));
   }
 
-  // ---------- 취소 ----------
-
-  @Test
-  @DisplayName("OWNER 가 취소하면 200 이고 링크는 REVOKED 된다")
-  void ownerCancelsInvite() throws Exception {
-    Long inviteId = issueAndGetId(ownerToken, capsule.getId(), "PARTICIPANT");
-
-    mockMvc
-        .perform(
-            delete("/v1/time-capsules/{capsuleId}/invites/{inviteId}", capsule.getId(), inviteId)
-                .header(AUTHORIZATION, bearer(ownerToken)))
-        .andExpect(status().isOk());
-
-    assertThat(capsuleInviteRepository.findById(inviteId).orElseThrow().getStatus())
-        .isEqualTo(InviteStatus.REVOKED);
-  }
-
-  @Test
-  @DisplayName("이미 취소된 링크를 다시 취소해도 에러 없이 성공한다")
-  void cancelIsIdempotent() throws Exception {
-    Long inviteId = issueAndGetId(ownerToken, capsule.getId(), "PARTICIPANT");
-
-    mockMvc
-        .perform(
-            delete("/v1/time-capsules/{capsuleId}/invites/{inviteId}", capsule.getId(), inviteId)
-                .header(AUTHORIZATION, bearer(ownerToken)))
-        .andExpect(status().isOk());
-    mockMvc
-        .perform(
-            delete("/v1/time-capsules/{capsuleId}/invites/{inviteId}", capsule.getId(), inviteId)
-                .header(AUTHORIZATION, bearer(ownerToken)))
-        .andExpect(status().isOk());
-  }
-
-  @Test
-  @DisplayName("존재하지 않는 초대 ID 를 취소하면 404 다")
-  void cancelUnknownInviteIsNotFound() throws Exception {
-    mockMvc
-        .perform(
-            delete("/v1/time-capsules/{capsuleId}/invites/{inviteId}", capsule.getId(), 999_999L)
-                .header(AUTHORIZATION, bearer(ownerToken)))
-        .andExpect(status().isNotFound())
-        .andExpect(jsonPath("$.code").value("INVITE_NOT_FOUND"));
-  }
-
   // ---------- 미리보기 (선점) ----------
 
   @Test
@@ -572,15 +526,16 @@ class CapsuleInviteIntegrationTest {
   }
 
   @Test
-  @DisplayName("취소된 링크를 수락하면 404 다")
+  @DisplayName("재생성으로 무효가 된 링크를 수락하면 404 다")
   void acceptRejectsRevokedInvite() throws Exception {
-    Long inviteId = issueAndGetId(ownerToken, capsule.getId(), "PARTICIPANT");
-    String token = capsuleInviteRepository.findById(inviteId).orElseThrow().getInviteToken();
+    String token = issue(ownerToken, capsule.getId(), "PARTICIPANT");
     mockMvc
         .perform(
-            delete("/v1/time-capsules/{capsuleId}/invites/{inviteId}", capsule.getId(), inviteId)
-                .header(AUTHORIZATION, bearer(ownerToken)))
-        .andExpect(status().isOk());
+            post("/v1/time-capsules/{capsuleId}/invites/regenerate", capsule.getId())
+                .header(AUTHORIZATION, bearer(ownerToken))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(body("PARTICIPANT")))
+        .andExpect(status().isCreated());
 
     mockMvc
         .perform(
@@ -759,11 +714,6 @@ class CapsuleInviteIntegrationTest {
             .getContentAsString();
 
     return JSON.readTree(response).path("data").path("inviteToken").asText();
-  }
-
-  private Long issueAndGetId(String token, Long capsuleId, String targetRole) throws Exception {
-    String inviteToken = issue(token, capsuleId, targetRole);
-    return capsuleInviteRepository.findByInviteToken(inviteToken).orElseThrow().getId();
   }
 
   private static String body(String targetRole) {

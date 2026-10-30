@@ -31,10 +31,6 @@ public class CapsuleInviteFacade {
     return CapsuleInviteResponse.from(capsuleInviteService.regenerate(capsuleId, userId, request));
   }
 
-  public void cancel(Long capsuleId, Long userId, Long inviteId) {
-    capsuleInviteService.cancel(capsuleId, userId, inviteId);
-  }
-
   public CapsuleInvitePreviewResponse getPreview(String inviteToken, Long userId) {
     return toPreviewResponse(capsuleInviteService.getPreview(inviteToken, userId));
   }

@@ -27,9 +27,6 @@ public interface CapsuleInviteRepository extends JpaRepository<CapsuleInvite, Lo
       @Param("inviteeId") Long inviteeId,
       @Param("status") InviteStatus status);
 
-  /** 취소 대상 조회. 다른 캡슐의 초대 ID 는 없는 것으로 취급한다. */
-  Optional<CapsuleInvite> findByIdAndTimeCapsuleId(Long id, Long timeCapsuleId);
-
   /**
    * 검증용. 서비스 로직에선 더 이상 안 쓴다(미리보기·수락·거절 모두 선점 때문에 잠금이 필요해 {@link #findByInviteTokenForUpdate} 를 쓴다).
    */

@@ -32,12 +32,4 @@ public interface CapsuleInviteApi {
       @Parameter(hidden = true) UserPrincipal principal,
       @Parameter(description = "타임캡슐 ID", example = "12") Long capsuleId,
       @Valid CapsuleInviteCreateRequest request);
-
-  @Operation(
-      summary = "초대 링크 취소",
-      description = "OWNER 만 호출할 수 있다. 이미 취소되었거나 만료된 링크를 다시 취소해도 에러 없이 성공한다.")
-  CommonResponse<?> cancelInvite(
-      @Parameter(hidden = true) UserPrincipal principal,
-      @Parameter(description = "타임캡슐 ID", example = "12") Long capsuleId,
-      @Parameter(description = "초대 ID", example = "31") Long inviteId);
 }

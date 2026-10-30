@@ -81,21 +81,6 @@ public class CapsuleInviteService {
   }
 
   /**
-   * 없거나 다른 캡슐의 초대 ID 는 404 다. 이미 취소·만료된 링크를 다시 취소하는 건(초대 자체는 존재) 에러 없이 성공한다(REST DELETE 의 멱등 관례).
-   */
-  @Transactional
-  public void cancel(Long capsuleId, Long userId, Long inviteId) {
-    requireOwner(capsuleId, userId);
-
-    CapsuleInvite invite =
-        capsuleInviteRepository
-            .findByIdAndTimeCapsuleId(inviteId, capsuleId)
-            .orElseThrow(() -> new ApiException(CapsuleErrorCode.INVITE_NOT_FOUND));
-
-    invite.revoke();
-  }
-
-  /**
    * 로그인한 회원이 이 링크를 처음 열면 그 회원에게 고정한다({@link CapsuleInvite#claim}). 이미 다른 회원이 선점한 링크면 존재하지 않는 것과 똑같이
    * 404 다 — "누가 이미 선점했다"는 사실 자체를 드러내지 않는다.
    */
