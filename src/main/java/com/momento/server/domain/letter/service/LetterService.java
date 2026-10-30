@@ -13,6 +13,7 @@ import java.time.Clock;
 import java.time.LocalDateTime;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
@@ -50,6 +51,29 @@ public class LetterService {
             .status(LetterStatus.SUBMITTED)
             .submittedAt(now)
             .build());
+  }
+
+  /**
+   * 캡슐 ID만 먼저 읽고 캡슐 → 편지 순서로 잠근다. 초기 조회로 편지를 캐시에 올리지 않는다. READ_COMMITTED는 잠금을 기다리는 동안 내보내진 멤버의 상태도
+   * 최신 값으로 읽기 위해 필요하다.
+   */
+  @Transactional(isolation = Isolation.READ_COMMITTED)
+  public void delete(Long letterId, Long userId) {
+    Long capsuleId =
+        letterRepository
+            .findCapsuleIdForDeletion(letterId, userId)
+            .orElseThrow(() -> new ApiException(LetterErrorCode.LETTER_NOT_FOUND));
+    TimeCapsule capsule = timeCapsuleService.getActiveCapsuleForUpdate(capsuleId);
+    timeCapsuleService.requireActiveMember(capsuleId, userId);
+    Letter letter =
+        letterRepository
+            .findActiveByIdForUpdate(letterId, userId, capsuleId)
+            .orElseThrow(() -> new ApiException(LetterErrorCode.LETTER_NOT_FOUND));
+    LocalDateTime now = LocalDateTime.now(clock);
+    if (!capsule.isLetterWritingOpen(now)) {
+      throw new ApiException(LetterErrorCode.LETTER_WRITING_CLOSED);
+    }
+    letter.delete(now);
   }
 
   public LetterDetail getMine(Long capsuleId, Long userId) {

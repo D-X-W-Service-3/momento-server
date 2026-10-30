@@ -18,4 +18,8 @@ public class LetterFacade {
   public LetterResponse getMine(Long capsuleId, Long userId) {
     return LetterResponse.from(letterService.getMine(capsuleId, userId));
   }
+
+  public void delete(Long letterId, Long userId) {
+    letterService.delete(letterId, userId);
+  }
 }
