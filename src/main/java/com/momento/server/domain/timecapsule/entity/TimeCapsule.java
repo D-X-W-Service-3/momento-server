@@ -132,11 +132,16 @@ public class TimeCapsule extends BaseTimeEntity {
 
   /** 현재 두 공개 범위 모두에서 모든 참여 역할이 작성 가능하다. 상태·공개·마감 시각은 함께 검사한다. */
   public LetterWritingEligibility getLetterWritingEligibility(MemberRole role, LocalDateTime now) {
-    if (status != CapsuleStatus.WRITING
-        || !now.isBefore(openAt)
-        || !now.isBefore(letterDeadlineAt)) {
+    if (!isLetterWritingOpen(now)) {
       return LetterWritingEligibility.CLOSED;
     }
     return LetterWritingEligibility.ALLOWED;
+  }
+
+  /** 편지 작성·삭제 기간의 공통 조건. 스케줄러 전이 전에도 마감·공개 정각부터 닫힌다. */
+  public boolean isLetterWritingOpen(LocalDateTime now) {
+    return status == CapsuleStatus.WRITING
+        && now.isBefore(letterDeadlineAt)
+        && now.isBefore(openAt);
   }
 }
