@@ -259,7 +259,7 @@ class CapsuleMemberIntegrationTest {
             post("/v1/time-capsules/{capsuleId}/letters", capsule.getId())
                 .header(AUTHORIZATION, bearer(participant))
                 .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"content\": \"편지\"}"))
+                .content("{\"title\": \"제목\", \"content\": \"편지\", \"themeType\": \"COZY\"}"))
         .andExpect(status().isNotFound())
         .andExpect(jsonPath("$.code").value("CAPSULE_NOT_FOUND"));
   }
@@ -360,7 +360,9 @@ class CapsuleMemberIntegrationTest {
               () -> {
                 start.await();
                 return letterService.create(
-                    capsule.getId(), participant.getId(), new LetterCreateRequest("편지", null));
+                    capsule.getId(),
+                    participant.getId(),
+                    new LetterCreateRequest("제목", "편지", "COZY"));
               });
       Future<?> remove =
           executor.submit(

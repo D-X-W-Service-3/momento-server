@@ -1,6 +1,7 @@
 package com.momento.server.domain.letter;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.BDDMockito.given;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -28,11 +29,14 @@ import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -48,12 +52,15 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 /** 실제 인증 필터와 트랜잭션 커밋을 포함한다. 테스트 전체를 트랜잭션으로 감싸지 않는다. */
 @SpringBootTest
 @AutoConfigureMockMvc
 class LetterIntegrationTest {
-  private static final String BODY = "{\"content\":\"내 편지\",\"themeType\":\"WATERCOLOR\"}";
+  private static final String BODY =
+      "{\"title\":\"편지 제목\",\"content\":\"내 편지\",\"themeType\":\"WATERCOLOR\"}";
   @Autowired private MockMvc mvc;
   @Autowired private TokenProvider tokens;
   @Autowired private UserRepository users;
@@ -62,6 +69,7 @@ class LetterIntegrationTest {
   @Autowired private LetterRepository letters;
   @Autowired private JdbcTemplate jdbc;
   @Autowired private ObjectMapper objectMapper;
+  @Autowired private PlatformTransactionManager transactionManager;
   @MockitoBean private Clock clock;
   private static final Instant NOW = Instant.parse("2026-09-14T12:00:00Z");
   private User owner;
@@ -98,19 +106,25 @@ class LetterIntegrationTest {
   }
 
   @Test
-  void createsDraftAndReadsOwnLetter() throws Exception {
+  void createsSubmittedLetterAndReadsOwnLetter() throws Exception {
     create(token, BODY)
         .andExpect(status().isCreated())
-        .andExpect(jsonPath("$.data.capsuleId").value(capsule.getId()))
-        .andExpect(jsonPath("$.data.status").value("DRAFT"))
-        .andExpect(jsonPath("$.data.content").value("내 편지"))
-        .andExpect(jsonPath("$.data.themeType").value("WATERCOLOR"));
+        .andExpect(jsonPath("$.status").value(201))
+        .andExpect(jsonPath("$.code").value("SUCCESS"))
+        .andExpect(jsonPath("$.message").value("요청에 성공했습니다."))
+        .andExpect(jsonPath("$.data").doesNotExist());
     Letter saved = letters.findAll().getFirst();
-    assertThat(saved.getSubmittedAt()).isNull();
+    assertThat(saved.getStatus()).isEqualTo(LetterStatus.SUBMITTED);
+    assertThat(saved.getSubmittedAt()).isEqualTo(LocalDateTime.ofInstant(NOW, ZoneOffset.UTC));
+    assertThat(saved.getTitle()).isEqualTo("편지 제목");
+    assertThat(saved.getContent()).isEqualTo("내 편지");
+    assertThat(saved.getThemeType()).isEqualTo("WATERCOLOR");
+    assertThat(capsules.countLettersByStatus(capsule.getId(), LetterStatus.SUBMITTED)).isEqualTo(1);
     assertThat(saved.getAuthor().getId()).isEqualTo(owner.getId());
     read(token)
         .andExpect(status().isOk())
-        .andExpect(jsonPath("$.data.letterId").value(saved.getId()));
+        .andExpect(jsonPath("$.data.letterId").value(saved.getId()))
+        .andExpect(jsonPath("$.data.status").value("SUBMITTED"));
   }
 
   @Test
@@ -124,7 +138,7 @@ class LetterIntegrationTest {
   @Test
   void duplicateDoesNotOverwrite() throws Exception {
     create(token, BODY).andExpect(status().isCreated());
-    create(token, "{\"content\":\"덮어쓰기\"}")
+    create(token, "{\"title\":\"다른 제목\",\"content\":\"덮어쓰기\",\"themeType\":\"COZY\"}")
         .andExpect(status().isConflict())
         .andExpect(jsonPath("$.code").value("LETTER_ALREADY_EXISTS"));
     assertThat(letters.count()).isEqualTo(1);
@@ -292,6 +306,7 @@ class LetterIntegrationTest {
         capsule.getId());
     create(token, BODY).andExpect(status().is(expectedStatus));
     assertThat(letters.count()).isEqualTo(1);
+    assertThat(letters.findAll().getFirst().getStatus()).isEqualTo(LetterStatus.SUBMITTED);
   }
 
   @ParameterizedTest
@@ -370,37 +385,39 @@ class LetterIntegrationTest {
   }
 
   @Test
-  void emptyDraftAndMissingThemeAreAllowed() throws Exception {
-    create(token, "{\"content\":\"\"}")
-        .andExpect(status().isCreated())
-        .andExpect(jsonPath("$.data.content").value(""));
-    Letter saved = letters.findAll().getFirst();
-    assertThat(saved.getContent()).isEmpty();
-    assertThat(saved.getThemeType()).isNull();
+  void missingThemeIsRejected() throws Exception {
+    create(token, "{\"title\":\"제목\",\"content\":\"내 편지\"}").andExpect(status().isBadRequest());
+    assertThat(letters.count()).isZero();
   }
 
   @Test
   void acceptsMaximumContentAndThemeLengths() throws Exception {
-    String content = "가".repeat(10000);
+    String content = "가".repeat(500);
     String theme = "T".repeat(20);
     create(
             token,
             objectMapper.writeValueAsString(
-                java.util.Map.of("content", content, "themeType", theme)))
+                java.util.Map.of("title", "가".repeat(50), "content", content, "themeType", theme)))
         .andExpect(status().isCreated());
     Letter saved = letters.findAll().getFirst();
+    assertThat(saved.getTitle()).isEqualTo("가".repeat(50));
     assertThat(saved.getContent()).isEqualTo(content);
     assertThat(saved.getThemeType()).isEqualTo(theme);
   }
 
   @ParameterizedTest
-  @CsvSource({"10001,20", "10000,21"})
+  @CsvSource({"501,20", "500,21"})
   void rejectsLengthsAboveLimits(int contentLength, int themeLength) throws Exception {
     create(
             token,
             objectMapper.writeValueAsString(
                 java.util.Map.of(
-                    "content", "가".repeat(contentLength), "themeType", "T".repeat(themeLength))))
+                    "title",
+                    "제목",
+                    "content",
+                    "가".repeat(contentLength),
+                    "themeType",
+                    "T".repeat(themeLength))))
         .andExpect(status().isBadRequest())
         .andExpect(jsonPath("$.code").value("INVALID_INPUT_VALUE"));
     assertThat(letters.count()).isZero();
@@ -462,6 +479,70 @@ class LetterIntegrationTest {
         .andExpect(status().isConflict())
         .andExpect(jsonPath("$.code").value("LETTER_ALREADY_EXISTS"));
     assertThat(letters.count()).isEqualTo(1);
+  }
+
+  @Test
+  void creationWaitingForCapsuleLockRechecksDeadline() throws Exception {
+    Instant deadline = NOW.plusSeconds(1);
+    jdbc.update(
+        "update time_capsules set letter_deadline_at = ? where id = ?",
+        LocalDateTime.ofInstant(deadline, ZoneOffset.UTC),
+        capsule.getId());
+    try (var executor = Executors.newSingleThreadExecutor()) {
+      List<Future<Integer>> pending = new ArrayList<>();
+      new TransactionTemplate(transactionManager)
+          .executeWithoutResult(
+              tx -> {
+                capsules.findActiveByIdForUpdate(capsule.getId()).orElseThrow();
+                CountDownLatch started = new CountDownLatch(1);
+                Future<Integer> result =
+                    executor.submit(
+                        () -> {
+                          started.countDown();
+                          return create(token, BODY).andReturn().getResponse().getStatus();
+                        });
+                pending.add(result);
+                try {
+                  assertThat(started.await(5, TimeUnit.SECONDS)).isTrue();
+                  assertThatThrownBy(() -> result.get(200, TimeUnit.MILLISECONDS))
+                      .isInstanceOf(TimeoutException.class);
+                  given(clock.instant()).willReturn(deadline);
+                } catch (InterruptedException e) {
+                  Thread.currentThread().interrupt();
+                  throw new IllegalStateException(e);
+                }
+              });
+      assertThat(pending.getFirst().get(10, TimeUnit.SECONDS)).isEqualTo(409);
+    }
+    assertThat(letters.count()).isZero();
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"title", "content", "themeType"})
+  void rejectsMissingNullEmptyAndBlankFields(String field) throws Exception {
+    for (String value : new String[] {null, "", " ", "\t\n"}) {
+      Map<String, Object> body =
+          new HashMap<>(Map.of("title", "제목", "content", "본문", "themeType", "COZY"));
+      body.put(field, value);
+      create(token, objectMapper.writeValueAsString(body))
+          .andExpect(status().isBadRequest())
+          .andExpect(jsonPath("$.code").value("INVALID_INPUT_VALUE"));
+    }
+    Map<String, Object> body =
+        new HashMap<>(Map.of("title", "제목", "content", "본문", "themeType", "COZY"));
+    body.remove(field);
+    create(token, objectMapper.writeValueAsString(body)).andExpect(status().isBadRequest());
+    assertThat(letters.count()).isZero();
+  }
+
+  @Test
+  void rejectsTitleAboveFiftyCharacters() throws Exception {
+    create(
+            token,
+            objectMapper.writeValueAsString(
+                Map.of("title", "가".repeat(51), "content", "본문", "themeType", "COZY")))
+        .andExpect(status().isBadRequest());
+    assertThat(letters.count()).isZero();
   }
 
   private String path() {

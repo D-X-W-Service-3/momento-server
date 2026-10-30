@@ -2,6 +2,7 @@ package com.momento.server.domain.letter.service;
 
 import com.momento.server.domain.letter.dto.request.LetterCreateRequest;
 import com.momento.server.domain.letter.entity.Letter;
+import com.momento.server.domain.letter.entity.LetterStatus;
 import com.momento.server.domain.letter.exception.LetterErrorCode;
 import com.momento.server.domain.letter.repository.LetterRepository;
 import com.momento.server.domain.timecapsule.entity.CapsuleMember;
@@ -31,7 +32,8 @@ public class LetterService {
       throw new ApiException(LetterErrorCode.LETTER_ALREADY_EXISTS);
     }
     // 잠금 대기 중 마감될 수 있으므로 시간은 잠금을 얻은 뒤 읽는다.
-    switch (capsule.getLetterWritingEligibility(member.getRole(), LocalDateTime.now(clock))) {
+    LocalDateTime now = LocalDateTime.now(clock);
+    switch (capsule.getLetterWritingEligibility(member.getRole(), now)) {
       case NOT_ALLOWED -> throw new ApiException(LetterErrorCode.LETTER_WRITING_NOT_ALLOWED);
       case CLOSED -> throw new ApiException(LetterErrorCode.LETTER_WRITING_CLOSED);
       case ALLOWED -> {
@@ -42,8 +44,11 @@ public class LetterService {
         Letter.builder()
             .timeCapsule(capsule)
             .author(member.getUser())
+            .title(request.title())
             .content(request.content())
             .themeType(request.themeType())
+            .status(LetterStatus.SUBMITTED)
+            .submittedAt(now)
             .build());
   }
 

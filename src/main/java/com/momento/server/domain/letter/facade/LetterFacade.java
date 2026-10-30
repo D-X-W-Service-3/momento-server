@@ -11,8 +11,8 @@ import org.springframework.stereotype.Component;
 public class LetterFacade {
   private final LetterService letterService;
 
-  public LetterResponse create(Long capsuleId, Long userId, LetterCreateRequest request) {
-    return LetterResponse.from(letterService.create(capsuleId, userId, request));
+  public void create(Long capsuleId, Long userId, LetterCreateRequest request) {
+    letterService.create(capsuleId, userId, request);
   }
 
   public LetterResponse getMine(Long capsuleId, Long userId) {
