@@ -3,7 +3,6 @@ package com.momento.server.domain.timecapsule.service;
 import com.momento.server.domain.timecapsule.dto.request.CapsuleInviteCreateRequest;
 import com.momento.server.domain.timecapsule.entity.CapsuleInvite;
 import com.momento.server.domain.timecapsule.entity.CapsuleMember;
-import com.momento.server.domain.timecapsule.entity.CapsuleStatus;
 import com.momento.server.domain.timecapsule.entity.CapsuleType;
 import com.momento.server.domain.timecapsule.entity.InviteStatus;
 import com.momento.server.domain.timecapsule.entity.MemberRole;
@@ -46,13 +45,13 @@ public class CapsuleInviteService {
   @Transactional
   public CapsuleInvite issue(Long capsuleId, Long userId, CapsuleInviteCreateRequest request) {
     TimeCapsule capsule = timeCapsuleService.getActiveCapsuleForUpdate(capsuleId);
-    requireOwner(capsuleId, userId);
+    CapsuleMember me = timeCapsuleService.requireActiveMember(capsuleId, userId);
+    timeCapsuleService.requireManageable(capsule, me);
     validateTargetRole(capsule.getCapsuleType(), request.targetRole());
-    requireEditable(capsule);
 
     return capsuleInviteRepository
         .findActiveSlot(capsuleId, request.targetRole(), null, InviteStatus.ACTIVE)
-        .orElseGet(() -> createInvite(capsule, userId, request.targetRole()));
+        .orElseGet(() -> createInvite(capsule, me.getUser(), request.targetRole()));
   }
 
   /**
@@ -62,22 +61,15 @@ public class CapsuleInviteService {
   @Transactional
   public CapsuleInvite regenerate(Long capsuleId, Long userId, CapsuleInviteCreateRequest request) {
     TimeCapsule capsule = timeCapsuleService.getActiveCapsuleForUpdate(capsuleId);
-    CapsuleMember requester = requireOwner(capsuleId, userId);
+    CapsuleMember me = timeCapsuleService.requireActiveMember(capsuleId, userId);
+    timeCapsuleService.requireManageable(capsule, me);
     validateTargetRole(capsule.getCapsuleType(), request.targetRole());
-    requireEditable(capsule);
 
     capsuleInviteRepository
         .findActiveSlot(capsuleId, request.targetRole(), null, InviteStatus.ACTIVE)
         .ifPresent(CapsuleInvite::revoke);
 
-    return capsuleInviteRepository.save(
-        CapsuleInvite.builder()
-            .timeCapsule(capsule)
-            .inviter(requester.getUser())
-            .inviteToken(generateToken())
-            .targetRole(request.targetRole())
-            .expiresAt(expiresAt(capsule))
-            .build());
+    return createInvite(capsule, me.getUser(), request.targetRole());
   }
 
   /**
@@ -113,13 +105,15 @@ public class CapsuleInviteService {
     CapsuleInvite invite = claimAndAuthorize(inviteToken, userId);
 
     TimeCapsule capsule = timeCapsuleService.getActiveCapsule(invite.getTimeCapsule().getId());
-    if (!invite.isUsable(LocalDateTime.now(clock))) {
+    LocalDateTime now = LocalDateTime.now(clock);
+    if (!invite.isUsable(now)) {
       throw new ApiException(CapsuleErrorCode.INVITE_NOT_FOUND);
     }
-    requireEditable(capsule);
+    if (!capsule.isEditable(now)) {
+      throw new ApiException(CapsuleErrorCode.CAPSULE_NOT_EDITABLE);
+    }
 
     User user = userService.getActiveUser(userId);
-    LocalDateTime now = LocalDateTime.now(clock);
 
     capsuleMemberRepository
         .findByTimeCapsuleIdAndUserId(capsule.getId(), userId)
@@ -191,8 +185,7 @@ public class CapsuleInviteService {
     existing.reactivate(targetRole, now);
   }
 
-  private CapsuleInvite createInvite(TimeCapsule capsule, Long userId, MemberRole targetRole) {
-    User inviter = userService.getActiveUser(userId);
+  private CapsuleInvite createInvite(TimeCapsule capsule, User inviter, MemberRole targetRole) {
     return capsuleInviteRepository.save(
         CapsuleInvite.builder()
             .timeCapsule(capsule)
@@ -226,21 +219,6 @@ public class CapsuleInviteService {
     if (!allowed) {
       throw new ApiException(CapsuleErrorCode.INVALID_INVITE_ROLE);
     }
-  }
-
-  /** 편지 작성이 끝난(LOCKED) 이후나 이미 공개된(OPENED) 캡슐에서는 초대 발급·재생성·수락을 모두 막는다. */
-  private void requireEditable(TimeCapsule capsule) {
-    if (capsule.getStatus() != CapsuleStatus.WRITING) {
-      throw new ApiException(CapsuleErrorCode.CAPSULE_NOT_EDITABLE);
-    }
-  }
-
-  private CapsuleMember requireOwner(Long capsuleId, Long userId) {
-    CapsuleMember member = timeCapsuleService.requireActiveMember(capsuleId, userId);
-    if (member.getRole() != MemberRole.OWNER) {
-      throw new ApiException(CapsuleErrorCode.CAPSULE_OWNER_ONLY);
-    }
-    return member;
   }
 
   /** 상태를 담지 않는 무작위 값이라 충돌 확률이 무시할 수준이다. 별도 유일성 조회 없이 그대로 저장한다. */

@@ -197,6 +197,21 @@ class CapsuleInviteIntegrationTest {
   }
 
   @Test
+  @DisplayName("편지 수정 마감이 지났으면 스케줄러가 잠그기 전(WRITING)이어도 발급할 수 없다")
+  void issueRejectedAfterDeadlineBeforeLock() throws Exception {
+    passDeadline(capsule);
+
+    mockMvc
+        .perform(
+            post("/v1/time-capsules/{capsuleId}/invites", capsule.getId())
+                .header(AUTHORIZATION, bearer(ownerToken))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(body("PARTICIPANT")))
+        .andExpect(status().isConflict())
+        .andExpect(jsonPath("$.code").value("CAPSULE_NOT_EDITABLE"));
+  }
+
+  @Test
   @DisplayName("인증 없이 발급할 수 없다")
   void issueRequiresAuthentication() throws Exception {
     mockMvc
@@ -580,6 +595,20 @@ class CapsuleInviteIntegrationTest {
   }
 
   @Test
+  @DisplayName("편지 수정 마감이 지났으면 스케줄러가 잠그기 전(WRITING)이어도 수락할 수 없다")
+  void acceptRejectedAfterDeadlineBeforeLock() throws Exception {
+    String token = issue(ownerToken, capsule.getId(), "PARTICIPANT");
+    passDeadline(capsule);
+
+    mockMvc
+        .perform(
+            post("/v1/invites/{inviteToken}/accept", token)
+                .header(AUTHORIZATION, bearer(tokenOf(saveUser("invitee-kakao-id", "민건")))))
+        .andExpect(status().isConflict())
+        .andExpect(jsonPath("$.code").value("CAPSULE_NOT_EDITABLE"));
+  }
+
+  @Test
   @DisplayName("존재하지 않는 토큰을 수락하면 404 다")
   void acceptUnknownTokenIsNotFound() throws Exception {
     mockMvc
@@ -742,6 +771,17 @@ class CapsuleInviteIntegrationTest {
             entityManager
                 .createQuery("update TimeCapsule c set c.status = :status where c.id = :id")
                 .setParameter("status", CapsuleStatus.LOCKED)
+                .setParameter("id", capsule.getId())
+                .executeUpdate());
+  }
+
+  /** 편지 수정 마감만 지나게 한다. 상태는 WRITING 그대로라, 스케줄러가 LOCKED 로 바꾸기 전 틈을 재현한다. 링크의 만료 시각은 건드리지 않는다. */
+  private void passDeadline(TimeCapsule capsule) {
+    transactionTemplate.executeWithoutResult(
+        tx ->
+            entityManager
+                .createQuery("update TimeCapsule c set c.letterDeadlineAt = :at where c.id = :id")
+                .setParameter("at", LocalDateTime.now().minusMinutes(1))
                 .setParameter("id", capsule.getId())
                 .executeUpdate());
   }
