@@ -68,4 +68,22 @@ public class Memory extends BaseTimeEntity {
 
   @Column(name = "deleted_at")
   private LocalDateTime deletedAt;
+
+  /** 보낸 값만 바꾼다. null 인 값은 그대로 둔다(명세: 보낸 경우에만 수정). */
+  public void update(String title, String content, LocalDate memoryDate) {
+    if (title != null) {
+      this.title = title;
+    }
+    if (content != null) {
+      this.content = content;
+    }
+    if (memoryDate != null) {
+      this.memoryDate = memoryDate;
+    }
+  }
+
+  /** 소프트 삭제. 아카이브 목록 · 캘린더 · 상세 쿼리가 모두 {@code deletedAt} 이 빈 추억만 읽는다. */
+  public void delete(LocalDateTime now) {
+    this.deletedAt = now;
+  }
 }
