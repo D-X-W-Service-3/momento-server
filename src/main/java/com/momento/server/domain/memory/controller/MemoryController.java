@@ -12,6 +12,7 @@ import com.momento.server.global.common.dto.CommonResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -48,6 +49,14 @@ public class MemoryController implements MemoryApi {
       @PathVariable Long memoryId,
       @Valid @RequestBody MemoryUpdateRequest request) {
     memoryFacade.update(memoryId, principal.getUserId(), request);
+    return CommonResponse.ok();
+  }
+
+  @Override
+  @DeleteMapping("/{memoryId}")
+  public CommonResponse<?> deleteMemory(
+      @AuthenticationPrincipal UserPrincipal principal, @PathVariable Long memoryId) {
+    memoryFacade.delete(memoryId, principal.getUserId());
     return CommonResponse.ok();
   }
 

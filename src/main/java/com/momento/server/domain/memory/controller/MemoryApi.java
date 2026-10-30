@@ -50,6 +50,16 @@ public interface MemoryApi {
       @Valid MemoryUpdateRequest request);
 
   @Operation(
+      summary = "아카이브 삭제",
+      description =
+          "아카이브 상세 메뉴의 '삭제하기' 로 아카이브를 삭제한다. memories.deleted_at 을 채우는 소프트 삭제이고, 지운 아카이브는 상세 · 목록 ·"
+              + " 캘린더에 나오지 않는다. 본인이 등록한 아카이브만 삭제할 수 있고, 없는 아카이브 · 이미 삭제된 아카이브 · 다른 회원의 아카이브는"
+              + " 똑같이 404 MEMORY_NOT_FOUND 다. 응답 데이터는 없다.")
+  CommonResponse<?> deleteMemory(
+      @Parameter(hidden = true) UserPrincipal principal,
+      @Parameter(description = "아카이브 식별자", example = "3") Long memoryId);
+
+  @Operation(
       summary = "추억 목록 조회",
       description =
           "로그인한 사용자가 직접 등록한 추억만 memoryDate 최신순으로 조회한다. "

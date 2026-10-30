@@ -2,6 +2,7 @@ package com.momento.server.domain.memory;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.containsString;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -300,5 +301,64 @@ class MemoryManageIntegrationTest {
     }
 
     assertThat(reload(others).getTitle()).isEqualTo("남의 추억");
+  }
+
+  private ResultActions deleteMemory(Long memoryId) throws Exception {
+    return mockMvc.perform(
+        delete("/v1/memories/{memoryId}", memoryId).header("Authorization", "Bearer " + token));
+  }
+
+  @Test
+  @DisplayName("삭제하면 data 없는 200 이고, 삭제 시각이 채워지며 상세 · 목록에서 사라진다")
+  void deletesMemory() throws Exception {
+    Memory memory = saveMemory(me, "제주도 여행");
+    saveImage(memory, imageKey(me), 0);
+    saveMemory(me, "남길 추억");
+
+    deleteMemory(memory.getId())
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.data").doesNotExist());
+
+    assertThat(reload(memory).getDeletedAt()).isNotNull();
+    getMemory(memory.getId()).andExpect(status().isNotFound());
+    mockMvc
+        .perform(get("/v1/memories").header("Authorization", "Bearer " + token))
+        .andExpect(jsonPath("$.data.totalElements").value(1))
+        .andExpect(jsonPath("$.data.memories[0].title").value("남길 추억"));
+  }
+
+  @Test
+  @DisplayName("없는 아카이브 · 이미 삭제된 아카이브 · 다른 회원의 아카이브는 지울 수 없고 404 MEMORY_NOT_FOUND 다")
+  void deleteNotFound() throws Exception {
+    Memory deleted = saveDeletedMemory(me);
+    Memory others = saveMemory(other, "남의 추억");
+
+    for (Long memoryId : List.of(deleted.getId(), others.getId(), others.getId() + 1000)) {
+      deleteMemory(memoryId)
+          .andExpect(status().isNotFound())
+          .andExpect(jsonPath("$.code").value("MEMORY_NOT_FOUND"));
+    }
+
+    assertThat(reload(others).getDeletedAt()).isNull();
+  }
+
+  @Test
+  @DisplayName("토큰 없이 수정 · 삭제하면 401 이고 아무것도 바뀌지 않는다")
+  void manageRequiresAuthentication() throws Exception {
+    Memory memory = saveMemory(me, "제주도 여행");
+
+    mockMvc
+        .perform(
+            patch("/v1/memories/{memoryId}", memory.getId())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"title\": \"바뀐 이름\"}"))
+        .andExpect(status().isUnauthorized());
+    mockMvc
+        .perform(delete("/v1/memories/{memoryId}", memory.getId()))
+        .andExpect(status().isUnauthorized());
+
+    Memory unchanged = reload(memory);
+    assertThat(unchanged.getTitle()).isEqualTo("제주도 여행");
+    assertThat(unchanged.getDeletedAt()).isNull();
   }
 }

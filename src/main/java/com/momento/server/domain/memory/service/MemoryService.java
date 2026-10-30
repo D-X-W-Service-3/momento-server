@@ -14,7 +14,9 @@ import com.momento.server.domain.user.entity.User;
 import com.momento.server.global.common.code.GlobalErrorCode;
 import com.momento.server.global.common.exception.ApiException;
 import com.momento.server.global.common.storage.PresignedUrlProvider;
+import java.time.Clock;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -39,6 +41,7 @@ public class MemoryService {
   private final MemoryRepository memoryRepository;
   private final MemoryImageRepository memoryImageRepository;
   private final PresignedUrlProvider presignedUrlProvider;
+  private final Clock clock;
 
   /** 추억 하나와 첨부 이미지를 저장한다. 공개 범위는 요청으로 받지 않고 엔티티 기본값(PRIVATE)을 쓴다. */
   @Transactional
@@ -85,6 +88,12 @@ public class MemoryService {
     }
 
     memory.update(request.title(), request.content(), request.memoryDate());
+  }
+
+  /** 소프트 삭제. 사진 행과 S3 파일은 남겨 둔다. */
+  @Transactional
+  public void delete(Long memoryId, Long userId) {
+    getMine(memoryId, userId).delete(LocalDateTime.now(clock));
   }
 
   private List<String> currentImageKeys(Memory memory) {

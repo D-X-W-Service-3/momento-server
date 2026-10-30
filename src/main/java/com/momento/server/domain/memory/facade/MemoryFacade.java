@@ -42,6 +42,10 @@ public class MemoryFacade {
     memoryService.update(memoryId, userId, request);
   }
 
+  public void delete(Long memoryId, Long userId) {
+    memoryService.delete(memoryId, userId);
+  }
+
   public MemoryListResponse findMyMemories(
       Long userId, String keyword, Integer year, int page, int size) {
     MemoryPage result = memoryService.findMyMemories(userId, keyword, year, page, size);
