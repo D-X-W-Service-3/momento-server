@@ -277,7 +277,7 @@ class LetterIntegrationTest {
     "OWNER,ALL_MEMBERS,201",
     "PARTICIPANT,RECIPIENT_AND_AUTHOR,201",
     "PARTICIPANT,ALL_MEMBERS,201",
-    "RECIPIENT,RECIPIENT_AND_AUTHOR,403",
+    "RECIPIENT,RECIPIENT_AND_AUTHOR,201",
     "RECIPIENT,ALL_MEMBERS,201"
   })
   void creationChecksRoleAndVisibility(
@@ -290,13 +290,8 @@ class LetterIntegrationTest {
         "update time_capsules set visibility_type = ? where id = ?",
         visibility.name(),
         capsule.getId());
-    ResultActions result = create(token, BODY).andExpect(status().is(expectedStatus));
-    if (expectedStatus == 403) {
-      result.andExpect(jsonPath("$.code").value("LETTER_WRITING_NOT_ALLOWED"));
-      assertThat(letters.count()).isZero();
-    } else {
-      assertThat(letters.count()).isEqualTo(1);
-    }
+    create(token, BODY).andExpect(status().is(expectedStatus));
+    assertThat(letters.count()).isEqualTo(1);
   }
 
   @ParameterizedTest
@@ -436,10 +431,10 @@ class LetterIntegrationTest {
 
   @ParameterizedTest
   @CsvSource({
-    "RECIPIENT_AND_AUTHOR,403,LETTER_WRITING_NOT_ALLOWED",
+    "RECIPIENT_AND_AUTHOR,409,LETTER_WRITING_CLOSED",
     "ALL_MEMBERS,409,LETTER_WRITING_CLOSED"
   })
-  void recipientDenialDistinguishesPermissionFromDeadline(
+  void recipientCannotWriteAfterDeadlineInEitherVisibility(
       VisibilityType visibility, int expectedStatus, String expectedCode) throws Exception {
     jdbc.update(
         "update capsule_members set role = 'RECIPIENT' where time_capsule_id = ?", capsule.getId());
@@ -455,7 +450,7 @@ class LetterIntegrationTest {
   }
 
   @Test
-  void recipientCanReadExistingOwnLetterWithoutCreationPermission() throws Exception {
+  void recipientCanReadOwnLetterAndCannotCreateDuplicate() throws Exception {
     create(token, BODY).andExpect(status().isCreated());
     jdbc.update(
         "update capsule_members set role = 'RECIPIENT' where time_capsule_id = ?", capsule.getId());
