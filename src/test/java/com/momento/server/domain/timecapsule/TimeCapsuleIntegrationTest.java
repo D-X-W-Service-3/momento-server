@@ -26,8 +26,9 @@ import com.momento.server.global.common.auth.service.TokenProvider;
 import jakarta.persistence.EntityManager;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
+import java.time.LocalTime;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -58,8 +59,6 @@ import org.springframework.transaction.support.TransactionTemplate;
 class TimeCapsuleIntegrationTest {
 
   private static final ObjectMapper JSON = new ObjectMapper();
-  private static final DateTimeFormatter DATE_TIME =
-      DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss");
 
   @Autowired private MockMvc mockMvc;
   @Autowired private TokenProvider tokenProvider;
@@ -87,36 +86,89 @@ class TimeCapsuleIntegrationTest {
   // ---------- 생성 ----------
 
   @Test
-  @DisplayName("캡슐을 만들면 201 과 함께 편지를 쓸 수 있는 WRITING 상태로 생성된다")
+  @DisplayName("캡슐을 만들면 201 과 캡슐 ID 만 돌려주고, 편지를 쓸 수 있는 WRITING 상태로 저장된다")
   void createCapsule() throws Exception {
-    String openAt = future();
+    Map<String, Object> body = validBody();
+    body.put("title", "우리의 졸업 타임캡슐");
+    body.put("letterDeadlineDate", today().plusDays(10).toString());
+    body.put("openDate", today().plusDays(30).toString());
 
-    mockMvc
-        .perform(
-            post("/v1/time-capsules")
-                .header(AUTHORIZATION, bearer(ownerToken))
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(createBody("우리의 졸업 타임캡슐", "GROUP", "ALL_MEMBERS", openAt)))
-        .andExpect(status().isCreated())
-        .andExpect(jsonPath("$.data.capsuleId").isNumber())
-        .andExpect(jsonPath("$.data.title").value("우리의 졸업 타임캡슐"))
-        .andExpect(jsonPath("$.data.capsuleType").value("GROUP"))
-        .andExpect(jsonPath("$.data.visibilityType").value("ALL_MEMBERS"))
-        .andExpect(jsonPath("$.data.status").value("WRITING"))
-        .andExpect(jsonPath("$.data.openAt").value(openAt))
-        .andExpect(jsonPath("$.data.createdAt").isNotEmpty());
+    String response =
+        mockMvc
+            .perform(
+                post("/v1/time-capsules")
+                    .header(AUTHORIZATION, bearer(ownerToken))
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(JSON.writeValueAsString(body)))
+            .andExpect(status().isCreated())
+            .andExpect(jsonPath("$.data.capsuleId").isNumber())
+            .andExpect(jsonPath("$.data.title").doesNotExist())
+            .andReturn()
+            .getResponse()
+            .getContentAsString();
+
+    Long capsuleId = JSON.readTree(response).path("data").path("capsuleId").asLong();
+    TimeCapsule saved = timeCapsuleRepository.findById(capsuleId).orElseThrow();
+    assertThat(saved.getIconType()).isEqualTo("ICE_CREAM");
+    assertThat(saved.getTitle()).isEqualTo("우리의 졸업 타임캡슐");
+    assertThat(saved.getStatus()).isEqualTo(CapsuleStatus.WRITING);
+    assertThat(saved.getLetterDeadlineAt())
+        .isEqualTo(today().plusDays(10).atTime(LocalTime.of(23, 59, 59)));
+    assertThat(saved.getOpenAt()).isEqualTo(today().plusDays(30).atStartOfDay());
   }
 
   @Test
-  @DisplayName("설명은 1000자까지 받는다")
-  void descriptionUpTo1000CharsIsAccepted() throws Exception {
+  @DisplayName("이름은 20자, 설명은 45자까지 받는다")
+  void titleAndDescriptionUpToLimitAreAccepted() throws Exception {
+    Map<String, Object> body = validBody();
+    body.put("title", "가".repeat(20));
+    body.put("description", "가".repeat(45));
+
     mockMvc
         .perform(
             post("/v1/time-capsules")
                 .header(AUTHORIZATION, bearer(ownerToken))
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(createBodyWithDescription("가".repeat(1000))))
+                .content(JSON.writeValueAsString(body)))
         .andExpect(status().isCreated());
+  }
+
+  @Test
+  @DisplayName("오늘을 마감일로, 개봉일 2일 전을 마감일로 고를 수 있다")
+  void deadlineBoundariesAreAccepted() throws Exception {
+    mockMvc
+        .perform(
+            post("/v1/time-capsules")
+                .header(AUTHORIZATION, bearer(ownerToken))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(scheduleBody(today(), today().plusDays(2))))
+        .andExpect(status().isCreated());
+  }
+
+  @ParameterizedTest(name = "{0}")
+  @MethodSource("invalidSchedules")
+  @DisplayName("마감일이 오늘보다 이르거나 개봉일 2일 전보다 늦으면 400 이고 캡슐을 만들지 않는다")
+  void invalidScheduleIsRejected(String reason, String body) throws Exception {
+    mockMvc
+        .perform(
+            post("/v1/time-capsules")
+                .header(AUTHORIZATION, bearer(ownerToken))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(body))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.code").value("INVALID_CAPSULE_SCHEDULE"));
+
+    assertThat(timeCapsuleRepository.count()).isZero();
+    assertThat(capsuleMemberRepository.count()).isZero();
+  }
+
+  static Stream<Arguments> invalidSchedules() throws JsonProcessingException {
+    return Stream.of(
+        Arguments.of("마감일이 어제", scheduleBody(today().minusDays(1), today().plusDays(10))),
+        Arguments.of("마감일이 개봉일 전날", scheduleBody(today().plusDays(9), today().plusDays(10))),
+        Arguments.of("마감일이 개봉일과 같음", scheduleBody(today().plusDays(10), today().plusDays(10))),
+        Arguments.of("마감일이 개봉일보다 늦음", scheduleBody(today().plusDays(11), today().plusDays(10))),
+        Arguments.of("개봉일이 이미 지남", scheduleBody(today().minusDays(3), today().minusDays(1))));
   }
 
   @Test
@@ -127,22 +179,24 @@ class TimeCapsuleIntegrationTest {
             post("/v1/time-capsules")
                 .header(AUTHORIZATION, bearer(ownerToken))
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(createBody("나에게 쓰는 캡슐", "SELF", "ALL_MEMBERS", future())))
+                .content(createBody("나에게 쓰는 캡슐", "SELF", "ALL_MEMBERS")))
         .andExpect(status().isCreated())
-        .andExpect(jsonPath("$.data.capsuleType").value("SELF"))
-        .andExpect(jsonPath("$.data.visibilityType").value("ALL_MEMBERS"));
+        .andExpect(jsonPath("$.data.capsuleId").isNumber());
+
+    TimeCapsule saved = timeCapsuleRepository.findAll().get(0);
+    assertThat(saved.getCapsuleType()).isEqualTo(CapsuleType.SELF);
+    assertThat(saved.getVisibilityType()).isEqualTo(VisibilityType.ALL_MEMBERS);
   }
 
-  @ParameterizedTest(name = "SELF + {0} → 400")
-  @CsvSource({"RECIPIENT_ONLY", "RECIPIENT_AND_AUTHOR"})
+  @Test
   @DisplayName("나에게 쓰는 캡슐은 전체 공개 외의 범위를 거절하고 캡슐을 만들지 않는다")
-  void selfCapsuleRejectsOtherVisibilities(String visibilityType) throws Exception {
+  void selfCapsuleRejectsOtherVisibilities() throws Exception {
     mockMvc
         .perform(
             post("/v1/time-capsules")
                 .header(AUTHORIZATION, bearer(ownerToken))
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(createBody("나에게 쓰는 캡슐", "SELF", visibilityType, future())))
+                .content(createBody("나에게 쓰는 캡슐", "SELF", "RECIPIENT_AND_AUTHOR")))
         .andExpect(status().isBadRequest())
         .andExpect(jsonPath("$.code").value("INVALID_SELF_CAPSULE_VISIBILITY"));
 
@@ -152,14 +206,12 @@ class TimeCapsuleIntegrationTest {
 
   @ParameterizedTest(name = "{0} + {1} → 201")
   @CsvSource({
-    "FRIEND, RECIPIENT_ONLY",
     "FRIEND, RECIPIENT_AND_AUTHOR",
     "FRIEND, ALL_MEMBERS",
-    "GROUP,  RECIPIENT_ONLY",
     "GROUP,  RECIPIENT_AND_AUTHOR",
     "GROUP,  ALL_MEMBERS"
   })
-  @DisplayName("친구·그룹 캡슐은 세 공개 범위를 모두 받는다")
+  @DisplayName("친구·그룹 캡슐은 두 공개 범위를 모두 받는다")
   void otherCapsuleTypesAcceptEveryVisibility(String capsuleType, String visibilityType)
       throws Exception {
     mockMvc
@@ -167,19 +219,20 @@ class TimeCapsuleIntegrationTest {
             post("/v1/time-capsules")
                 .header(AUTHORIZATION, bearer(ownerToken))
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(createBody("캡슐", capsuleType, visibilityType, future())))
+                .content(createBody("캡슐", capsuleType, visibilityType)))
         .andExpect(status().isCreated());
   }
 
-  @Test
-  @DisplayName("옛 이름 PARTICIPANTS_ONLY 로는 캡슐을 만들 수 없다")
-  void oldVisibilityNameIsRejected() throws Exception {
+  @ParameterizedTest(name = "{0} → 400")
+  @CsvSource({"PARTICIPANTS_ONLY", "RECIPIENT_ONLY"})
+  @DisplayName("없어진 공개 범위 값으로는 캡슐을 만들 수 없다")
+  void removedVisibilityIsRejected(String visibilityType) throws Exception {
     mockMvc
         .perform(
             post("/v1/time-capsules")
                 .header(AUTHORIZATION, bearer(ownerToken))
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(createBody("캡슐", "GROUP", "PARTICIPANTS_ONLY", future())))
+                .content(createBody("캡슐", "GROUP", visibilityType)))
         .andExpect(status().isBadRequest())
         .andExpect(jsonPath("$.code").value("INVALID_INPUT_VALUE"));
 
@@ -220,17 +273,18 @@ class TimeCapsuleIntegrationTest {
   }
 
   static Stream<Arguments> invalidCreateBodies() throws JsonProcessingException {
-    String past = DATE_TIME.format(LocalDateTime.now().minusDays(1));
-
     return Stream.of(
-        Arguments.of("제목이 비어 있음", createBody("", "GROUP", "ALL_MEMBERS", future())),
-        Arguments.of("제목이 50자를 넘음", createBody("가".repeat(51), "GROUP", "ALL_MEMBERS", future())),
-        Arguments.of("공개 일시가 과거", createBody("캡슐", "GROUP", "ALL_MEMBERS", past)),
-        Arguments.of("공개 일시가 빠짐", createBody("캡슐", "GROUP", "ALL_MEMBERS", null)),
-        Arguments.of("캡슐 유형이 빠짐", createBody("캡슐", null, "ALL_MEMBERS", future())),
-        Arguments.of("공개 범위가 빠짐", createBody("캡슐", "GROUP", null, future())),
-        Arguments.of("enum 에 없는 캡슐 유형", createBody("캡슐", "TEAM", "ALL_MEMBERS", future())),
-        Arguments.of("설명이 1000자를 넘음", createBodyWithDescription("가".repeat(1001))),
+        Arguments.of("이름이 비어 있음", createBody("", "GROUP", "ALL_MEMBERS")),
+        Arguments.of("이름이 20자를 넘음", createBody("가".repeat(21), "GROUP", "ALL_MEMBERS")),
+        Arguments.of("설명이 45자를 넘음", bodyWith("description", "가".repeat(46))),
+        Arguments.of("아이콘이 빠짐", bodyWith("iconType", null)),
+        Arguments.of("아이콘이 비어 있음", bodyWith("iconType", " ")),
+        Arguments.of("마감일이 빠짐", bodyWith("letterDeadlineDate", null)),
+        Arguments.of("개봉일이 빠짐", bodyWith("openDate", null)),
+        Arguments.of("개봉일이 날짜 형식이 아님", bodyWith("openDate", "2027/12/12")),
+        Arguments.of("캡슐 유형이 빠짐", createBody("캡슐", null, "ALL_MEMBERS")),
+        Arguments.of("공개 범위가 빠짐", createBody("캡슐", "GROUP", null)),
+        Arguments.of("enum 에 없는 캡슐 유형", createBody("캡슐", "TEAM", "ALL_MEMBERS")),
         Arguments.of("JSON 이 깨짐", "{\"title\":"));
   }
 
@@ -241,7 +295,7 @@ class TimeCapsuleIntegrationTest {
         .perform(
             post("/v1/time-capsules")
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(createBody("캡슐", "GROUP", "ALL_MEMBERS", future())))
+                .content(createBody("캡슐", "GROUP", "ALL_MEMBERS")))
         .andExpect(status().isUnauthorized())
         .andExpect(jsonPath("$.code").value("INVALID_ACCESS_TOKEN"));
 
@@ -251,7 +305,7 @@ class TimeCapsuleIntegrationTest {
   // ---------- 상세 조회 ----------
 
   @Test
-  @DisplayName("OWNER 가 상세를 조회하면 내 역할과 볼 수 있는 범위를 함께 받는다")
+  @DisplayName("OWNER 가 상세를 조회하면 내 역할과 할 수 있는 동작을 함께 받는다")
   void ownerGetsDetail() throws Exception {
     Long capsuleId = createCapsule(ownerToken);
 
@@ -265,8 +319,9 @@ class TimeCapsuleIntegrationTest {
         .andExpect(jsonPath("$.data.myRole").value("OWNER"))
         .andExpect(jsonPath("$.data.memberCount").value(1))
         .andExpect(jsonPath("$.data.letterCount").value(0))
-        .andExpect(jsonPath("$.data.canViewMemberList").value(true))
-        .andExpect(jsonPath("$.data.canViewLetters").value(false));
+        .andExpect(jsonPath("$.data.permissions.canManage").value(true))
+        .andExpect(jsonPath("$.data.permissions.canViewLetters").value(false))
+        .andExpect(jsonPath("$.data.canViewMemberList").doesNotExist());
   }
 
   @Test
@@ -323,9 +378,6 @@ class TimeCapsuleIntegrationTest {
 
   @ParameterizedTest(name = "{0} 캡슐의 {1} → {2}")
   @CsvSource({
-    "RECIPIENT_ONLY,    RECIPIENT,   true",
-    "RECIPIENT_ONLY,    PARTICIPANT, false",
-    "RECIPIENT_ONLY,    OWNER,       false",
     "RECIPIENT_AND_AUTHOR, RECIPIENT,   true",
     "RECIPIENT_AND_AUTHOR, PARTICIPANT, true",
     "RECIPIENT_AND_AUTHOR, OWNER,       true",
@@ -333,7 +385,7 @@ class TimeCapsuleIntegrationTest {
     "ALL_MEMBERS,       PARTICIPANT, true",
     "ALL_MEMBERS,       OWNER,       true"
   })
-  @DisplayName("열린 캡슐의 편지함은 수신자만 공개일 때만 수신자로 제한되고, 참여자 목록은 OWNER 만 볼 수 있다")
+  @DisplayName("열린 캡슐의 편지함은 공개 범위와 관계없이 멤버 전원이 들어간다")
   void openedCapsuleVisibilityFollowsRole(
       VisibilityType visibility, MemberRole role, boolean canViewLetters) throws Exception {
     TimeCapsule capsule = saveCapsule(CapsuleStatus.OPENED, visibility, null);
@@ -346,8 +398,7 @@ class TimeCapsuleIntegrationTest {
                 .header(AUTHORIZATION, bearer(tokenOf(viewer))))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.data.myRole").value(role.name()))
-        .andExpect(jsonPath("$.data.canViewLetters").value(canViewLetters))
-        .andExpect(jsonPath("$.data.canViewMemberList").value(role == MemberRole.OWNER));
+        .andExpect(jsonPath("$.data.permissions.canViewLetters").value(canViewLetters));
   }
 
   @Test
@@ -379,7 +430,7 @@ class TimeCapsuleIntegrationTest {
                 post("/v1/time-capsules")
                     .header(AUTHORIZATION, bearer(token))
                     .contentType(MediaType.APPLICATION_JSON)
-                    .content(createBody("캡슐", "GROUP", "ALL_MEMBERS", future())))
+                    .content(createBody("캡슐", "GROUP", "ALL_MEMBERS")))
             .andExpect(status().isCreated())
             .andReturn()
             .getResponse()
@@ -398,33 +449,45 @@ class TimeCapsuleIntegrationTest {
         .getContentAsString(StandardCharsets.UTF_8);
   }
 
-  private static String createBody(
-      String title, String capsuleType, String visibilityType, String openAt)
-      throws JsonProcessingException {
+  /** 그대로 보내면 201 이 나는 요청 본문. 테스트마다 바꿀 값만 덮어쓴다. */
+  private static Map<String, Object> validBody() {
     Map<String, Object> body = new HashMap<>();
-    body.put("title", title);
-    body.put("description", "설명");
-    body.put("capsuleType", capsuleType);
-    body.put("visibilityType", visibilityType);
-    body.put("openAt", openAt);
-
-    return JSON.writeValueAsString(body);
-  }
-
-  private static String createBodyWithDescription(String description)
-      throws JsonProcessingException {
-    Map<String, Object> body = new HashMap<>();
+    body.put("iconType", "ICE_CREAM");
     body.put("title", "캡슐");
-    body.put("description", description);
+    body.put("description", "설명");
     body.put("capsuleType", "GROUP");
     body.put("visibilityType", "ALL_MEMBERS");
-    body.put("openAt", future());
+    body.put("letterDeadlineDate", today().plusDays(10).toString());
+    body.put("openDate", today().plusDays(30).toString());
+    return body;
+  }
 
+  private static String createBody(String title, String capsuleType, String visibilityType)
+      throws JsonProcessingException {
+    Map<String, Object> body = validBody();
+    body.put("title", title);
+    body.put("capsuleType", capsuleType);
+    body.put("visibilityType", visibilityType);
     return JSON.writeValueAsString(body);
   }
 
-  private static String future() {
-    return DATE_TIME.format(LocalDateTime.now().plusDays(30));
+  private static String bodyWith(String key, Object value) throws JsonProcessingException {
+    Map<String, Object> body = validBody();
+    body.put(key, value);
+    return JSON.writeValueAsString(body);
+  }
+
+  private static String scheduleBody(LocalDate letterDeadlineDate, LocalDate openDate)
+      throws JsonProcessingException {
+    Map<String, Object> body = validBody();
+    body.put("letterDeadlineDate", letterDeadlineDate.toString());
+    body.put("openDate", openDate.toString());
+    return JSON.writeValueAsString(body);
+  }
+
+  /** 서비스는 Clock 빈(시스템 기본 시간대)으로 오늘을 판단하므로 테스트도 같은 기준을 쓴다. */
+  private static LocalDate today() {
+    return LocalDate.now();
   }
 
   private User saveUser(String kakaoId, String nickname) {
@@ -436,10 +499,12 @@ class TimeCapsuleIntegrationTest {
     return timeCapsuleRepository.save(
         TimeCapsule.builder()
             .creator(owner)
+            .iconType("ICE_CREAM")
             .title("캡슐")
             .capsuleType(CapsuleType.GROUP)
             .visibilityType(visibility)
             .status(status)
+            .letterDeadlineAt(LocalDateTime.now().plusDays(10))
             .openAt(LocalDateTime.now().plusDays(30))
             .deletedAt(deletedAt)
             .build());

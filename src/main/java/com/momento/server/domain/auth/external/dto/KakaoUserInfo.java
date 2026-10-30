@@ -3,18 +3,12 @@ package com.momento.server.domain.auth.external.dto;
 /**
  * 카카오 응답을 가입에 바로 쓸 수 있게 정규화한 값.
  *
- * <p>{@code users.nickname} 은 NOT NULL 이지만 카카오는 프로필 동의를 받지 못하면 닉네임을 주지 않으므로 기본 닉네임으로 채운다.
+ * <p>카카오 닉네임은 쓰지 않는다. 닉네임은 겹치면 안 되는데 카카오 닉네임은 겹칠 수 있고, 동의하지 않으면 오지도 않는다. 가입할 때는 서버가 임시 닉네임을 넣고,
+ * 사용자가 프로필 설정에서 바꾼다.
  */
-public record KakaoUserInfo(String kakaoId, String nickname, String profileImageUrl) {
-
-  private static final String DEFAULT_NICKNAME = "모멘토 친구";
+public record KakaoUserInfo(String kakaoId, String profileImageUrl) {
 
   public static KakaoUserInfo from(KakaoUserResponse response) {
-    String nickname = response.nicknameOrNull();
-
-    return new KakaoUserInfo(
-        String.valueOf(response.id()),
-        (nickname == null || nickname.isBlank()) ? DEFAULT_NICKNAME : nickname,
-        response.profileImageUrlOrNull());
+    return new KakaoUserInfo(String.valueOf(response.id()), response.profileImageUrlOrNull());
   }
 }

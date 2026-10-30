@@ -1,6 +1,5 @@
 package com.momento.server.domain.timecapsule.entity;
 
-import com.momento.server.domain.anniversary.entity.Anniversary;
 import com.momento.server.domain.user.entity.User;
 import com.momento.server.global.common.entity.BaseTimeEntity;
 import jakarta.persistence.Column;
@@ -44,10 +43,9 @@ public class TimeCapsule extends BaseTimeEntity {
   @JoinColumn(name = "creator_id", nullable = false)
   private User creator;
 
-  /** 기념일에 맞춰 만든 캡슐이면 연결된다. 직접 만든 캡슐이면 비어 있다. */
-  @ManyToOne(fetch = FetchType.LAZY)
-  @JoinColumn(name = "anniversary_id")
-  private Anniversary anniversary;
+  /** 캡슐 대표 아이콘. 값 목록이 확정되지 않아 문자열로 둔다. */
+  @Column(name = "icon_type", nullable = false, length = 30)
+  private String iconType;
 
   @Column(name = "title", nullable = false, length = 50)
   private String title;
@@ -74,25 +72,19 @@ public class TimeCapsule extends BaseTimeEntity {
   @Column(name = "open_at", nullable = false)
   private LocalDateTime openAt;
 
-  /** 편지 작성 마감 일시. 없으면 공개 직전까지 쓸 수 있다. */
-  @Column(name = "letter_deadline_at")
+  /** 편지 작성 마감 일시. 이 시각부터 편지를 쓸 수 없고 캡슐이 잠긴다. */
+  @Column(name = "letter_deadline_at", nullable = false)
   private LocalDateTime letterDeadlineAt;
 
   @Column(name = "deleted_at")
   private LocalDateTime deletedAt;
 
   /**
-   * 이 역할의 참여자가 편지함에 들어갈 수 있는지. 캡슐이 열려야 하고, 수신자만 공개인 캡슐이면 수신자만 들어갈 수 있다. 그 밖의 범위에서는 참여자 전원이 들어가되, 어떤
-   * 편지가 보이는지는 {@link #canViewLetter} 로 한 통씩 정한다. OWNER 도 예외 없이 편지를 쓴 참여자로 취급한다.
+   * 이 역할의 참여자가 편지함에 들어갈 수 있는지. 캡슐이 열리면 공개 범위와 관계없이 참여자 전원이 들어가되, 어떤 편지가 보이는지는 {@link
+   * #canViewLetter} 로 한 통씩 정한다. OWNER 도 예외 없이 편지를 쓴 참여자로 취급한다.
    */
   public boolean canViewLetters(MemberRole role) {
-    if (status != CapsuleStatus.OPENED) {
-      return false;
-    }
-    return switch (visibilityType) {
-      case RECIPIENT_ONLY -> role == MemberRole.RECIPIENT;
-      case RECIPIENT_AND_AUTHOR, ALL_MEMBERS -> true;
-    };
+    return status == CapsuleStatus.OPENED;
   }
 
   /**
@@ -105,9 +97,37 @@ public class TimeCapsule extends BaseTimeEntity {
       return false;
     }
     return switch (visibilityType) {
-      case RECIPIENT_ONLY, ALL_MEMBERS -> true;
+      case ALL_MEMBERS -> true;
       case RECIPIENT_AND_AUTHOR -> role == MemberRole.RECIPIENT || isAuthor;
     };
+  }
+
+  /**
+   * 아이콘 · 이름 · 설명을 고치고, 캡슐을 지우고, 멤버를 바꿀 수 있는지. 편지 수정 마감 전에만 된다.
+   *
+   * <p>저장된 상태와 마감 시각을 함께 본다. 마감이 지나도 스케줄러가 LOCKED 로 바꾸기 전까지(최대 한 주기) 상태는 WRITING 이다. 상태만 보면 그 사이에는
+   * 편지는 못 쓰는데 캡슐은 고치고 지울 수 있게 된다. 편지 작성 판정({@link #getLetterWritingEligibility})과 같은 기준으로 맞춘다.
+   */
+  public boolean isEditable(LocalDateTime now) {
+    return status == CapsuleStatus.WRITING && now.isBefore(letterDeadlineAt);
+  }
+
+  public void updateIconType(String iconType) {
+    this.iconType = iconType;
+  }
+
+  public void updateTitle(String title) {
+    this.title = title;
+  }
+
+  /** null 이면 지운다. */
+  public void updateDescription(String description) {
+    this.description = description;
+  }
+
+  /** 소프트 삭제. 목록 · 탭 홈 · 상세 쿼리가 모두 {@code deletedAt} 이 빈 캡슐만 읽는다. */
+  public void delete(LocalDateTime now) {
+    this.deletedAt = now;
   }
 
   /** 역할·공개 범위와 작성 시간을 함께 판정한다. 권한이 없으면 시간 조건보다 먼저 거절한다. */
@@ -117,7 +137,7 @@ public class TimeCapsule extends BaseTimeEntity {
     }
     if (status != CapsuleStatus.WRITING
         || !now.isBefore(openAt)
-        || (letterDeadlineAt != null && !now.isBefore(letterDeadlineAt))) {
+        || !now.isBefore(letterDeadlineAt)) {
       return LetterWritingEligibility.CLOSED;
     }
     return LetterWritingEligibility.ALLOWED;

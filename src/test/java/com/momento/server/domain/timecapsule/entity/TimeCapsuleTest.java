@@ -13,10 +13,6 @@ class TimeCapsuleTest {
 
   @ParameterizedTest(name = "{0} 캡슐의 {1}, 내가 쓴 편지={2} → {3}")
   @CsvSource({
-    // 수신자만: 작성자는 OWNER 라도 자기 편지를 못 본다
-    "RECIPIENT_ONLY,    RECIPIENT,   false, true",
-    "RECIPIENT_ONLY,    PARTICIPANT, true,  false",
-    "RECIPIENT_ONLY,    OWNER,       true,  false",
     // 수신자 + 작성자: 수신자는 전부, 작성자는 자기 편지만
     "RECIPIENT_AND_AUTHOR, RECIPIENT,   false, true",
     "RECIPIENT_AND_AUTHOR, PARTICIPANT, true,  true",
@@ -46,12 +42,61 @@ class TimeCapsuleTest {
     assertThat(locked.canViewLetter(MemberRole.OWNER, true)).isFalse();
   }
 
+  @ParameterizedTest(name = "{0}, 마감까지 {1}초 → {2}")
+  @CsvSource({
+    "WRITING, 1,  true",
+    "WRITING, 0,  false",
+    "WRITING, -1, false",
+    "LOCKED,  1,  false",
+    "OPENED,  1,  false"
+  })
+  @DisplayName("WRITING 이고 마감 시각 전에만 캡슐을 고치거나 지울 수 있다. 스케줄러가 돌기 전이라도 마감이 지나면 안 된다")
+  void editableOnlyBeforeDeadline(CapsuleStatus status, long secondsLeft, boolean expected) {
+    LocalDateTime deadline = LocalDateTime.of(2045, 1, 1, 23, 59, 59);
+    TimeCapsule capsule =
+        TimeCapsule.builder()
+            .iconType("ICE_CREAM")
+            .title("캡슐")
+            .capsuleType(CapsuleType.GROUP)
+            .visibilityType(VisibilityType.ALL_MEMBERS)
+            .status(status)
+            .letterDeadlineAt(deadline)
+            .openAt(deadline.plusDays(10))
+            .build();
+
+    assertThat(capsule.isEditable(deadline.minusSeconds(secondsLeft))).isEqualTo(expected);
+  }
+
+  @Test
+  @DisplayName("설명에 null 을 넣으면 지운다")
+  void clearsDescription() {
+    TimeCapsule capsule = capsule(CapsuleStatus.WRITING, VisibilityType.ALL_MEMBERS);
+    capsule.updateDescription("설명");
+
+    capsule.updateDescription(null);
+
+    assertThat(capsule.getDescription()).isNull();
+  }
+
+  @Test
+  @DisplayName("삭제하면 삭제 시각이 남는다")
+  void deleteRecordsTime() {
+    TimeCapsule capsule = capsule(CapsuleStatus.WRITING, VisibilityType.ALL_MEMBERS);
+    LocalDateTime now = LocalDateTime.of(2045, 1, 1, 9, 0);
+
+    capsule.delete(now);
+
+    assertThat(capsule.getDeletedAt()).isEqualTo(now);
+  }
+
   private TimeCapsule capsule(CapsuleStatus status, VisibilityType visibility) {
     return TimeCapsule.builder()
+        .iconType("ICE_CREAM")
         .title("캡슐")
         .capsuleType(CapsuleType.GROUP)
         .visibilityType(visibility)
         .status(status)
+        .letterDeadlineAt(LocalDateTime.now().minusDays(1))
         .openAt(LocalDateTime.now())
         .build();
   }

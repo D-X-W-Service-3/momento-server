@@ -29,14 +29,14 @@ CREATE TABLE `memory_images` (
 CREATE TABLE `time_capsules` (
 	`id`	BIGINT	NOT NULL	AUTO_INCREMENT	COMMENT '타임캡슐 ID',
 	`creator_id`	BIGINT	NOT NULL	COMMENT '타임캡슐 생성자 ID',
-	`anniversary_id`	BIGINT	NULL	COMMENT '연결된 기념일 ID',
+	`icon_type`	VARCHAR(30)	NOT NULL	COMMENT '캡슐 대표 아이콘',
 	`title`	VARCHAR(50)	NOT NULL	COMMENT '타임캡슐 제목',
 	`description`	TEXT	NULL	COMMENT '타임캡슐 설명',
 	`capsule_type`	VARCHAR(20)	NOT NULL	COMMENT '캡슐 유형: SELF, FRIEND, GROUP',
-	`visibility_type`	VARCHAR(30)	NOT NULL	COMMENT '공개 범위: RECIPIENT_ONLY, RECIPIENT_AND_AUTHOR, ALL_MEMBERS',
+	`visibility_type`	VARCHAR(30)	NOT NULL	COMMENT '공개 범위: RECIPIENT_AND_AUTHOR, ALL_MEMBERS',
 	`status`	VARCHAR(20)	NOT NULL	DEFAULT 'WRITING'	COMMENT '상태: WRITING, LOCKED, OPENED',
 	`open_at`	DATETIME(6)	NOT NULL	COMMENT '공개 예정 일시',
-	`letter_deadline_at`	DATETIME(6)	NULL	COMMENT '편지 작성 마감 일시',
+	`letter_deadline_at`	DATETIME(6)	NOT NULL	COMMENT '편지 작성 마감 일시',
 	`created_at`	DATETIME(6)	NOT NULL	COMMENT '생성 일시',
 	`updated_at`	DATETIME(6)	NOT NULL	COMMENT '수정 일시',
 	`deleted_at`	DATETIME(6)	NULL	COMMENT '삭제 일시'
@@ -48,6 +48,10 @@ CREATE TABLE `anniversaries` (
 	`title`	VARCHAR(50)	NOT NULL	COMMENT '기념일 제목',
 	`anniversary_date`	DATE	NOT NULL	COMMENT '기념일 날짜',
 	`repeat_type`	VARCHAR(20)	NOT NULL	DEFAULT 'NONE'	COMMENT '반복 유형: NONE, YEARLY',
+	`memo`	VARCHAR(200)	NULL	COMMENT '메모',
+	`notification_enabled`	BOOLEAN	NOT NULL	DEFAULT FALSE	COMMENT '알림 받기 여부',
+	`notify_time`	TIME	NOT NULL	DEFAULT '09:00:00'	COMMENT '알림 시각',
+	`remind_days_before`	INT	NULL	COMMENT '미리 알림 일수: 1, 3, 5, 7, 10. 알림 받기가 꺼지면 NULL',
 	`created_at`	DATETIME(6)	NOT NULL	COMMENT '생성 일시',
 	`updated_at`	DATETIME(6)	NOT NULL	COMMENT '수정 일시'
 );
@@ -59,6 +63,7 @@ CREATE TABLE `capsule_members` (
 	`role`	VARCHAR(20)	NOT NULL	COMMENT '참여 역할: OWNER, RECIPIENT, PARTICIPANT',
 	`status`	VARCHAR(20)	NOT NULL	DEFAULT 'ACTIVE'	COMMENT '참여 상태: ACTIVE, LEFT, REMOVED',
 	`joined_at`	DATETIME(6)	NULL	COMMENT '참여 일시',
+	`opened_at`	DATETIME(6)	NULL	COMMENT '열린 캡슐을 처음 확인한 일시',
 	`created_at`	DATETIME(6)	NOT NULL	COMMENT '생성 일시',
 	`updated_at`	DATETIME(6)	NOT NULL	COMMENT '수정 일시'
 );
@@ -73,6 +78,16 @@ CREATE TABLE `capsule_invites` (
 	`status`	VARCHAR(20)	NOT NULL	DEFAULT 'ACTIVE'	COMMENT '초대 링크 상태: ACTIVE, EXPIRED, REVOKED',
 	`expires_at`	DATETIME(6)	NULL	COMMENT '초대 링크 만료 일시',
 	`created_at`	DATETIME(6)	NOT NULL	COMMENT '생성 일시',
+	`updated_at`	DATETIME(6)	NOT NULL	COMMENT '수정 일시'
+);
+
+-- 초대 링크를 연 회원별 대기 기록 (이슈 #42). 공유 링크 하나를 여러 사람이 열 수 있어 (링크, 회원) 마다 한 행이다.
+CREATE TABLE `capsule_invitees` (
+	`id`	BIGINT	NOT NULL	AUTO_INCREMENT	COMMENT '초대 대상 ID',
+	`capsule_invite_id`	BIGINT	NOT NULL	COMMENT '초대 링크 ID',
+	`user_id`	BIGINT	NOT NULL	COMMENT '링크를 연 회원 ID',
+	`status`	VARCHAR(20)	NOT NULL	DEFAULT 'PENDING'	COMMENT '응답 상태: PENDING, ACCEPTED, DECLINED',
+	`created_at`	DATETIME(6)	NOT NULL	COMMENT '링크를 처음 연 일시',
 	`updated_at`	DATETIME(6)	NOT NULL	COMMENT '수정 일시'
 );
 
@@ -107,9 +122,16 @@ CREATE TABLE `memories` (
 CREATE TABLE `users` (
 	`id`	BIGINT	NOT NULL	AUTO_INCREMENT	COMMENT '회원 ID',
 	`kakao_id`	VARCHAR(100)	NOT NULL	UNIQUE	COMMENT '카카오 회원 고유 ID',
-	`nickname`	VARCHAR(30)	NOT NULL	COMMENT '닉네임',
+	`nickname`	VARCHAR(30)	NOT NULL	UNIQUE	COMMENT '닉네임. 탈퇴 회원도 행이 남아 계속 차지한다',
 	`profile_image_url`	VARCHAR(500)	NULL	COMMENT '프로필 이미지 URL',
-	`notification_enabled`	BOOLEAN	NOT NULL	DEFAULT TRUE	COMMENT '알림 수신 여부',
+	`birthday`	DATE	NULL	COMMENT '생일',
+	`email`	VARCHAR(100)	NULL	COMMENT '이메일',
+	`phone_number`	VARCHAR(20)	NULL	COMMENT '전화번호 (010-1234-5678)',
+	`notify_capsule_opened`	BOOLEAN	NOT NULL	DEFAULT TRUE	COMMENT '개봉 알림',
+	`notify_capsule_d_day`	BOOLEAN	NOT NULL	DEFAULT TRUE	COMMENT 'D-Day 알림',
+	`notify_letter_deadline`	BOOLEAN	NOT NULL	DEFAULT TRUE	COMMENT '수정 마감 알림',
+	`notify_new_member`	BOOLEAN	NOT NULL	DEFAULT TRUE	COMMENT '새 참여자 알림',
+	`notify_memory_reminder`	BOOLEAN	NOT NULL	DEFAULT FALSE	COMMENT '추억 다시보기',
 	`created_at`	DATETIME(6)	NOT NULL	COMMENT '생성 일시',
 	`updated_at`	DATETIME(6)	NOT NULL	COMMENT '수정 일시',
 	`deleted_at`	DATETIME(6)	NULL	COMMENT '탈퇴 일시'
@@ -152,6 +174,15 @@ ALTER TABLE `capsule_invites` ADD CONSTRAINT `PK_CAPSULE_INVITES` PRIMARY KEY (
 	`id`
 );
 
+ALTER TABLE `capsule_invitees` ADD CONSTRAINT `PK_CAPSULE_INVITEES` PRIMARY KEY (
+	`id`
+);
+
+ALTER TABLE `capsule_invitees` ADD CONSTRAINT `UK_CAPSULE_INVITEES_INVITE_USER` UNIQUE (
+	`capsule_invite_id`,
+	`user_id`
+);
+
 ALTER TABLE `notifications` ADD CONSTRAINT `PK_NOTIFICATIONS` PRIMARY KEY (
 	`id`
 );
@@ -166,6 +197,12 @@ ALTER TABLE `notifications` ADD INDEX `IDX_NOTIFICATIONS_USER_ID_ID` (
 ALTER TABLE `time_capsules` ADD INDEX `IDX_TIME_CAPSULES_STATUS_OPEN_AT` (
 	`status`,
 	`open_at`
+);
+
+-- 탭 홈 초대 배너 · 받은 초대 목록이 회원별로 대기 중인 초대를 찾는 조회다 (이슈 #42)
+ALTER TABLE `capsule_invitees` ADD INDEX `IDX_CAPSULE_INVITEES_USER_ID_STATUS` (
+	`user_id`,
+	`status`
 );
 
 -- 받은 초대 목록 조회가 회원별로 지정형 초대를 찾는 조회다

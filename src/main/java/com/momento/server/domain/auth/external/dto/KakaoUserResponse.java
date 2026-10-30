@@ -12,10 +12,6 @@ import java.util.Optional;
 @JsonIgnoreProperties(ignoreUnknown = true)
 public record KakaoUserResponse(Long id, @JsonProperty("kakao_account") KakaoAccount kakaoAccount) {
 
-  public String nicknameOrNull() {
-    return profile().map(Profile::nickname).orElse(null);
-  }
-
   public String profileImageUrlOrNull() {
     return profile().map(Profile::profileImageUrl).orElse(null);
   }

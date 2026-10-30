@@ -4,7 +4,13 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.BDDMockito.then;
+import static org.mockito.BDDMockito.willAnswer;
+import static org.mockito.BDDMockito.willThrow;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -15,8 +21,10 @@ import com.momento.server.domain.auth.external.KakaoApiClient;
 import com.momento.server.domain.auth.external.KakaoAuthClient;
 import com.momento.server.domain.auth.external.dto.KakaoTokenResponse;
 import com.momento.server.domain.auth.external.dto.KakaoUserResponse;
+import com.momento.server.domain.user.entity.NotificationSettings;
 import com.momento.server.domain.user.entity.User;
 import com.momento.server.domain.user.repository.UserRepository;
+import com.momento.server.domain.user.service.UserService;
 import feign.FeignException;
 import feign.Request;
 import java.nio.charset.StandardCharsets;
@@ -29,9 +37,14 @@ import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.util.MultiValueMap;
 
 /** 카카오 API 만 대체하고 로그인 흐름을 실제 필터/시큐리티까지 태워 검증한다. */
@@ -41,6 +54,7 @@ class KakaoLoginIntegrationTest {
 
   private static final long KAKAO_ID = 1234567890L;
   private static final String NICKNAME = "모모";
+  private static final String TEMPORARY_NICKNAME = "모멘토친구\\d{6}";
   private static final String PROFILE_IMAGE_URL = "https://k.kakaocdn.net/dn/profile.jpg";
   private static final String REDIRECT_URI = "http://localhost:3000/auth/kakao/callback";
   private static final String LOGIN_BODY =
@@ -49,21 +63,28 @@ class KakaoLoginIntegrationTest {
   @Autowired private MockMvc mockMvc;
   @Autowired private ObjectMapper objectMapper;
   @Autowired private UserRepository userRepository;
+  @Autowired private PlatformTransactionManager transactionManager;
 
   @MockitoBean private KakaoAuthClient kakaoAuthClient;
   @MockitoBean private KakaoApiClient kakaoApiClient;
+  @MockitoSpyBean private UserService userService;
 
   @BeforeEach
   void setUp() {
     userRepository.deleteAll();
     given(kakaoAuthClient.issueToken(any()))
         .willReturn(new KakaoTokenResponse("kakao-access-token"));
+    givenKakaoUser(KAKAO_ID, NICKNAME, PROFILE_IMAGE_URL);
+  }
+
+  private void givenKakaoUser(long kakaoId, String nickname, String profileImageUrl) {
+    KakaoUserResponse.KakaoAccount account =
+        nickname == null && profileImageUrl == null
+            ? null
+            : new KakaoUserResponse.KakaoAccount(
+                new KakaoUserResponse.Profile(nickname, profileImageUrl));
     given(kakaoApiClient.getUserInfo(anyString()))
-        .willReturn(
-            new KakaoUserResponse(
-                KAKAO_ID,
-                new KakaoUserResponse.KakaoAccount(
-                    new KakaoUserResponse.Profile(NICKNAME, PROFILE_IMAGE_URL))));
+        .willReturn(new KakaoUserResponse(kakaoId, account));
   }
 
   @AfterEach
@@ -77,9 +98,11 @@ class KakaoLoginIntegrationTest {
     String accessToken = login(true);
 
     User saved = userRepository.findByKakaoId(String.valueOf(KAKAO_ID)).orElseThrow();
-    assertThat(saved.getNickname()).isEqualTo(NICKNAME);
+    assertThat(saved.getNickname()).matches(TEMPORARY_NICKNAME).isNotEqualTo(NICKNAME);
     assertThat(saved.getProfileImageUrl()).isEqualTo(PROFILE_IMAGE_URL);
-    assertThat(saved.isNotificationEnabled()).isTrue();
+    assertThat(saved.getNotificationSettings())
+        .usingRecursiveComparison()
+        .isEqualTo(NotificationSettings.defaults());
     assertThat(saved.getDeletedAt()).isNull();
 
     mockMvc
@@ -102,19 +125,113 @@ class KakaoLoginIntegrationTest {
   }
 
   @Test
-  @DisplayName("탈퇴한 회원이 같은 카카오 계정으로 로그인하면 계정이 복구된다")
+  @DisplayName("카카오 닉네임에 동의하지 않아도 임시 닉네임으로 가입한다")
+  void loginWithoutKakaoNickname() throws Exception {
+    givenKakaoUser(KAKAO_ID, null, null);
+
+    login(true);
+
+    User saved = userRepository.findByKakaoId(String.valueOf(KAKAO_ID)).orElseThrow();
+    assertThat(saved.getNickname()).matches(TEMPORARY_NICKNAME);
+    assertThat(saved.getProfileImageUrl()).isNull();
+  }
+
+  @Test
+  @DisplayName("카카오 닉네임이 같은 두 사람이 가입해도 닉네임이 겹치지 않는다")
+  void twoUsersGetDifferentNicknames() throws Exception {
+    login(true);
+    givenKakaoUser(KAKAO_ID + 1, NICKNAME, PROFILE_IMAGE_URL);
+    login(true);
+
+    assertThat(userRepository.findAll())
+        .extracting(User::getNickname)
+        .hasSize(2)
+        .doesNotHaveDuplicates();
+  }
+
+  @Test
+  @DisplayName("가입이 닉네임 UNIQUE 에 걸려도 한 번 더 시도해 로그인에 성공한다")
+  void retriesRegisterOnUniqueViolation() throws Exception {
+    willThrow(new DataIntegrityViolationException("임시 닉네임 중복"))
+        .willCallRealMethod()
+        .given(userService)
+        .register(anyString(), any());
+
+    login(true);
+
+    assertThat(userRepository.findByKakaoId(String.valueOf(KAKAO_ID))).isPresent();
+    then(userService).should(times(2)).register(anyString(), any());
+  }
+
+  @Test
+  @DisplayName("같은 카카오 계정의 다른 요청이 먼저 가입시켰으면 그 회원으로 로그인한다")
+  void usesAccountCreatedByConcurrentLogin() throws Exception {
+    TransactionTemplate otherRequest = new TransactionTemplate(transactionManager);
+    otherRequest.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+    willAnswer(
+            invocation -> {
+              // 다른 요청이 먼저 가입시켜 커밋까지 마친 상황이다. 이 가입의 트랜잭션은 롤백되므로 따로 커밋한다.
+              otherRequest.executeWithoutResult(
+                  tx ->
+                      userRepository.save(
+                          User.builder()
+                              .kakaoId(invocation.getArgument(0))
+                              .nickname("먼저가입")
+                              .build()));
+              throw new DataIntegrityViolationException("카카오 ID 중복");
+            })
+        .given(userService)
+        .register(anyString(), any());
+
+    login(true);
+
+    assertThat(userRepository.count()).isEqualTo(1);
+    assertThat(userRepository.findByKakaoId(String.valueOf(KAKAO_ID)).orElseThrow().getNickname())
+        .isEqualTo("먼저가입");
+    then(userService).should(times(1)).register(anyString(), any());
+  }
+
+  @Test
+  @DisplayName("탈퇴한 회원이 같은 카카오 계정으로 로그인하면 계정이 복구되고, 닉네임 · 사진은 탈퇴 전 그대로다")
   void loginRestoresWithdrawnUser() throws Exception {
     login(true);
 
     User user = userRepository.findByKakaoId(String.valueOf(KAKAO_ID)).orElseThrow();
+    user.updateNickname("직접정한닉네임");
     user.withdraw();
     userRepository.saveAndFlush(user);
+    givenKakaoUser(KAKAO_ID, "카카오에서바꾼닉네임", "https://k.kakaocdn.net/dn/changed.jpg");
 
     login(false);
 
+    User restored = userRepository.findByKakaoId(String.valueOf(KAKAO_ID)).orElseThrow();
     assertThat(userRepository.count()).isEqualTo(1);
-    assertThat(userRepository.findByKakaoId(String.valueOf(KAKAO_ID)).orElseThrow().getDeletedAt())
-        .isNull();
+    assertThat(restored.getDeletedAt()).isNull();
+    assertThat(restored.getNickname()).isEqualTo("직접정한닉네임");
+    assertThat(restored.getProfileImageUrl()).isEqualTo(PROFILE_IMAGE_URL);
+  }
+
+  @Test
+  @DisplayName("탈퇴 API 로 탈퇴한 뒤 같은 카카오 계정으로 로그인하면 같은 회원으로 복구되고 새 토큰을 쓸 수 있다")
+  void loginRestoresUserWithdrawnByApi() throws Exception {
+    String accessToken = login(true);
+    User user = userRepository.findByKakaoId(String.valueOf(KAKAO_ID)).orElseThrow();
+
+    mockMvc
+        .perform(delete("/v1/users/me").header("Authorization", "Bearer " + accessToken))
+        .andExpect(status().isOk());
+    assertThat(userRepository.findById(user.getId()).orElseThrow().isWithdrawn()).isTrue();
+
+    String restoredToken = login(false);
+
+    User restored = userRepository.findById(user.getId()).orElseThrow();
+    assertThat(userRepository.count()).isEqualTo(1);
+    assertThat(restored.isWithdrawn()).isFalse();
+    assertThat(restored.getNickname()).isEqualTo(user.getNickname());
+    mockMvc
+        .perform(get("/v1/users/me").header("Authorization", "Bearer " + restoredToken))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.data.userId").value(user.getId()));
   }
 
   @Test

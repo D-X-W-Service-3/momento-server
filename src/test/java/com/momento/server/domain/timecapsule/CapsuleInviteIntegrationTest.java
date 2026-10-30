@@ -68,7 +68,7 @@ class CapsuleInviteIntegrationTest {
     cleanUp();
     owner = saveUser("owner-kakao-id", "상래");
     ownerToken = tokenOf(owner);
-    capsule = saveCapsule(CapsuleType.GROUP, CapsuleStatus.WRITING, null);
+    capsule = saveCapsule(CapsuleType.GROUP, CapsuleStatus.WRITING);
     saveMember(capsule, owner, MemberRole.OWNER, MemberStatus.ACTIVE);
   }
 
@@ -92,7 +92,7 @@ class CapsuleInviteIntegrationTest {
         .andExpect(jsonPath("$.data.inviteId").isNumber())
         .andExpect(jsonPath("$.data.targetRole").value("PARTICIPANT"))
         .andExpect(jsonPath("$.data.inviteToken").isNotEmpty())
-        .andExpect(jsonPath("$.data.expiresAt").value(formatted(capsule.getOpenAt())));
+        .andExpect(jsonPath("$.data.expiresAt").value(formatted(capsule.getLetterDeadlineAt())));
   }
 
   @Test
@@ -121,7 +121,7 @@ class CapsuleInviteIntegrationTest {
   @Test
   @DisplayName("SELF 캡슐은 어떤 역할로도 초대할 수 없다")
   void selfCapsuleRejectsAnyInvite() throws Exception {
-    TimeCapsule self = saveCapsule(CapsuleType.SELF, CapsuleStatus.WRITING, null);
+    TimeCapsule self = saveCapsule(CapsuleType.SELF, CapsuleStatus.WRITING);
     saveMember(self, owner, MemberRole.OWNER, MemberStatus.ACTIVE);
 
     mockMvc
@@ -137,7 +137,7 @@ class CapsuleInviteIntegrationTest {
   @Test
   @DisplayName("FRIEND 캡슐은 RECIPIENT 로 초대할 수 없다")
   void friendCapsuleRejectsRecipientInvite() throws Exception {
-    TimeCapsule friend = saveCapsule(CapsuleType.FRIEND, CapsuleStatus.WRITING, null);
+    TimeCapsule friend = saveCapsule(CapsuleType.FRIEND, CapsuleStatus.WRITING);
     saveMember(friend, owner, MemberRole.OWNER, MemberStatus.ACTIVE);
 
     mockMvc
@@ -153,7 +153,7 @@ class CapsuleInviteIntegrationTest {
   @Test
   @DisplayName("FRIEND 캡슐은 PARTICIPANT 로는 초대할 수 있다")
   void friendCapsuleAllowsParticipantInvite() throws Exception {
-    TimeCapsule friend = saveCapsule(CapsuleType.FRIEND, CapsuleStatus.WRITING, null);
+    TimeCapsule friend = saveCapsule(CapsuleType.FRIEND, CapsuleStatus.WRITING);
     saveMember(friend, owner, MemberRole.OWNER, MemberStatus.ACTIVE);
 
     mockMvc
@@ -184,7 +184,7 @@ class CapsuleInviteIntegrationTest {
   @Test
   @DisplayName("WRITING 이 아닌 캡슐은 발급할 수 없다")
   void issueRejectedAfterWriting() throws Exception {
-    TimeCapsule opened = saveCapsule(CapsuleType.GROUP, CapsuleStatus.OPENED, null);
+    TimeCapsule opened = saveCapsule(CapsuleType.GROUP, CapsuleStatus.OPENED);
     saveMember(opened, owner, MemberRole.OWNER, MemberStatus.ACTIVE);
 
     mockMvc
@@ -800,17 +800,18 @@ class CapsuleInviteIntegrationTest {
     return userRepository.save(User.builder().kakaoId(kakaoId).nickname(nickname).build());
   }
 
-  private TimeCapsule saveCapsule(
-      CapsuleType capsuleType, CapsuleStatus status, LocalDateTime letterDeadlineAt) {
+  private TimeCapsule saveCapsule(CapsuleType capsuleType, CapsuleStatus status) {
+    LocalDateTime openAt = LocalDateTime.now().withNano(0).plusDays(30);
     return timeCapsuleRepository.save(
         TimeCapsule.builder()
             .creator(owner)
+            .iconType("ICE_CREAM")
             .title("캡슐")
             .capsuleType(capsuleType)
             .visibilityType(VisibilityType.ALL_MEMBERS)
             .status(status)
-            .openAt(LocalDateTime.now().withNano(0).plusDays(30))
-            .letterDeadlineAt(letterDeadlineAt)
+            .openAt(openAt)
+            .letterDeadlineAt(openAt.minusDays(2))
             .build());
   }
 
