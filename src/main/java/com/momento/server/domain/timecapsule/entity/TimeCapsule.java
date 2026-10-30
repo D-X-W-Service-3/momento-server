@@ -135,11 +135,16 @@ public class TimeCapsule extends BaseTimeEntity {
     if (role == MemberRole.RECIPIENT && visibilityType != VisibilityType.ALL_MEMBERS) {
       return LetterWritingEligibility.NOT_ALLOWED;
     }
-    if (status != CapsuleStatus.WRITING
-        || !now.isBefore(openAt)
-        || !now.isBefore(letterDeadlineAt)) {
+    if (!isLetterWritingOpen(now)) {
       return LetterWritingEligibility.CLOSED;
     }
     return LetterWritingEligibility.ALLOWED;
+  }
+
+  /** 편지 작성·삭제 기간의 공통 조건. 스케줄러 전이 전에도 마감·공개 정각부터 닫힌다. */
+  public boolean isLetterWritingOpen(LocalDateTime now) {
+    return status == CapsuleStatus.WRITING
+        && now.isBefore(letterDeadlineAt)
+        && now.isBefore(openAt);
   }
 }

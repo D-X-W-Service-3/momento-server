@@ -63,4 +63,11 @@ public class Letter extends BaseTimeEntity {
 
   @Column(name = "deleted_at")
   private LocalDateTime deletedAt;
+
+  /** 처음 삭제한 시각을 보존한다. 접근 권한과 기간은 서비스가 검사한다. */
+  public void delete(LocalDateTime now) {
+    if (deletedAt == null) {
+      deletedAt = now;
+    }
+  }
 }
