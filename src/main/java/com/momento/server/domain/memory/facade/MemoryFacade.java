@@ -27,8 +27,8 @@ public class MemoryFacade {
   }
 
   public MemoryListResponse findMyMemories(
-      Long userId, String title, Integer year, int page, int size) {
-    MemoryPage result = memoryService.findMyMemories(userId, title, year, page, size);
+      Long userId, String keyword, Integer year, int page, int size) {
+    MemoryPage result = memoryService.findMyMemories(userId, keyword, year, page, size);
 
     List<MemorySummary> summaries =
         result.memories().getContent().stream()

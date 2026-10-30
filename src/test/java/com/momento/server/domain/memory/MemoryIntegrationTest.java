@@ -259,16 +259,28 @@ class MemoryIntegrationTest {
   }
 
   @Test
-  @DisplayName("제목 부분검색과 연도 필터로 목록을 좁힐 수 있다")
+  @DisplayName("검색어는 이름 · 내용에서 찾고, 연도 필터와 함께 쓸 수 있다")
   void filterMemories() throws Exception {
     saveMemory(me, "제주도 여행", LocalDate.of(2026, 8, 15));
     saveMemory(me, "부산 여행", LocalDate.of(2025, 5, 1));
-    saveMemory(me, "생일 파티", LocalDate.of(2026, 7, 2));
+    memoryRepository.save(
+        Memory.builder()
+            .user(me)
+            .title("생일 파티")
+            .content("여행 계획을 세웠다")
+            .memoryDate(LocalDate.of(2026, 7, 2))
+            .build());
 
     mockMvc
         .perform(
-            get("/v1/memories").param("title", "여행").header("Authorization", "Bearer " + token))
-        .andExpect(jsonPath("$.data.totalElements").value(2));
+            get("/v1/memories").param("keyword", "여행").header("Authorization", "Bearer " + token))
+        .andExpect(jsonPath("$.data.totalElements").value(3));
+
+    mockMvc
+        .perform(
+            get("/v1/memories").param("keyword", "계획").header("Authorization", "Bearer " + token))
+        .andExpect(jsonPath("$.data.totalElements").value(1))
+        .andExpect(jsonPath("$.data.memories[0].title").value("생일 파티"));
 
     mockMvc
         .perform(
@@ -278,11 +290,10 @@ class MemoryIntegrationTest {
     mockMvc
         .perform(
             get("/v1/memories")
-                .param("title", "여행")
+                .param("keyword", "부산")
                 .param("year", "2026")
                 .header("Authorization", "Bearer " + token))
-        .andExpect(jsonPath("$.data.totalElements").value(1))
-        .andExpect(jsonPath("$.data.memories[0].title").value("제주도 여행"));
+        .andExpect(jsonPath("$.data.totalElements").value(0));
   }
 
   @Test

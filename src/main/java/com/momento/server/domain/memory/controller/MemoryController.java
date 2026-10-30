@@ -34,11 +34,11 @@ public class MemoryController implements MemoryApi {
   @GetMapping
   public CommonResponse<MemoryListResponse> findMyMemories(
       @AuthenticationPrincipal UserPrincipal principal,
-      @RequestParam(required = false) String title,
+      @RequestParam(required = false) String keyword,
       @RequestParam(required = false) Integer year,
       @RequestParam(defaultValue = "0") int page,
       @RequestParam(defaultValue = "20") int size) {
     return CommonResponse.ok(
-        memoryFacade.findMyMemories(principal.getUserId(), title, year, page, size));
+        memoryFacade.findMyMemories(principal.getUserId(), keyword, year, page, size));
   }
 }

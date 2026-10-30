@@ -30,7 +30,7 @@ public interface MemoryApi {
               + "타임캡슐에서 옮겨진 추억과 삭제된 추억은 제외한다. 각 항목에는 대표 이미지 1장만 담긴다.")
   CommonResponse<MemoryListResponse> findMyMemories(
       UserPrincipal principal,
-      @Parameter(description = "제목 부분검색어", example = "제주") String title,
+      @Parameter(description = "검색어. 아카이브 이름 · 내용에서 찾는다", example = "카페") String keyword,
       @Parameter(description = "연도 필터", example = "2026") Integer year,
       @Parameter(description = "페이지 번호(0부터)", example = "0") int page,
       @Parameter(description = "페이지당 개수(1~100)", example = "20") int size);

@@ -102,8 +102,8 @@ public class MemoryService {
   }
 
   /** 아카이브 탭 목록. 연도는 그 해의 1월 1일 ~ 12월 31일 범위로 바꿔 넘긴다. */
-  public MemoryPage findMyMemories(Long userId, String title, Integer year, int page, int size) {
-    String keyword = (title == null || title.isBlank()) ? null : title.trim();
+  public MemoryPage findMyMemories(Long userId, String keyword, Integer year, int page, int size) {
+    String trimmedKeyword = (keyword == null || keyword.isBlank()) ? null : keyword.trim();
     LocalDate startDate = null;
     LocalDate endDate = null;
 
@@ -115,7 +115,7 @@ public class MemoryService {
 
     Pageable pageable = PageRequest.of(Math.max(page, 0), clampSize(size));
     Page<Memory> memories =
-        memoryRepository.findMyMemories(userId, keyword, startDate, endDate, pageable);
+        memoryRepository.findMyMemories(userId, trimmedKeyword, startDate, endDate, pageable);
 
     return new MemoryPage(memories, findImagesByMemory(memories.getContent()));
   }

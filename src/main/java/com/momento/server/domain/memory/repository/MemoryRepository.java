@@ -15,7 +15,7 @@ public interface MemoryRepository extends JpaRepository<Memory, Long> {
   /** 상세 · 수정 · 삭제 대상. 내 아카이브이고 삭제되지 않은 것만 찾는다. */
   Optional<Memory> findByIdAndUserIdAndDeletedAtIsNull(Long id, Long userId);
 
-  /** 아카이브 탭에 노출할 "내가 직접 등록한 추억" 목록. 소프트 삭제된 것과 타임캡슐에서 옮겨진 것은 제외한다. */
+  /** 아카이브 탭에 노출할 "내가 직접 등록한 추억" 목록. 소프트 삭제된 것과 타임캡슐에서 옮겨진 것은 제외한다. 검색어는 이름 · 내용 중 한 곳에만 있어도 찾는다. */
   @Query(
       value =
           """
@@ -23,7 +23,9 @@ public interface MemoryRepository extends JpaRepository<Memory, Long> {
                     WHERE m.user.id = :userId
                       AND m.deletedAt IS NULL
                       AND m.timeCapsule IS NULL
-                      AND (:title IS NULL OR m.title LIKE CONCAT('%', :title, '%'))
+                      AND (:keyword IS NULL
+                           OR m.title LIKE CONCAT('%', :keyword, '%')
+                           OR m.content LIKE CONCAT('%', :keyword, '%'))
                       AND (:startDate IS NULL OR m.memoryDate >= :startDate)
                       AND (:endDate IS NULL OR m.memoryDate <= :endDate)
                     ORDER BY m.memoryDate DESC, m.id DESC
@@ -34,13 +36,15 @@ public interface MemoryRepository extends JpaRepository<Memory, Long> {
                     WHERE m.user.id = :userId
                       AND m.deletedAt IS NULL
                       AND m.timeCapsule IS NULL
-                      AND (:title IS NULL OR m.title LIKE CONCAT('%', :title, '%'))
+                      AND (:keyword IS NULL
+                           OR m.title LIKE CONCAT('%', :keyword, '%')
+                           OR m.content LIKE CONCAT('%', :keyword, '%'))
                       AND (:startDate IS NULL OR m.memoryDate >= :startDate)
                       AND (:endDate IS NULL OR m.memoryDate <= :endDate)
                     """)
   Page<Memory> findMyMemories(
       @Param("userId") Long userId,
-      @Param("title") String title,
+      @Param("keyword") String keyword,
       @Param("startDate") LocalDate startDate,
       @Param("endDate") LocalDate endDate,
       Pageable pageable);
