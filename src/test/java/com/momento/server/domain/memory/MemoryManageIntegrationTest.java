@@ -1,7 +1,9 @@
 package com.momento.server.domain.memory;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.containsString;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -17,6 +19,8 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -24,6 +28,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
 
@@ -151,5 +156,149 @@ class MemoryManageIntegrationTest {
     mockMvc
         .perform(get("/v1/memories/{memoryId}", memory.getId()))
         .andExpect(status().isUnauthorized());
+  }
+
+  private ResultActions updateMemory(Long memoryId, String body) throws Exception {
+    return mockMvc.perform(
+        patch("/v1/memories/{memoryId}", memoryId)
+            .header("Authorization", "Bearer " + token)
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(body));
+  }
+
+  private List<String> imageKeysOf(Memory memory) {
+    return memoryImageRepository.findByMemoryIdOrderByDisplayOrderAsc(memory.getId()).stream()
+        .map(MemoryImage::getImageUrl)
+        .toList();
+  }
+
+  private Memory reload(Memory memory) {
+    return memoryRepository.findById(memory.getId()).orElseThrow();
+  }
+
+  @Test
+  @DisplayName("보낸 값만 바꾸고 보내지 않은 값과 사진은 그대로 둔다")
+  void updateOnlyGivenValues() throws Exception {
+    Memory memory = saveMemory(me, "제주도 여행");
+    String key = imageKey(me);
+    saveImage(memory, key, 0);
+
+    updateMemory(memory.getId(), "{\"title\": \"부산 여행\"}")
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.data").doesNotExist());
+
+    Memory updated = reload(memory);
+    assertThat(updated.getTitle()).isEqualTo("부산 여행");
+    assertThat(updated.getContent()).isEqualTo("내용");
+    assertThat(updated.getMemoryDate()).isEqualTo(LocalDate.of(2026, 8, 15));
+    assertThat(imageKeysOf(memory)).containsExactly(key);
+  }
+
+  @Test
+  @DisplayName("imageKeys 를 보내면 사진 목록을 통째로 바꾸고, 대표 사진은 첫 번째로 옮긴다")
+  void replaceImages() throws Exception {
+    Memory memory = saveMemory(me, "제주도 여행");
+    String removed = imageKey(me);
+    String kept = imageKey(me);
+    String added = imageKey(me);
+    saveImage(memory, removed, 0);
+    saveImage(memory, kept, 1);
+
+    updateMemory(
+            memory.getId(),
+            """
+            {"imageKeys": ["%s", "%s"], "representativeImageKey": "%s"}
+            """
+                .formatted(kept, added, added))
+        .andExpect(status().isOk());
+
+    assertThat(imageKeysOf(memory)).containsExactly(added, kept);
+    assertThat(reload(memory).getTitle()).isEqualTo("제주도 여행");
+  }
+
+  @Test
+  @DisplayName("빈 imageKeys 를 보내면 사진이 모두 빠진다")
+  void removeAllImages() throws Exception {
+    Memory memory = saveMemory(me, "제주도 여행");
+    saveImage(memory, imageKey(me), 0);
+
+    updateMemory(memory.getId(), "{\"imageKeys\": []}").andExpect(status().isOk());
+
+    assertThat(imageKeysOf(memory)).isEmpty();
+  }
+
+  @Test
+  @DisplayName("대표 사진 key 만 보내면 기존 사진 중 그 사진을 첫 번째로 옮긴다")
+  void changeRepresentativeOnly() throws Exception {
+    Memory memory = saveMemory(me, "제주도 여행");
+    String first = imageKey(me);
+    String second = imageKey(me);
+    String third = imageKey(me);
+    saveImage(memory, first, 0);
+    saveImage(memory, second, 1);
+    saveImage(memory, third, 2);
+
+    updateMemory(memory.getId(), "{\"representativeImageKey\": \"%s\"}".formatted(third))
+        .andExpect(status().isOk());
+
+    assertThat(imageKeysOf(memory)).containsExactly(third, first, second);
+  }
+
+  @Test
+  @DisplayName("다른 회원의 key · 목록에 없는 대표 사진이면 400 INVALID_IMAGE_KEY 이고 아무것도 바뀌지 않는다")
+  void updateRejectsInvalidImageKeys() throws Exception {
+    Memory memory = saveMemory(me, "제주도 여행");
+    String mine = imageKey(me);
+    saveImage(memory, mine, 0);
+
+    for (String body :
+        List.of(
+            "{\"title\": \"바뀐 이름\", \"imageKeys\": [\"%s\"]}".formatted(imageKey(other)),
+            "{\"title\": \"바뀐 이름\", \"representativeImageKey\": \"%s\"}".formatted(imageKey(me)))) {
+      updateMemory(memory.getId(), body)
+          .andExpect(status().isBadRequest())
+          .andExpect(jsonPath("$.code").value("INVALID_IMAGE_KEY"));
+    }
+
+    assertThat(reload(memory).getTitle()).isEqualTo("제주도 여행");
+    assertThat(imageKeysOf(memory)).containsExactly(mine);
+  }
+
+  @Test
+  @DisplayName("공백 이름 · 15자 넘는 이름 · 45자 넘는 내용 · 9장 사진은 400 INVALID_INPUT_VALUE 다")
+  void updateValidatesBody() throws Exception {
+    Memory memory = saveMemory(me, "제주도 여행");
+    String nine =
+        IntStream.rangeClosed(1, 9)
+            .mapToObj(i -> "\"" + imageKey(me) + "\"")
+            .collect(Collectors.joining(","));
+
+    for (String body :
+        List.of(
+            "{\"title\": \" \"}",
+            "{\"title\": \"" + "가".repeat(16) + "\"}",
+            "{\"content\": \"" + "가".repeat(46) + "\"}",
+            "{\"imageKeys\": [" + nine + "]}")) {
+      updateMemory(memory.getId(), body)
+          .andExpect(status().isBadRequest())
+          .andExpect(jsonPath("$.code").value("INVALID_INPUT_VALUE"));
+    }
+
+    assertThat(reload(memory).getTitle()).isEqualTo("제주도 여행");
+  }
+
+  @Test
+  @DisplayName("삭제된 아카이브 · 다른 회원의 아카이브는 수정할 수 없고 404 MEMORY_NOT_FOUND 다")
+  void updateNotFound() throws Exception {
+    Memory deleted = saveDeletedMemory(me);
+    Memory others = saveMemory(other, "남의 추억");
+
+    for (Memory memory : List.of(deleted, others)) {
+      updateMemory(memory.getId(), "{\"title\": \"바뀐 이름\"}")
+          .andExpect(status().isNotFound())
+          .andExpect(jsonPath("$.code").value("MEMORY_NOT_FOUND"));
+    }
+
+    assertThat(reload(others).getTitle()).isEqualTo("남의 추억");
   }
 }

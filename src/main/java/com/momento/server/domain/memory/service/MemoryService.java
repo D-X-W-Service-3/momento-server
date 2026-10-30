@@ -3,6 +3,7 @@ package com.momento.server.domain.memory.service;
 import com.momento.server.domain.image.entity.ImageTarget;
 import com.momento.server.domain.image.service.ImageKeys;
 import com.momento.server.domain.memory.dto.request.MemoryCreateRequest;
+import com.momento.server.domain.memory.dto.request.MemoryUpdateRequest;
 import com.momento.server.domain.memory.dto.response.MemorySummary;
 import com.momento.server.domain.memory.entity.Memory;
 import com.momento.server.domain.memory.entity.MemoryImage;
@@ -64,6 +65,32 @@ public class MemoryService {
 
     return new MemoryDetail(
         memory, memoryImageRepository.findByMemoryIdOrderByDisplayOrderAsc(memory.getId()));
+  }
+
+  /**
+   * 보낸 값만 바꾼다. imageKeys 를 보내면 기존 사진을 지우고 보낸 순서대로 다시 붙인다. 대표 사진 key 만 보내면 기존 사진 중 그 사진을 첫 번째로 옮긴다.
+   * 사진 검증 규칙은 등록과 같다.
+   */
+  @Transactional
+  public void update(Long memoryId, Long userId, MemoryUpdateRequest request) {
+    Memory memory = getMine(memoryId, userId);
+
+    if (request.changesImages()) {
+      List<String> imageKeys =
+          request.imageKeys() != null ? request.imageKeys() : currentImageKeys(memory);
+      List<String> arranged = arrangeImageKeys(userId, imageKeys, request.representativeImageKey());
+
+      memoryImageRepository.deleteByMemoryId(memory.getId());
+      saveImages(memory, arranged);
+    }
+
+    memory.update(request.title(), request.content(), request.memoryDate());
+  }
+
+  private List<String> currentImageKeys(Memory memory) {
+    return memoryImageRepository.findByMemoryIdOrderByDisplayOrderAsc(memory.getId()).stream()
+        .map(MemoryImage::getImageUrl)
+        .toList();
   }
 
   /** 내 아카이브를 찾는다. 없는 아카이브 · 삭제된 아카이브 · 다른 회원의 아카이브는 똑같이 404 다. */

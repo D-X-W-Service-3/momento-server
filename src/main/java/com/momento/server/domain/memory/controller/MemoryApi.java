@@ -1,6 +1,7 @@
 package com.momento.server.domain.memory.controller;
 
 import com.momento.server.domain.memory.dto.request.MemoryCreateRequest;
+import com.momento.server.domain.memory.dto.request.MemoryUpdateRequest;
 import com.momento.server.domain.memory.dto.response.MemoryDetailResponse;
 import com.momento.server.domain.memory.dto.response.MemoryListResponse;
 import com.momento.server.global.common.auth.UserPrincipal;
@@ -34,6 +35,19 @@ public interface MemoryApi {
   CommonResponse<MemoryDetailResponse> getMemory(
       @Parameter(hidden = true) UserPrincipal principal,
       @Parameter(description = "아카이브 식별자", example = "3") Long memoryId);
+
+  @Operation(
+      summary = "아카이브 수정",
+      description =
+          "아카이브 수정 화면에서 사진 · 이름 · 내용을 수정한다. 등록과 같은 필드를 받지만 모두 선택이고, title · content · memoryDate 는 보낸"
+              + " 경우에만 바꾼다. imageKeys 를 보내면 사진 목록 전체를 그 값으로 바꾸고 빠진 사진은 삭제된다. 기존 사진은 상세 조회의 imageKey 를,"
+              + " 새 사진은 업로드 후 받은 key 를 넣는다. representativeImageKey 를 주면 그 사진을 첫 번째(대표 사진)로 옮긴다. 내 key 가"
+              + " 아니거나 중복이거나 대표 사진 key 가 목록에 없으면 400 INVALID_IMAGE_KEY 다. 없는 아카이브 · 삭제된 아카이브 · 다른 회원의"
+              + " 아카이브는 똑같이 404 MEMORY_NOT_FOUND 다. 응답 데이터는 없다.")
+  CommonResponse<?> updateMemory(
+      @Parameter(hidden = true) UserPrincipal principal,
+      @Parameter(description = "아카이브 식별자", example = "3") Long memoryId,
+      @Valid MemoryUpdateRequest request);
 
   @Operation(
       summary = "추억 목록 조회",

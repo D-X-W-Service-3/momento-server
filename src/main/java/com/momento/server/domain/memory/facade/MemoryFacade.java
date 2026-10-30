@@ -1,6 +1,7 @@
 package com.momento.server.domain.memory.facade;
 
 import com.momento.server.domain.memory.dto.request.MemoryCreateRequest;
+import com.momento.server.domain.memory.dto.request.MemoryUpdateRequest;
 import com.momento.server.domain.memory.dto.response.MemoryDetailResponse;
 import com.momento.server.domain.memory.dto.response.MemoryListResponse;
 import com.momento.server.domain.memory.dto.response.MemorySummary;
@@ -35,6 +36,10 @@ public class MemoryFacade {
 
     return MemoryDetailResponse.of(
         detail.memory(), detail.images(), nickname, true, presignedUrlProvider::viewUrl);
+  }
+
+  public void update(Long memoryId, Long userId, MemoryUpdateRequest request) {
+    memoryService.update(memoryId, userId, request);
   }
 
   public MemoryListResponse findMyMemories(

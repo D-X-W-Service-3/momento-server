@@ -1,6 +1,7 @@
 package com.momento.server.domain.memory.controller;
 
 import com.momento.server.domain.memory.dto.request.MemoryCreateRequest;
+import com.momento.server.domain.memory.dto.request.MemoryUpdateRequest;
 import com.momento.server.domain.memory.dto.response.MemoryDetailResponse;
 import com.momento.server.domain.memory.dto.response.MemoryListResponse;
 import com.momento.server.domain.memory.facade.MemoryFacade;
@@ -12,6 +13,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -37,6 +39,16 @@ public class MemoryController implements MemoryApi {
   public CommonResponse<MemoryDetailResponse> getMemory(
       @AuthenticationPrincipal UserPrincipal principal, @PathVariable Long memoryId) {
     return CommonResponse.ok(memoryFacade.getDetail(memoryId, principal.getUserId()));
+  }
+
+  @Override
+  @PatchMapping("/{memoryId}")
+  public CommonResponse<?> updateMemory(
+      @AuthenticationPrincipal UserPrincipal principal,
+      @PathVariable Long memoryId,
+      @Valid @RequestBody MemoryUpdateRequest request) {
+    memoryFacade.update(memoryId, principal.getUserId(), request);
+    return CommonResponse.ok();
   }
 
   @Override
