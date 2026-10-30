@@ -142,6 +142,7 @@ CREATE TABLE `letters` (
 	`id`	BIGINT	NOT NULL	AUTO_INCREMENT	COMMENT '편지 ID',
 	`time_capsule_id`	BIGINT	NOT NULL	COMMENT '타임캡슐 ID',
 	`author_id`	BIGINT	NOT NULL	COMMENT '편지 작성자 ID',
+	`title`	VARCHAR(50)	NULL	COMMENT '편지 제목. 기존 편지는 NULL',
 	`content`	TEXT	NOT NULL	COMMENT '편지 내용',
 	`theme_type`	VARCHAR(20)	NULL,
 	`status`	VARCHAR(20)	NOT NULL	DEFAULT 'DRAFT'	COMMENT '작성 상태: DRAFT, SUBMITTED',
