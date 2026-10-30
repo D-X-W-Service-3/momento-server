@@ -15,7 +15,10 @@ public interface MemoryApi {
   @Operation(
       summary = "추억 등록",
       description =
-          "아카이브 추가 화면에서 이름 · 내용 · 추억 날짜와 이미지 URL 목록(최대 10장)을 받아 저장한다. 이름은 15자, 내용은 45자까지다."
+          "아카이브 추가 화면에서 이름 · 내용 · 추억 날짜 · 사진을 받아 저장한다. 사진은 먼저 이미지 업로드 URL 발급(target=MEMORY)으로 S3 에"
+              + " 올리고, 받은 imageKey 를 보여줄 순서대로 imageKeys 에 담는다(최대 8장). representativeImageKey 를 주면 그 사진을"
+              + " 첫 번째로 옮겨 대표 사진으로 쓰고, 없으면 첫 사진이 대표 사진이다. 내 key 가 아니거나 같은 key 가 두 번 있거나 대표 사진 key"
+              + " 가 목록에 없으면 400 INVALID_IMAGE_KEY 다. 이름은 15자, 내용은 45자까지다."
               + " 공개 범위는 요청으로 받지 않고 항상 PRIVATE 로 저장된다. 등록 후 목록을 다시 조회하므로 응답 데이터는 없다.")
   CommonResponse<?> create(
       @Parameter(hidden = true) UserPrincipal principal, @Valid MemoryCreateRequest request);

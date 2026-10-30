@@ -17,6 +17,7 @@ import com.momento.server.global.common.auth.service.TokenProvider;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.UUID;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import org.junit.jupiter.api.AfterEach;
@@ -28,6 +29,7 @@ import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMock
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.ResultActions;
 
 /** 추억 등록·목록 조회 API 를 실제 시큐리티 필터까지 태워 검증한다. */
 @SpringBootTest
@@ -61,6 +63,19 @@ class MemoryIntegrationTest {
     userRepository.deleteAll();
   }
 
+  /** 이미지 업로드 URL 발급이 MEMORY 용도로 만드는 것과 같은 모양의 key. */
+  private static String imageKey(User owner, String extension) {
+    return "memories/" + owner.getId() + "/" + UUID.randomUUID() + "." + extension;
+  }
+
+  private ResultActions create(String body) throws Exception {
+    return mockMvc.perform(
+        post("/v1/memories")
+            .header("Authorization", "Bearer " + token)
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(body));
+  }
+
   private Memory saveMemory(User owner, String title, LocalDate memoryDate) {
     return memoryRepository.save(
         Memory.builder().user(owner).title(title).memoryDate(memoryDate).build());
@@ -69,15 +84,18 @@ class MemoryIntegrationTest {
   @Test
   @DisplayName("추억을 등록하면 data 없는 201 이고, PRIVATE 로 저장되며 이미지가 보낸 순서대로 붙는다")
   void createMemory() throws Exception {
+    String first = imageKey(me, "jpg");
+    String second = imageKey(me, "png");
     String body =
         """
-                {
-                  "title": "제주도 여행",
-                  "content": "바다가 정말 예뻤다",
-                  "memoryDate": "2026-08-15",
-                  "imageUrls": ["https://cdn.test/a.jpg", "https://cdn.test/b.jpg"]
-                }
-                """;
+        {
+          "title": "제주도 여행",
+          "content": "바다가 정말 예뻤다",
+          "memoryDate": "2026-08-15",
+          "imageKeys": ["%s", "%s"]
+        }
+        """
+            .formatted(first, second);
 
     mockMvc
         .perform(
@@ -99,7 +117,8 @@ class MemoryIntegrationTest {
         memoryImageRepository.findByMemoryIdOrderByDisplayOrderAsc(saved.getId());
     assertThat(images).hasSize(2);
     assertThat(images.get(0).getDisplayOrder()).isZero();
-    assertThat(images.get(0).getImageUrl()).isEqualTo("https://cdn.test/a.jpg");
+    assertThat(images.get(0).getImageUrl()).isEqualTo(first);
+    assertThat(images.get(1).getImageUrl()).isEqualTo(second);
   }
 
   @Test
@@ -179,14 +198,14 @@ class MemoryIntegrationTest {
   }
 
   @Test
-  @DisplayName("이미지를 11장 보내면 400 을 반환하고 아무것도 저장하지 않는다")
-  void imageCountIsLimitedToTen() throws Exception {
-    String urls =
-        IntStream.rangeClosed(1, 11)
-            .mapToObj(i -> "\"https://cdn.test/" + i + ".jpg\"")
+  @DisplayName("사진을 9장 보내면 400 을 반환하고 아무것도 저장하지 않는다")
+  void imageCountIsLimitedToEight() throws Exception {
+    String keys =
+        IntStream.rangeClosed(1, 9)
+            .mapToObj(i -> "\"" + imageKey(me, "jpg") + "\"")
             .collect(Collectors.joining(","));
     String body =
-        "{\"title\":\"사진 많음\",\"memoryDate\":\"2026-08-15\",\"imageUrls\":[" + urls + "]}";
+        "{\"title\":\"사진 많음\",\"memoryDate\":\"2026-08-15\",\"imageKeys\":[" + keys + "]}";
 
     mockMvc
         .perform(
@@ -262,22 +281,22 @@ class MemoryIntegrationTest {
   }
 
   @Test
-  @DisplayName("이미지 URL 이 비어 있거나 500자를 넘으면 400 을 반환한다")
-  void imageUrlElementsAreValidated() throws Exception {
+  @DisplayName("이미지 key 가 비어 있거나 500자를 넘으면 400 을 반환한다")
+  void imageKeyElementsAreValidated() throws Exception {
     String blank =
         """
-        {"title": "빈 URL", "memoryDate": "2026-08-15", "imageUrls": [""]}
+        {"title": "빈 key", "memoryDate": "2026-08-15", "imageKeys": [""]}
         """;
-    String nullUrl =
+    String nullKey =
         """
-        {"title": "null URL", "memoryDate": "2026-08-15", "imageUrls": [null]}
+        {"title": "null key", "memoryDate": "2026-08-15", "imageKeys": [null]}
         """;
     String tooLong =
-        "{\"title\":\"긴 URL\",\"memoryDate\":\"2026-08-15\",\"imageUrls\":[\"https://cdn.test/"
+        "{\"title\":\"긴 key\",\"memoryDate\":\"2026-08-15\",\"imageKeys\":[\"memories/"
             + "a".repeat(600)
             + ".jpg\"]}";
 
-    for (String body : List.of(blank, nullUrl, tooLong)) {
+    for (String body : List.of(blank, nullKey, tooLong)) {
       mockMvc
           .perform(
               post("/v1/memories")
@@ -301,5 +320,55 @@ class MemoryIntegrationTest {
           .andExpect(status().isBadRequest())
           .andExpect(jsonPath("$.code").value("INVALID_INPUT_VALUE"));
     }
+  }
+
+  @Test
+  @DisplayName("대표 사진 key 를 주면 그 사진이 첫 번째(display_order 0)가 되고 나머지는 보낸 순서를 지킨다")
+  void representativeImageComesFirst() throws Exception {
+    String a = imageKey(me, "jpg");
+    String b = imageKey(me, "png");
+    String c = imageKey(me, "webp");
+
+    create(
+            """
+            {"title": "대표 사진", "memoryDate": "2026-08-15", "imageKeys": ["%s", "%s", "%s"],
+             "representativeImageKey": "%s"}
+            """
+                .formatted(a, b, c, c))
+        .andExpect(status().isCreated());
+
+    Memory saved = memoryRepository.findAll().get(0);
+    assertThat(memoryImageRepository.findByMemoryIdOrderByDisplayOrderAsc(saved.getId()))
+        .extracting(MemoryImage::getImageUrl)
+        .containsExactly(c, a, b);
+  }
+
+  @Test
+  @DisplayName("내 key 가 아니거나 중복이거나 대표 사진이 목록에 없으면 400 INVALID_IMAGE_KEY 이고 아무것도 저장하지 않는다")
+  void rejectsInvalidImageKeys() throws Exception {
+    User other = userRepository.save(User.builder().kakaoId("kakao-other").nickname("남").build());
+    String mine = imageKey(me, "jpg");
+    String profileKey = "profiles/" + me.getId() + "/" + UUID.randomUUID() + ".jpg";
+    String body =
+        """
+        {"title": "잘못된 사진", "memoryDate": "2026-08-15", "imageKeys": [%s] %s}
+        """;
+
+    for (String invalid :
+        List.of(
+            body.formatted("\"" + imageKey(other, "jpg") + "\"", ""),
+            body.formatted("\"https://cdn.test/a.jpg\"", ""),
+            body.formatted("\"" + profileKey + "\"", ""),
+            body.formatted("\"" + mine + "\", \"" + mine + "\"", ""),
+            body.formatted(
+                "\"" + mine + "\"",
+                ", \"representativeImageKey\": \"" + imageKey(me, "png") + "\""))) {
+      create(invalid)
+          .andExpect(status().isBadRequest())
+          .andExpect(jsonPath("$.code").value("INVALID_IMAGE_KEY"));
+    }
+
+    assertThat(memoryRepository.count()).isZero();
+    assertThat(memoryImageRepository.count()).isZero();
   }
 }

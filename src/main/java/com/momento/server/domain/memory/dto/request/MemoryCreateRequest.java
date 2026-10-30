@@ -25,15 +25,23 @@ public record MemoryCreateRequest(
             requiredMode = Schema.RequiredMode.REQUIRED)
         @NotNull(message = "추억 날짜는 필수입니다.")
         LocalDate memoryDate,
-    @Schema(description = "이미 업로드해 확보한 이미지 URL 목록. 최대 10장이며, 없으면 생략하거나 빈 배열로 보낸다.")
-        @Size(max = 10, message = "이미지는 최대 10장까지 등록할 수 있습니다.")
+    @Schema(
+            description =
+                "사진 S3 key. 보여줄 순서대로, 최대 8개. 이미지 업로드 URL 발급(target=MEMORY)으로 받은 내 key 여야 한다."
+                    + " 없으면 생략하거나 빈 배열로 보낸다.",
+            example = "[\"memories/1/3f0a5c9e-2b1d-4f7a-8c3e-9d2b7a6e1f00.jpg\"]")
+        @Size(max = 8, message = "사진은 최대 8장까지 등록할 수 있습니다.")
         List<
-                @NotBlank(message = "이미지 URL 은 비어 있을 수 없습니다.")
-                @Size(max = 500, message = "이미지 URL 은 500자를 넘을 수 없습니다.") String>
-            imageUrls) {
+                @NotBlank(message = "이미지 key 는 비어 있을 수 없습니다.")
+                @Size(max = 500, message = "이미지 key 는 500자를 넘을 수 없습니다.") String>
+            imageKeys,
+    @Schema(
+            description = "대표 사진 key. imageKeys 중 하나다. 없으면 첫 번째 사진이 대표 사진이다.",
+            example = "memories/1/3f0a5c9e-2b1d-4f7a-8c3e-9d2b7a6e1f00.jpg")
+        String representativeImageKey) {
 
-  /** imageUrls 를 아예 안 보낸 경우 null 이 되므로, 서비스가 쓰기 편하게 빈 목록으로 바꿔 준다. */
-  public List<String> imageUrlsOrEmpty() {
-    return imageUrls == null ? List.of() : imageUrls;
+  /** imageKeys 를 아예 안 보낸 경우 null 이 되므로, 서비스가 쓰기 편하게 빈 목록으로 바꿔 준다. */
+  public List<String> imageKeysOrEmpty() {
+    return imageKeys == null ? List.of() : imageKeys;
   }
 }
