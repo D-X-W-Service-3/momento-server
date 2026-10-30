@@ -123,7 +123,7 @@ class LetterDeleteIntegrationTest {
       throws Exception {
     Letter letter = saveLetter(letterStatus);
     Letter before = letters.findById(letter.getId()).orElseThrow();
-    read().andExpect(status().isOk());
+    read().andExpect(status().isOk()).andExpect(jsonPath("$.data.canDelete").value(true));
     remove(letter.getId(), token)
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.status").value(200))
@@ -132,6 +132,7 @@ class LetterDeleteIntegrationTest {
         .andExpect(jsonPath("$.data").doesNotExist());
     Letter saved = letters.findById(letter.getId()).orElseThrow();
     assertThat(saved.getDeletedAt()).isEqualTo(now());
+    assertThat(saved.getTitle()).isEqualTo(before.getTitle());
     assertThat(saved.getContent()).isEqualTo(before.getContent());
     assertThat(saved.getThemeType()).isEqualTo(before.getThemeType());
     assertThat(saved.getStatus()).isEqualTo(letterStatus);
@@ -193,7 +194,9 @@ class LetterDeleteIntegrationTest {
         now().plusSeconds(openOffset),
         now().plusSeconds(deadlineOffset),
         capsule.getId());
-    read().andExpect(status().isOk());
+    read()
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.data.canDelete").value(expected == 200));
     ResultActions response = remove(letter.getId(), token).andExpect(status().is(expected));
     if (expected == 409) {
       response.andExpect(jsonPath("$.code").value("LETTER_WRITING_CLOSED"));
@@ -262,6 +265,7 @@ class LetterDeleteIntegrationTest {
             .findByTimeCapsuleIdAndAuthorIdAndDeletedAtIsNull(capsule.getId(), author.getId())
             .orElseThrow();
     assertThat(replacement.getId()).isNotEqualTo(old.getId());
+    assertThat(replacement.getStatus()).isEqualTo(LetterStatus.SUBMITTED);
     LetterStatus replacementStatus = replacement.getStatus();
     remove(old.getId(), token).andExpect(status().isNotFound());
     assertThat(letters.findById(replacement.getId()).orElseThrow().getDeletedAt()).isNull();
@@ -394,6 +398,65 @@ class LetterDeleteIntegrationTest {
       assertThat(members.findById(authorMember.getId()).orElseThrow().getStatus())
           .isEqualTo(MemberStatus.REMOVED);
     }
+  }
+
+  @ParameterizedTest
+  @CsvSource({
+    "OWNER,ALL_MEMBERS", "PARTICIPANT,ALL_MEMBERS", "RECIPIENT,ALL_MEMBERS",
+    "OWNER,RECIPIENT_AND_AUTHOR", "PARTICIPANT,RECIPIENT_AND_AUTHOR",
+        "RECIPIENT,RECIPIENT_AND_AUTHOR"
+  })
+  void writesReadsDeletesAndRecreatesSubmittedLetterThroughApis(
+      MemberRole role, VisibilityType visibility) throws Exception {
+    jdbc.update(
+        "update capsule_members set role = ? where id = ?", role.name(), authorMember.getId());
+    jdbc.update(
+        "update time_capsules set visibility_type = ? where id = ?",
+        visibility.name(),
+        capsule.getId());
+    create().andExpect(status().isCreated()).andExpect(jsonPath("$.data").doesNotExist());
+    Letter first =
+        letters
+            .findByTimeCapsuleIdAndAuthorIdAndDeletedAtIsNull(capsule.getId(), author.getId())
+            .orElseThrow();
+    assertThat(first.getStatus()).isEqualTo(LetterStatus.SUBMITTED);
+    assertThat(first.getSubmittedAt()).isEqualTo(now());
+    read()
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.data.letterId").value(first.getId()))
+        .andExpect(jsonPath("$.data.title").value("다시 작성"))
+        .andExpect(jsonPath("$.data.content").value("새 본문"))
+        .andExpect(jsonPath("$.data.themeType").value("COZY"))
+        .andExpect(jsonPath("$.data.createdAt").exists())
+        .andExpect(jsonPath("$.data.canDelete").value(true))
+        .andExpect(jsonPath("$.data.status").doesNotExist())
+        .andExpect(jsonPath("$.data.capsuleId").doesNotExist());
+    remove(first.getId(), token)
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.data").doesNotExist());
+    read().andExpect(status().isNotFound()).andExpect(jsonPath("$.code").value("LETTER_NOT_FOUND"));
+    assertThat(capsules.countLettersByStatus(capsule.getId(), LetterStatus.SUBMITTED)).isZero();
+    given(clock.instant()).willReturn(NOW.plusSeconds(10));
+    create().andExpect(status().isCreated());
+    Letter replacement =
+        letters
+            .findByTimeCapsuleIdAndAuthorIdAndDeletedAtIsNull(capsule.getId(), author.getId())
+            .orElseThrow();
+    assertThat(replacement.getId()).isNotEqualTo(first.getId());
+    assertThat(replacement.getStatus()).isEqualTo(LetterStatus.SUBMITTED);
+    assertThat(replacement.getSubmittedAt()).isEqualTo(now().plusSeconds(10));
+    remove(first.getId(), token).andExpect(status().isNotFound());
+    read()
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.data.letterId").value(replacement.getId()))
+        .andExpect(jsonPath("$.data.canDelete").value(true));
+    assertThat(letters.findById(replacement.getId()).orElseThrow().getDeletedAt()).isNull();
+    Letter deleted = letters.findById(first.getId()).orElseThrow();
+    assertThat(deleted.getDeletedAt()).isEqualTo(now());
+    assertThat(deleted.getSubmittedAt()).isEqualTo(now());
+    assertThat(letters.count()).isEqualTo(2);
+    assertThat(letters.countByTimeCapsuleIdAndDeletedAtIsNull(capsule.getId())).isEqualTo(1);
+    assertThat(capsules.countLettersByStatus(capsule.getId(), LetterStatus.SUBMITTED)).isEqualTo(1);
   }
 
   private Letter saveLetter(LetterStatus status) {
