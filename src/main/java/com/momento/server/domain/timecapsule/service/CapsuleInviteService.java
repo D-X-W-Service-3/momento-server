@@ -20,7 +20,6 @@ import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -28,9 +27,6 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
 public class CapsuleInviteService {
-
-  /** 미리보기 아바타 스택에 보여줄 상위 인원 수. 나머지는 프론트가 "+N" 으로 뭉친다. */
-  private static final int MEMBER_PREVIEW_LIMIT = 5;
 
   private final CapsuleInviteRepository capsuleInviteRepository;
   private final CapsuleMemberRepository capsuleMemberRepository;
@@ -77,23 +73,24 @@ public class CapsuleInviteService {
    * 404 다 — "누가 이미 선점했다"는 사실 자체를 드러내지 않는다.
    */
   @Transactional
-  public InvitePreviewDetail getPreview(String inviteToken, Long userId) {
+  public CapsuleInvitePreview getPreview(String inviteToken, Long userId) {
     CapsuleInvite invite = claimAndAuthorize(inviteToken, userId);
 
     TimeCapsule capsule = timeCapsuleService.getActiveCapsule(invite.getTimeCapsule().getId());
+    Long capsuleId = capsule.getId();
     boolean alreadyJoined =
         capsuleMemberRepository
-            .findByTimeCapsuleIdAndUserIdAndStatus(capsule.getId(), userId, MemberStatus.ACTIVE)
+            .findByTimeCapsuleIdAndUserIdAndStatus(capsuleId, userId, MemberStatus.ACTIVE)
             .isPresent();
 
-    return new InvitePreviewDetail(
+    return new CapsuleInvitePreview(
         invite,
         capsule,
         alreadyJoined,
-        capsuleMemberRepository.countByTimeCapsuleIdAndStatus(capsule.getId(), MemberStatus.ACTIVE),
-        timeCapsuleService.countSubmittedLetters(capsule.getId()),
-        memberPreview(capsule.getId(), MemberRole.PARTICIPANT),
-        memberPreview(capsule.getId(), MemberRole.RECIPIENT));
+        capsuleMemberRepository.countByTimeCapsuleIdAndStatus(capsuleId, MemberStatus.ACTIVE),
+        timeCapsuleService.countSubmittedLetters(capsuleId),
+        timeCapsuleService.participantGroup(capsuleId),
+        timeCapsuleService.recipientGroup(capsuleId));
   }
 
   /**
@@ -145,7 +142,7 @@ public class CapsuleInviteService {
   }
 
   /** 나에게 고정된, 아직 응답 대기 중인(수락·거절·만료되지 않은) 초대만 최신순으로 보여준다. */
-  public List<InvitePreviewDetail> getReceived(Long userId) {
+  public List<ReceivedInvite> getReceived(Long userId) {
     return capsuleInviteRepository.findByInviteeIdOrderByCreatedAtDesc(userId).stream()
         .filter(invite -> invite.isUsable(LocalDateTime.now(clock)))
         .map(this::tryBuildReceivedDetail)
@@ -153,10 +150,10 @@ public class CapsuleInviteService {
         .toList();
   }
 
-  private InvitePreviewDetail tryBuildReceivedDetail(CapsuleInvite invite) {
+  private ReceivedInvite tryBuildReceivedDetail(CapsuleInvite invite) {
     try {
       TimeCapsule capsule = timeCapsuleService.getActiveCapsule(invite.getTimeCapsule().getId());
-      return new InvitePreviewDetail(invite, capsule, false, 0, 0, null, null);
+      return new ReceivedInvite(invite, capsule);
     } catch (ApiException exception) {
       return null;
     }
@@ -226,31 +223,6 @@ public class CapsuleInviteService {
     return UUID.randomUUID().toString().replace("-", "");
   }
 
-  private MemberPreview memberPreview(Long capsuleId, MemberRole role) {
-    long count =
-        capsuleMemberRepository.countByTimeCapsuleIdAndRoleAndStatus(
-            capsuleId, role, MemberStatus.ACTIVE);
-    List<CapsuleMember> topMembers =
-        capsuleMemberRepository.findByTimeCapsuleIdAndRoleAndStatusOrderByJoinedAtAsc(
-            capsuleId, role, MemberStatus.ACTIVE, PageRequest.of(0, MEMBER_PREVIEW_LIMIT));
-    return new MemberPreview(count, topMembers);
-  }
-
-  /**
-   * 미리보기의 "참여자/수신자" 한 역할 몫. {@code topMembers} 는 아바타로 보여줄 상위 인원(최대 {@link #MEMBER_PREVIEW_LIMIT}).
-   */
-  public record MemberPreview(long count, List<CapsuleMember> topMembers) {}
-
-  /**
-   * 미리보기·받은 목록이 공유하는 결과. 받은 목록에서는 {@code alreadyJoined}·인원 수·미리보기까지는 필요 없어 각각 false/0/null 로 둔다 —
-   * Facade 가 어떤 응답을 만드는지에 따라 쓰는 필드가 다르다.
-   */
-  public record InvitePreviewDetail(
-      CapsuleInvite invite,
-      TimeCapsule capsule,
-      boolean alreadyJoined,
-      long memberCount,
-      long letterCount,
-      MemberPreview participants,
-      MemberPreview recipients) {}
+  /** 받은 초대 목록 한 줄. */
+  public record ReceivedInvite(CapsuleInvite invite, TimeCapsule capsule) {}
 }

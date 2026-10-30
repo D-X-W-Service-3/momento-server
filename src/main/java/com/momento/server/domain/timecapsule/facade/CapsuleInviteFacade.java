@@ -2,16 +2,10 @@ package com.momento.server.domain.timecapsule.facade;
 
 import com.momento.server.domain.timecapsule.dto.request.CapsuleInviteCreateRequest;
 import com.momento.server.domain.timecapsule.dto.response.CapsuleInvitePreviewResponse;
-import com.momento.server.domain.timecapsule.dto.response.CapsuleInvitePreviewResponse.CapsuleSummary;
-import com.momento.server.domain.timecapsule.dto.response.CapsuleInvitePreviewResponse.MemberPreview;
-import com.momento.server.domain.timecapsule.dto.response.CapsuleInvitePreviewResponse.MemberPreviewItem;
 import com.momento.server.domain.timecapsule.dto.response.CapsuleInviteReceivedListResponse;
 import com.momento.server.domain.timecapsule.dto.response.CapsuleInviteReceivedListResponse.Item;
 import com.momento.server.domain.timecapsule.dto.response.CapsuleInviteResponse;
-import com.momento.server.domain.timecapsule.entity.CapsuleInvite;
-import com.momento.server.domain.timecapsule.entity.TimeCapsule;
 import com.momento.server.domain.timecapsule.service.CapsuleInviteService;
-import com.momento.server.domain.timecapsule.service.CapsuleInviteService.InvitePreviewDetail;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
@@ -32,7 +26,7 @@ public class CapsuleInviteFacade {
   }
 
   public CapsuleInvitePreviewResponse getPreview(String inviteToken, Long userId) {
-    return toPreviewResponse(capsuleInviteService.getPreview(inviteToken, userId));
+    return CapsuleInvitePreviewResponse.of(capsuleInviteService.getPreview(inviteToken, userId));
   }
 
   public void accept(String inviteToken, Long userId) {
@@ -46,36 +40,7 @@ public class CapsuleInviteFacade {
   public CapsuleInviteReceivedListResponse getReceived(Long userId) {
     return CapsuleInviteReceivedListResponse.of(
         capsuleInviteService.getReceived(userId).stream()
-            .map(detail -> Item.of(detail.invite(), detail.capsule()))
-            .toList());
-  }
-
-  private CapsuleInvitePreviewResponse toPreviewResponse(InvitePreviewDetail detail) {
-    CapsuleInvite invite = detail.invite();
-    TimeCapsule capsule = detail.capsule();
-
-    CapsuleSummary summary =
-        new CapsuleSummary(
-            capsule.getId(),
-            capsule.getTitle(),
-            capsule.getDescription(),
-            capsule.getCapsuleType(),
-            capsule.getStatus(),
-            capsule.getOpenAt(),
-            detail.memberCount(),
-            detail.letterCount(),
-            toMemberPreview(detail.participants()),
-            toMemberPreview(detail.recipients()));
-
-    return new CapsuleInvitePreviewResponse(
-        invite.getTargetRole(), detail.alreadyJoined(), summary);
-  }
-
-  private MemberPreview toMemberPreview(CapsuleInviteService.MemberPreview preview) {
-    return new MemberPreview(
-        preview.count(),
-        preview.topMembers().stream()
-            .map(member -> MemberPreviewItem.from(member.getUser()))
+            .map(received -> Item.of(received.invite(), received.capsule()))
             .toList());
   }
 }

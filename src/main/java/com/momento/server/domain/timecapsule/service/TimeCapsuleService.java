@@ -108,9 +108,18 @@ public class TimeCapsuleService {
         me,
         memberCount,
         letterCount,
-        memberGroup(capsuleId, PARTICIPANT_ROLES),
-        memberGroup(capsuleId, RECIPIENT_ROLES),
+        participantGroup(capsuleId),
+        recipientGroup(capsuleId),
         permissionsOf(capsule, me));
+  }
+
+  /** 방장과 참여자. 방장이 맨 앞이다. 초대 미리보기도 상세 화면과 같은 기준으로 보여준다. */
+  public TimeCapsuleDetail.MemberGroup participantGroup(Long capsuleId) {
+    return memberGroup(capsuleId, PARTICIPANT_ROLES);
+  }
+
+  public TimeCapsuleDetail.MemberGroup recipientGroup(Long capsuleId) {
+    return memberGroup(capsuleId, RECIPIENT_ROLES);
   }
 
   private TimeCapsuleDetail.MemberGroup memberGroup(Long capsuleId, List<MemberRole> roles) {

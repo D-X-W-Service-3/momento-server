@@ -316,12 +316,14 @@ class CapsuleInviteIntegrationTest {
         .andExpect(jsonPath("$.data.targetRole").value("PARTICIPANT"))
         .andExpect(jsonPath("$.data.alreadyJoined").value(false))
         .andExpect(jsonPath("$.data.capsule.capsuleId").value(capsule.getId()))
+        .andExpect(jsonPath("$.data.capsule.iconType").value("ICE_CREAM"))
         .andExpect(jsonPath("$.data.capsule.title").value("캡슐"))
         .andExpect(jsonPath("$.data.capsule.capsuleType").value("GROUP"))
         .andExpect(jsonPath("$.data.capsule.status").value("WRITING"))
         .andExpect(jsonPath("$.data.capsule.memberCount").value(1))
         .andExpect(jsonPath("$.data.capsule.letterCount").value(0))
-        .andExpect(jsonPath("$.data.capsule.participants.count").value(0))
+        .andExpect(jsonPath("$.data.capsule.participants.count").value(1))
+        .andExpect(jsonPath("$.data.capsule.participants.previews[0].userId").value(owner.getId()))
         .andExpect(jsonPath("$.data.capsule.recipients.count").value(0));
 
     assertThat(capsuleInviteRepository.findByInviteToken(token).orElseThrow().getInvitee().getId())
@@ -344,10 +346,12 @@ class CapsuleInviteIntegrationTest {
   }
 
   @Test
-  @DisplayName("미리보기의 참여자 목록에 닉네임·프로필사진이 담긴다")
-  void previewIncludesMemberNicknameAndProfileImage() throws Exception {
+  @DisplayName("참여자 미리보기는 상세 화면과 같이 방장을 맨 앞에 두고 닉네임을 담는다")
+  void previewListsOwnerFirstWithNicknames() throws Exception {
     User participant = saveUser("participant-kakao-id", "민건");
     saveMember(capsule, participant, MemberRole.PARTICIPANT, MemberStatus.ACTIVE);
+    User recipient = saveUser("recipient-kakao-id", "유빈");
+    saveMember(capsule, recipient, MemberRole.RECIPIENT, MemberStatus.ACTIVE);
     String token = issue(ownerToken, capsule.getId(), "RECIPIENT");
     User viewer = saveUser("viewer-kakao-id", "서현");
 
@@ -355,10 +359,14 @@ class CapsuleInviteIntegrationTest {
         .perform(
             get("/v1/invites/{inviteToken}", token).header(AUTHORIZATION, bearer(tokenOf(viewer))))
         .andExpect(status().isOk())
-        .andExpect(jsonPath("$.data.capsule.participants.count").value(1))
+        .andExpect(jsonPath("$.data.capsule.memberCount").value(3))
+        .andExpect(jsonPath("$.data.capsule.participants.count").value(2))
+        .andExpect(jsonPath("$.data.capsule.participants.previews[0].userId").value(owner.getId()))
+        .andExpect(jsonPath("$.data.capsule.participants.previews[0].nickname").value("상래"))
         .andExpect(
-            jsonPath("$.data.capsule.participants.previews[0].userId").value(participant.getId()))
-        .andExpect(jsonPath("$.data.capsule.participants.previews[0].nickname").value("민건"));
+            jsonPath("$.data.capsule.participants.previews[1].userId").value(participant.getId()))
+        .andExpect(jsonPath("$.data.capsule.recipients.count").value(1))
+        .andExpect(jsonPath("$.data.capsule.recipients.previews[0].nickname").value("유빈"));
   }
 
   @Test
