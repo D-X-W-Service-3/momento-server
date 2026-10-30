@@ -124,7 +124,7 @@ class LetterIntegrationTest {
     read(token)
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.data.letterId").value(saved.getId()))
-        .andExpect(jsonPath("$.data.status").value("SUBMITTED"));
+        .andExpect(jsonPath("$.data.canDelete").value(true));
   }
 
   @Test
@@ -372,7 +372,8 @@ class LetterIntegrationTest {
     read(token)
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.data.letterId").value(letter.getId()))
-        .andExpect(jsonPath("$.data.status").value(letterStatus.name()));
+        .andExpect(jsonPath("$.data.content").value("본인 편지"))
+        .andExpect(jsonPath("$.data.canDelete").value(false));
   }
 
   @ParameterizedTest
@@ -543,6 +544,110 @@ class LetterIntegrationTest {
                 Map.of("title", "가".repeat(51), "content", "본문", "themeType", "COZY")))
         .andExpect(status().isBadRequest());
     assertThat(letters.count()).isZero();
+  }
+
+  @Test
+  void ownLetterReturnsExactNewResponseContract() throws Exception {
+    create(token, BODY).andExpect(status().isCreated());
+    Letter saved = letters.findAll().getFirst();
+    LocalDateTime createdAt = LocalDateTime.of(2027, 3, 1, 21, 0);
+    jdbc.update("update letters set created_at = ? where id = ?", createdAt, saved.getId());
+
+    var response = read(token).andExpect(status().isOk()).andReturn().getResponse();
+    var data = objectMapper.readTree(response.getContentAsString()).get("data");
+    assertThat(data.isObject()).isTrue();
+    assertThat(data.size()).isEqualTo(6);
+    assertThat(data.get("letterId").longValue()).isEqualTo(saved.getId());
+    assertThat(data.get("themeType").textValue()).isEqualTo("WATERCOLOR");
+    assertThat(data.get("title").textValue()).isEqualTo("편지 제목");
+    assertThat(data.get("content").textValue()).isEqualTo("내 편지");
+    assertThat(data.get("createdAt")).isEqualTo(objectMapper.valueToTree(createdAt));
+    assertThat(data.get("canDelete").booleanValue()).isTrue();
+    assertThat(data.has("capsuleId")).isFalse();
+    assertThat(data.has("status")).isFalse();
+  }
+
+  @ParameterizedTest
+  @CsvSource({
+    "WRITING,1,60,true", "WRITING,0,60,false", "WRITING,-1,60,false",
+    "WRITING,60,1,true", "WRITING,60,0,false", "WRITING,60,-1,false",
+    "LOCKED,60,60,false", "OPENED,60,60,false"
+  })
+  void ownLetterDeletionFlagChecksStateAndExactTimeBoundaries(
+      CapsuleStatus state, int openOffset, int deadlineOffset, boolean expected) throws Exception {
+    create(token, BODY).andExpect(status().isCreated());
+    LocalDateTime now = LocalDateTime.ofInstant(NOW, ZoneOffset.UTC);
+    jdbc.update(
+        "update time_capsules set status = ?, open_at = ?, letter_deadline_at = ? where id = ?",
+        state.name(),
+        now.plusSeconds(openOffset),
+        now.plusSeconds(deadlineOffset),
+        capsule.getId());
+    read(token).andExpect(status().isOk()).andExpect(jsonPath("$.data.canDelete").value(expected));
+    assertThat(letters.findAll().getFirst().getDeletedAt()).isNull();
+  }
+
+  @ParameterizedTest
+  @CsvSource({"true,true", "true,false", "false,true", "false,false"})
+  void legacyLetterReturnsNullFieldsWithoutReplacingOrOmittingThem(
+      boolean missingTitle, boolean missingTheme) throws Exception {
+    Letter saved =
+        letters.save(
+            Letter.builder()
+                .timeCapsule(capsule)
+                .author(owner)
+                .title(missingTitle ? null : "기존 제목")
+                .themeType(missingTheme ? null : "COZY")
+                .content("기존 본문")
+                .build());
+    var data =
+        objectMapper
+            .readTree(
+                read(token)
+                    .andExpect(status().isOk())
+                    .andReturn()
+                    .getResponse()
+                    .getContentAsString())
+            .get("data");
+    assertThat(data.has("title")).isTrue();
+    assertThat(data.has("themeType")).isTrue();
+    assertThat(data.get("title").isNull()).isEqualTo(missingTitle);
+    assertThat(data.get("themeType").isNull()).isEqualTo(missingTheme);
+    if (!missingTitle) {
+      assertThat(data.get("title").textValue()).isEqualTo("기존 제목");
+    }
+    if (!missingTheme) {
+      assertThat(data.get("themeType").textValue()).isEqualTo("COZY");
+    }
+    assertThat(data.get("canDelete").booleanValue()).isTrue();
+    Letter unchanged = letters.findById(saved.getId()).orElseThrow();
+    assertThat(unchanged.getTitle()).isEqualTo(saved.getTitle());
+    assertThat(unchanged.getThemeType()).isEqualTo(saved.getThemeType());
+    assertThat(unchanged.getStatus()).isEqualTo(LetterStatus.DRAFT);
+    assertThat(unchanged.getSubmittedAt()).isNull();
+  }
+
+  @ParameterizedTest
+  @CsvSource({
+    "OWNER,RECIPIENT_AND_AUTHOR", "OWNER,ALL_MEMBERS",
+    "PARTICIPANT,RECIPIENT_AND_AUTHOR", "PARTICIPANT,ALL_MEMBERS",
+    "RECIPIENT,RECIPIENT_AND_AUTHOR", "RECIPIENT,ALL_MEMBERS"
+  })
+  void ownLetterReadAndDeletionFlagAllowAllActiveRoles(MemberRole role, VisibilityType visibility)
+      throws Exception {
+    create(token, BODY).andExpect(status().isCreated());
+    jdbc.update(
+        "update capsule_members set role = ? where time_capsule_id = ?",
+        role.name(),
+        capsule.getId());
+    jdbc.update(
+        "update time_capsules set visibility_type = ? where id = ?",
+        visibility.name(),
+        capsule.getId());
+    read(token)
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.data.title").value("편지 제목"))
+        .andExpect(jsonPath("$.data.canDelete").value(true));
   }
 
   private String path() {

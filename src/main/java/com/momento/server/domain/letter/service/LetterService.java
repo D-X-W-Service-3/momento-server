@@ -52,12 +52,14 @@ public class LetterService {
             .build());
   }
 
-  public Letter getMine(Long capsuleId, Long userId) {
-    timeCapsuleService.getActiveCapsule(capsuleId);
+  public LetterDetail getMine(Long capsuleId, Long userId) {
+    TimeCapsule capsule = timeCapsuleService.getActiveCapsule(capsuleId);
     timeCapsuleService.requireActiveMember(capsuleId, userId);
     // 본인 초안/제출 편지는 캡슐 공개 여부나 마감과 무관하게 조회한다.
-    return letterRepository
-        .findByTimeCapsuleIdAndAuthorIdAndDeletedAtIsNull(capsuleId, userId)
-        .orElseThrow(() -> new ApiException(LetterErrorCode.LETTER_NOT_FOUND));
+    Letter letter =
+        letterRepository
+            .findByTimeCapsuleIdAndAuthorIdAndDeletedAtIsNull(capsuleId, userId)
+            .orElseThrow(() -> new ApiException(LetterErrorCode.LETTER_NOT_FOUND));
+    return new LetterDetail(letter, capsule.isLetterWritingOpen(LocalDateTime.now(clock)));
   }
 }

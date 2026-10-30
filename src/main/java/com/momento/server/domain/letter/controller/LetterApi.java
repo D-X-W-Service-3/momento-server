@@ -26,7 +26,7 @@ public interface LetterApi {
   @Operation(
       summary = "내 편지 조회",
       description =
-          "ACTIVE 참여자는 공개 전후와 무관하게 본인의 초안/제출 편지를 조회한다. 미작성 또는 삭제된 편지는 404 LETTER_NOT_FOUND, 접근 불가 캡슐은 404 CAPSULE_NOT_FOUND다.")
+          "ACTIVE 참여자는 공개 전후와 무관하게 본인 편지 한 통을 조회한다. 제목·화풍·내용·작성 일시와 삭제 가능 여부를 반환하며 기존 편지의 제목·화풍은 null일 수 있다. canDelete는 WRITING이며 작성 마감·공개 시각 전일 때만 true다. 미작성 또는 삭제된 편지는 404 LETTER_NOT_FOUND, 접근 불가 캡슐은 404 CAPSULE_NOT_FOUND다.")
   CommonResponse<LetterResponse> getMine(
       @Parameter(hidden = true) UserPrincipal principal, Long capsuleId);
 }
