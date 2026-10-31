@@ -31,37 +31,39 @@ public interface MemoryRepository extends JpaRepository<Memory, Long> {
   Optional<Memory> findByShareTokenAndDeletedAtIsNull(String shareToken);
 
   /**
-   * 아카이브 탭에 노출할 "내가 직접 등록한 추억" 목록. 소프트 삭제된 것과 타임캡슐에서 옮겨진 것은 제외한다. 검색어는 이름 · 내용 중 한 곳에만 있어도 찾는다.
+   * 아카이브 목록 · 캘린더 · 통합 검색 · 개수가 함께 쓰는 "내 아카이브" 조건. 삭제되지 않았고 타임캡슐에서 옮겨지지 않은 추억 중, 내가 등록했거나 공유받아 저장한
+   * 것이다. 저장은 원본을 가리키므로 원본이 삭제되면 저장한 사람 쪽에서도 빠진다. 조건이 바뀌면 여기만 고친다.
+   */
+  String MY_ARCHIVE =
+      " where m.deletedAt is null"
+          + " and m.timeCapsule is null"
+          + " and (m.user.id = :userId"
+          + " or exists (select 1 from ReceivedMemory r"
+          + " where r.memory = m and r.receiver.id = :userId"
+          + " and r.status = com.momento.server.domain.memory.entity.ReceivedMemoryStatus.SAVED))";
+
+  /** 아카이브 목록의 검색어 · 연도 조건. 목록과 목록 개수가 같이 쓴다. */
+  String ARCHIVE_LIST_FILTER =
+      " and (:pattern is null"
+          + " or m.title like :pattern escape '!'"
+          + " or m.content like :pattern escape '!')"
+          + " and (:startDate is null or m.memoryDate >= :startDate)"
+          + " and (:endDate is null or m.memoryDate <= :endDate)";
+
+  /**
+   * 아카이브 탭 목록. 소프트 삭제된 것과 타임캡슐에서 옮겨진 것은 제외한다. 검색어는 이름 · 내용 중 한 곳에만 있어도 찾는다. 저장한 추억은 작성자가 제각각이라 작성자를
+   * 함께 읽는다.
    *
    * @param pattern {@link com.momento.server.global.common.util.LikePattern#contains} 로 만든 패턴. null
    *     이면 검색하지 않는다
    */
   @Query(
       value =
-          """
-                    SELECT m FROM Memory m
-                    WHERE m.user.id = :userId
-                      AND m.deletedAt IS NULL
-                      AND m.timeCapsule IS NULL
-                      AND (:pattern IS NULL
-                           OR m.title LIKE :pattern ESCAPE '!'
-                           OR m.content LIKE :pattern ESCAPE '!')
-                      AND (:startDate IS NULL OR m.memoryDate >= :startDate)
-                      AND (:endDate IS NULL OR m.memoryDate <= :endDate)
-                    ORDER BY m.memoryDate DESC, m.id DESC
-                    """,
-      countQuery =
-          """
-                    SELECT COUNT(m) FROM Memory m
-                    WHERE m.user.id = :userId
-                      AND m.deletedAt IS NULL
-                      AND m.timeCapsule IS NULL
-                      AND (:pattern IS NULL
-                           OR m.title LIKE :pattern ESCAPE '!'
-                           OR m.content LIKE :pattern ESCAPE '!')
-                      AND (:startDate IS NULL OR m.memoryDate >= :startDate)
-                      AND (:endDate IS NULL OR m.memoryDate <= :endDate)
-                    """)
+          "select m from Memory m join fetch m.user"
+              + MY_ARCHIVE
+              + ARCHIVE_LIST_FILTER
+              + " order by m.memoryDate desc, m.id desc",
+      countQuery = "select count(m) from Memory m" + MY_ARCHIVE + ARCHIVE_LIST_FILTER)
   Page<Memory> findMyMemories(
       @Param("userId") Long userId,
       @Param("pattern") String pattern,
@@ -69,29 +71,23 @@ public interface MemoryRepository extends JpaRepository<Memory, Long> {
       @Param("endDate") LocalDate endDate,
       Pageable pageable);
 
+  /** 상세 열람 대상. 목록에 나오는 추억(내 추억 · 저장한 추억)만 열 수 있다. 작성자 닉네임 · 수정 가능 여부를 위해 작성자를 함께 읽는다. */
+  @Query("select m from Memory m join fetch m.user" + MY_ARCHIVE + " and m.id = :id")
+  Optional<Memory> findViewable(@Param("id") Long id, @Param("userId") Long userId);
+
   /** 캘린더 월별 점. {@link #findMyMemories} 와 같은 추억 중 날짜가 {@code [from, to)} 인 것의 날짜만 읽는다. */
   @Query(
-      """
-          SELECT m.memoryDate FROM Memory m
-          WHERE m.user.id = :userId
-            AND m.deletedAt IS NULL
-            AND m.timeCapsule IS NULL
-            AND m.memoryDate >= :from
-            AND m.memoryDate < :to
-          """)
+      "select m.memoryDate from Memory m"
+          + MY_ARCHIVE
+          + " and m.memoryDate >= :from and m.memoryDate < :to")
   List<LocalDate> findMyMemoryDatesBetween(
       @Param("userId") Long userId, @Param("from") LocalDate from, @Param("to") LocalDate to);
 
   /** 캘린더 날짜별 추억. {@link #findMyMemories} 와 같은 추억 중 그 날 것을 등록 순으로 읽는다. */
   @Query(
-      """
-          SELECT m FROM Memory m
-          WHERE m.user.id = :userId
-            AND m.deletedAt IS NULL
-            AND m.timeCapsule IS NULL
-            AND m.memoryDate = :date
-          ORDER BY m.id
-          """)
+      "select m from Memory m join fetch m.user"
+          + MY_ARCHIVE
+          + " and m.memoryDate = :date order by m.id")
   List<Memory> findMyMemoriesOn(@Param("userId") Long userId, @Param("date") LocalDate date);
 
   /**
@@ -103,16 +99,12 @@ public interface MemoryRepository extends JpaRepository<Memory, Long> {
    * @param to null 이면 끝까지
    */
   @Query(
-      """
-          SELECT m FROM Memory m
-          WHERE m.user.id = :userId
-            AND m.deletedAt IS NULL
-            AND m.timeCapsule IS NULL
-            AND m.title LIKE :pattern ESCAPE '!'
-            AND (:from IS NULL OR m.memoryDate >= :from)
-            AND (:to IS NULL OR m.memoryDate < :to)
-          ORDER BY m.memoryDate, m.id
-          """)
+      "select m from Memory m join fetch m.user"
+          + MY_ARCHIVE
+          + " and m.title like :pattern escape '!'"
+          + " and (:from is null or m.memoryDate >= :from)"
+          + " and (:to is null or m.memoryDate < :to)"
+          + " order by m.memoryDate, m.id")
   List<Memory> searchMyMemories(
       @Param("userId") Long userId,
       @Param("pattern") String pattern,
@@ -120,12 +112,6 @@ public interface MemoryRepository extends JpaRepository<Memory, Long> {
       @Param("to") LocalDate to);
 
   /** 캘린더 탭 개수. {@link #findMyMemories} 에 검색 조건 없이 나오는 추억의 수다. */
-  @Query(
-      """
-          SELECT COUNT(m) FROM Memory m
-          WHERE m.user.id = :userId
-            AND m.deletedAt IS NULL
-            AND m.timeCapsule IS NULL
-          """)
+  @Query("select count(m) from Memory m" + MY_ARCHIVE)
   long countMyMemories(@Param("userId") Long userId);
 }

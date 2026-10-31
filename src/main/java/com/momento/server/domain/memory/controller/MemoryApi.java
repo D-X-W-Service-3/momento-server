@@ -29,7 +29,7 @@ public interface MemoryApi {
   @Operation(
       summary = "아카이브 상세 조회",
       description =
-          "아카이브 상세 화면(사진 슬라이드 · 날짜 · 이름 · 내용 · 사진 목록)을 조회한다. 본인이 등록한 아카이브만 조회할 수 있다. 사진은 displayOrder"
+          "아카이브 상세 화면(사진 슬라이드 · 날짜 · 이름 · 내용 · 사진 목록)을 조회한다. 본인이 등록한 아카이브와 공유받아 저장한 아카이브를 조회할 수 있고, 저장한 아카이브는 authorNickname 이 공유한 사람 · isMine 이 false 다. 사진은 displayOrder"
               + " 오름차순이고 첫 사진이 대표 사진(isRepresentative)이다. imageUrl 은 조회 시점에 만든 1시간짜리 presigned GET URL,"
               + " imageKey 는 수정 요청에 그대로 보내는 값이다. 없는 아카이브 · 삭제된 아카이브 · 다른 회원의 아카이브는 똑같이 404"
               + " MEMORY_NOT_FOUND 다.")
