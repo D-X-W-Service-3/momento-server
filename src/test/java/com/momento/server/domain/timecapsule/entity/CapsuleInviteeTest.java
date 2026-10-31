@@ -26,7 +26,9 @@ class CapsuleInviteeTest {
     declined.decline();
 
     assertThat(accepted.getStatus()).isEqualTo(InviteeStatus.ACCEPTED);
+    assertThat(accepted.isAccepted()).isTrue();
     assertThat(declined.getStatus()).isEqualTo(InviteeStatus.DECLINED);
     assertThat(declined.isDeclined()).isTrue();
+    assertThat(declined.isAccepted()).isFalse();
   }
 }

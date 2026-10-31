@@ -43,6 +43,9 @@ public enum CapsuleErrorCode implements ErrorCode {
 
   /** 이미 ACTIVE 상태로 참여 중인 캡슐의 초대를 수락 · 거절하는 경우. */
   ALREADY_CAPSULE_MEMBER("이미 참여 중인 타임캡슐입니다.", HttpStatus.CONFLICT),
+
+  /** 이 링크로 수락했던 회원이 캡슐을 나가거나 내보내진 뒤 같은 링크를 거절하는 경우. 수락 기록을 거절로 덮지 않는다. */
+  INVITE_ALREADY_ACCEPTED("이미 수락한 초대입니다.", HttpStatus.CONFLICT),
   ;
 
   private final String message;

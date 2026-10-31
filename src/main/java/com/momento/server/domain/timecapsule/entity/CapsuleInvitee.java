@@ -58,6 +58,11 @@ public class CapsuleInvitee extends BaseTimeEntity {
     return status == InviteeStatus.DECLINED;
   }
 
+  /** 한 번 수락한 기록은 그 뒤 캡슐을 나가거나 내보내져도 거절로 덮지 않는다. 덮으면 이 링크로 다시 참여할 수 없게 된다. */
+  public boolean isAccepted() {
+    return status == InviteeStatus.ACCEPTED;
+  }
+
   public void accept() {
     this.status = InviteeStatus.ACCEPTED;
   }

@@ -29,6 +29,7 @@ import com.momento.server.global.common.auth.service.TokenProvider;
 import jakarta.persistence.EntityManager;
 import java.time.Duration;
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -52,6 +53,10 @@ import org.springframework.transaction.support.TransactionTemplate;
 class CapsuleInviteIntegrationTest {
 
   private static final ObjectMapper JSON = new ObjectMapper();
+
+  /** Jackson 은 초가 0 이어도 초까지 쓴다. {@code LocalDateTime.toString()} 은 초가 0 이면 생략해 정각 초에 돌면 어긋난다. */
+  private static final DateTimeFormatter JSON_DATE_TIME =
+      DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss");
 
   @Autowired private MockMvc mockMvc;
   @Autowired private TokenProvider tokenProvider;
@@ -698,6 +703,22 @@ class CapsuleInviteIntegrationTest {
   }
 
   @Test
+  @DisplayName("수락했다가 나간 회원이 같은 링크를 거절하면 409 이고 수락 기록과 재참여는 그대로다")
+  void rejectKeepsAcceptedRecordAfterLeaving() throws Exception {
+    User member = saveUser("member-kakao-id", "민건");
+    String token = issue(ownerToken, capsule.getId(), "PARTICIPANT");
+    accept(token, member).andExpect(status().isOk());
+    leave(capsule, member);
+
+    reject(token, member)
+        .andExpect(status().isConflict())
+        .andExpect(jsonPath("$.code").value("INVITE_ALREADY_ACCEPTED"));
+
+    assertThat(inviteeStatus(token, member)).isEqualTo(InviteeStatus.ACCEPTED);
+    accept(token, member).andExpect(status().isOk());
+  }
+
+  @Test
   @DisplayName("존재하지 않는 토큰을 거절하면 404 다")
   void rejectUnknownTokenIsNotFound() throws Exception {
     reject("no-such-token", owner)
@@ -807,6 +828,19 @@ class CapsuleInviteIntegrationTest {
                 .executeUpdate());
   }
 
+  private void leave(TimeCapsule capsule, User user) {
+    transactionTemplate.executeWithoutResult(
+        tx ->
+            entityManager
+                .createQuery(
+                    "update CapsuleMember m set m.status = :status"
+                        + " where m.timeCapsule.id = :capsuleId and m.user.id = :userId")
+                .setParameter("status", MemberStatus.LEFT)
+                .setParameter("capsuleId", capsule.getId())
+                .setParameter("userId", user.getId())
+                .executeUpdate());
+  }
+
   private void deleteCapsule(TimeCapsule capsule) {
     transactionTemplate.executeWithoutResult(
         tx ->
@@ -867,7 +901,7 @@ class CapsuleInviteIntegrationTest {
   }
 
   private static String formatted(LocalDateTime dateTime) {
-    return dateTime.withNano(0).toString();
+    return dateTime.format(JSON_DATE_TIME);
   }
 
   private void cleanUp() {
