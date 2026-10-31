@@ -4,6 +4,7 @@ import com.momento.server.domain.memory.dto.request.MemoryCreateRequest;
 import com.momento.server.domain.memory.dto.request.MemoryUpdateRequest;
 import com.momento.server.domain.memory.dto.response.MemoryDetailResponse;
 import com.momento.server.domain.memory.dto.response.MemoryListResponse;
+import com.momento.server.domain.memory.dto.response.MemoryShareResponse;
 import com.momento.server.global.common.auth.UserPrincipal;
 import com.momento.server.global.common.dto.CommonResponse;
 import io.swagger.v3.oas.annotations.Operation;
@@ -70,4 +71,25 @@ public interface MemoryApi {
       @Parameter(description = "연도 필터", example = "2026") Integer year,
       @Parameter(description = "페이지 번호(0부터)", example = "0") int page,
       @Parameter(description = "페이지당 개수(1~100)", example = "20") int size);
+
+  @Operation(
+      summary = "아카이브 공유 링크 발급",
+      description =
+          "내 아카이브를 링크로 공유하려고 공유 토큰을 발급한다. 처음이면 만들고, 이미 공유했으면 같은 토큰을 준다. 링크 하나를 여러 사람이 받을 수 있고"
+              + " 만료는 없다. 공유 링크의 형식은 프론트가 정하고, 받는 사람은 링크로 받기에 이 토큰을 보낸다. 본인이 등록한 아카이브만 공유할 수 있고,"
+              + " 없는 아카이브 · 삭제된 아카이브 · 다른 회원의 아카이브는 똑같이 404 MEMORY_NOT_FOUND 다.")
+  CommonResponse<MemoryShareResponse> shareMemory(
+      @Parameter(hidden = true) UserPrincipal principal,
+      @Parameter(description = "아카이브 식별자", example = "3") Long memoryId);
+
+  @Operation(
+      summary = "공유 링크로 받기",
+      description =
+          "공유 링크를 열면 그 아카이브를 받은 아카이브에 넣는다. 아카이브 탭의 \"공유받은 아카이브가 있어요\" 에서 확인해 저장하거나 닫는다. 같은 링크를"
+              + " 여러 번 열어도 한 건이고, 닫았던 아카이브면 다시 받은 아카이브에 나온다. 이미 저장한 아카이브면 그대로 성공한다. 내 아카이브의 링크면"
+              + " 400 CANNOT_RECEIVE_OWN_MEMORY, 없는 토큰 · 삭제된 아카이브는 404 MEMORY_NOT_FOUND 다. 응답 데이터는 없다.")
+  CommonResponse<?> receiveSharedMemory(
+      @Parameter(hidden = true) UserPrincipal principal,
+      @Parameter(description = "공유 토큰", example = "3f0a5c9e2b1d4f7a8c3e9d2b7a6e1f00")
+          String shareToken);
 }
