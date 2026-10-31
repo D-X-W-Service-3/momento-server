@@ -291,7 +291,7 @@ class LetterIntegrationTest {
     "OWNER,ALL_MEMBERS,201",
     "PARTICIPANT,RECIPIENT_AND_AUTHOR,201",
     "PARTICIPANT,ALL_MEMBERS,201",
-    "RECIPIENT,RECIPIENT_AND_AUTHOR,201",
+    "RECIPIENT,RECIPIENT_AND_AUTHOR,403",
     "RECIPIENT,ALL_MEMBERS,201"
   })
   void creationChecksRoleAndVisibility(
@@ -305,8 +305,12 @@ class LetterIntegrationTest {
         visibility.name(),
         capsule.getId());
     create(token, BODY).andExpect(status().is(expectedStatus));
-    assertThat(letters.count()).isEqualTo(1);
-    assertThat(letters.findAll().getFirst().getStatus()).isEqualTo(LetterStatus.SUBMITTED);
+    if (expectedStatus == 403) {
+      assertThat(letters.count()).isZero();
+    } else {
+      assertThat(letters.count()).isEqualTo(1);
+      assertThat(letters.findAll().getFirst().getStatus()).isEqualTo(LetterStatus.SUBMITTED);
+    }
   }
 
   @ParameterizedTest
@@ -449,10 +453,10 @@ class LetterIntegrationTest {
 
   @ParameterizedTest
   @CsvSource({
-    "RECIPIENT_AND_AUTHOR,409,LETTER_WRITING_CLOSED",
+    "RECIPIENT_AND_AUTHOR,403,LETTER_WRITING_NOT_ALLOWED",
     "ALL_MEMBERS,409,LETTER_WRITING_CLOSED"
   })
-  void recipientCannotWriteAfterDeadlineInEitherVisibility(
+  void recipientPermissionIsCheckedBeforeDeadline(
       VisibilityType visibility, int expectedStatus, String expectedCode) throws Exception {
     jdbc.update(
         "update capsule_members set role = 'RECIPIENT' where time_capsule_id = ?", capsule.getId());

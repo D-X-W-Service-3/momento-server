@@ -205,14 +205,15 @@ class TimeCapsuleDetailIntegrationTest {
   }
 
   @Test
-  @DisplayName("수신자 + 작성자 공개 캡슐의 수신자도 편지를 쓸 수 있다")
-  void recipientCanWriteInRecipientAndAuthorCapsule() throws Exception {
+  @DisplayName("수신자 + 작성자 공개 캡슐의 수신자는 편지를 쓸 수 없다")
+  void recipientCannotWriteInRecipientAndAuthorCapsule() throws Exception {
     TimeCapsule capsule = saveCapsule(CapsuleStatus.WRITING, VisibilityType.RECIPIENT_AND_AUTHOR);
     join(capsule, owner, MemberRole.OWNER, 0);
     User recipient = saveUser("detail-recipient", "수신자");
     join(capsule, recipient, MemberRole.RECIPIENT, 1);
 
-    detail(capsule, recipient).andExpect(jsonPath("$.data.permissions.canWriteLetter").value(true));
+    detail(capsule, recipient)
+        .andExpect(jsonPath("$.data.permissions.canWriteLetter").value(false));
   }
 
   @Test

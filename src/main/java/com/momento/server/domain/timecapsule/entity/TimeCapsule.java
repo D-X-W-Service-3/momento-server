@@ -130,8 +130,11 @@ public class TimeCapsule extends BaseTimeEntity {
     this.deletedAt = now;
   }
 
-  /** 현재 두 공개 범위 모두에서 모든 참여 역할이 작성 가능하다. 상태·공개·마감 시각은 함께 검사한다. */
+  /** 수신자는 ALL_MEMBERS에서만 작성할 수 있다. 권한을 기간보다 먼저 확인한다. */
   public LetterWritingEligibility getLetterWritingEligibility(MemberRole role, LocalDateTime now) {
+    if (role == MemberRole.RECIPIENT && visibilityType != VisibilityType.ALL_MEMBERS) {
+      return LetterWritingEligibility.NOT_ALLOWED;
+    }
     if (!isLetterWritingOpen(now)) {
       return LetterWritingEligibility.CLOSED;
     }

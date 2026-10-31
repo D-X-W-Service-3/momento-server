@@ -414,6 +414,13 @@ class LetterDeleteIntegrationTest {
         "update time_capsules set visibility_type = ? where id = ?",
         visibility.name(),
         capsule.getId());
+    if (role == MemberRole.RECIPIENT && visibility == VisibilityType.RECIPIENT_AND_AUTHOR) {
+      create()
+          .andExpect(status().isForbidden())
+          .andExpect(jsonPath("$.code").value("LETTER_WRITING_NOT_ALLOWED"));
+      assertThat(letters.count()).isZero();
+      return;
+    }
     create().andExpect(status().isCreated()).andExpect(jsonPath("$.data").doesNotExist());
     Letter first =
         letters
