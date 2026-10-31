@@ -34,6 +34,18 @@ public enum CapsuleErrorCode implements ErrorCode {
 
   /** 없는 멤버, 다른 캡슐의 멤버, 이미 나간 멤버를 구분하지 않는다. */
   CAPSULE_MEMBER_NOT_FOUND("캡슐 멤버를 찾을 수 없습니다.", HttpStatus.NOT_FOUND),
+
+  /** {@code targetRole} 로 OWNER 를 보냈거나, 캡슐 유형(SELF/FRIEND/GROUP)에서 허용하지 않는 역할이다. */
+  INVALID_INVITE_ROLE("이 캡슐에서는 해당 역할로 초대할 수 없습니다.", HttpStatus.BAD_REQUEST),
+
+  /** 없는 토큰, 재생성으로 무효가 된 링크, 만료된 링크, 삭제된 캡슐의 링크, 내가 거절한 링크를 구분하지 않는다. 구분하면 토큰만으로 캡슐의 상태가 드러난다. */
+  INVITE_NOT_FOUND("유효하지 않은 초대 링크입니다.", HttpStatus.NOT_FOUND),
+
+  /** 이미 ACTIVE 상태로 참여 중인 캡슐의 초대를 수락 · 거절하는 경우. */
+  ALREADY_CAPSULE_MEMBER("이미 참여 중인 타임캡슐입니다.", HttpStatus.CONFLICT),
+
+  /** 이 링크로 수락했던 회원이 캡슐을 나가거나 내보내진 뒤 같은 링크를 거절하는 경우. 수락 기록을 거절로 덮지 않는다. */
+  INVITE_ALREADY_ACCEPTED("이미 수락한 초대입니다.", HttpStatus.CONFLICT),
   ;
 
   private final String message;

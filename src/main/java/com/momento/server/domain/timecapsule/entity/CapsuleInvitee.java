@@ -52,4 +52,22 @@ public class CapsuleInvitee extends BaseTimeEntity {
   @JdbcTypeCode(SqlTypes.VARCHAR)
   @Column(name = "status", nullable = false, length = 20)
   private InviteeStatus status = InviteeStatus.PENDING;
+
+  /** 거절한 링크로는 다시 참여할 수 없다. 방장이 링크를 재생성하면 새 링크에는 이 행이 없어 다시 받을 수 있다. */
+  public boolean isDeclined() {
+    return status == InviteeStatus.DECLINED;
+  }
+
+  /** 한 번 수락한 기록은 그 뒤 캡슐을 나가거나 내보내져도 거절로 덮지 않는다. 덮으면 이 링크로 다시 참여할 수 없게 된다. */
+  public boolean isAccepted() {
+    return status == InviteeStatus.ACCEPTED;
+  }
+
+  public void accept() {
+    this.status = InviteeStatus.ACCEPTED;
+  }
+
+  public void decline() {
+    this.status = InviteeStatus.DECLINED;
+  }
 }

@@ -75,8 +75,6 @@ CREATE TABLE `capsule_invites` (
 	`invite_token`	VARCHAR(100)	NOT NULL	UNIQUE	COMMENT '초대 링크 식별 토큰',
 	`target_role`	VARCHAR(20)	NOT NULL	DEFAULT 'PARTICIPANT'	COMMENT '초대 대상 역할: RECIPIENT, PARTICIPANT',
 	`status`	VARCHAR(20)	NOT NULL	DEFAULT 'ACTIVE'	COMMENT '초대 링크 상태: ACTIVE, EXPIRED, REVOKED',
-	`max_uses`	INT	NULL	COMMENT '최대 사용 횟수, NULL이면 제한 없음',
-	`used_count`	INT	NOT NULL	DEFAULT 0	COMMENT '현재 사용 횟수',
 	`expires_at`	DATETIME(6)	NULL	COMMENT '초대 링크 만료 일시',
 	`created_at`	DATETIME(6)	NOT NULL	COMMENT '생성 일시',
 	`updated_at`	DATETIME(6)	NOT NULL	COMMENT '수정 일시'

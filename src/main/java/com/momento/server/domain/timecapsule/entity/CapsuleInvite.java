@@ -27,6 +27,8 @@ import org.hibernate.type.SqlTypes;
  *
  * <p>{@code targetRole} 은 {@link MemberRole} 을 재사용하지만 초대로 지정할 수 있는 값은 {@code RECIPIENT} 와 {@code
  * PARTICIPANT} 뿐이다. {@code OWNER} 로 초대할 수 없다는 규칙은 초대 API 에서 막는다.
+ *
+ * <p>링크는 대상을 정하지 않은 공유 링크라 여러 명이 열고 수락할 수 있다. 누가 열었고 어떻게 응답했는지는 {@link CapsuleInvitee} 에 회원마다 기록한다.
  */
 @Entity
 @Table(name = "capsule_invites")
@@ -64,14 +66,26 @@ public class CapsuleInvite extends BaseTimeEntity {
   @Column(name = "status", nullable = false, length = 20)
   private InviteStatus status = InviteStatus.ACTIVE;
 
-  /** 최대 사용 횟수. 비어 있으면 제한이 없다. */
-  @Column(name = "max_uses")
-  private Integer maxUses;
-
-  @Builder.Default
-  @Column(name = "used_count", nullable = false)
-  private int usedCount = 0;
-
   @Column(name = "expires_at")
   private LocalDateTime expiresAt;
+
+  /** ACTIVE 이고 만료되지 않았는지. 수락 · 거절해도 링크는 그대로이고, 링크를 끝내는 것은 재생성({@link #revoke})뿐이다. */
+  public boolean isUsable(LocalDateTime now) {
+    return effectiveStatus(now) == InviteStatus.ACTIVE;
+  }
+
+  /**
+   * 저장된 {@code status} 뿐 아니라 만료 시각도 반영한 실제 상태. 만료를 감지해도 상태를 스케줄러 없이 지연 계산만 하므로, 저장된 값은 그대로 ACTIVE 로
+   * 남는다 — 미리보기처럼 "지금 이 링크가 살아있는가"를 보여줄 때는 저장값이 아니라 이 메서드를 쓴다.
+   */
+  public InviteStatus effectiveStatus(LocalDateTime now) {
+    if (status == InviteStatus.ACTIVE && expiresAt != null && !now.isBefore(expiresAt)) {
+      return InviteStatus.EXPIRED;
+    }
+    return status;
+  }
+
+  public void revoke() {
+    this.status = InviteStatus.REVOKED;
+  }
 }

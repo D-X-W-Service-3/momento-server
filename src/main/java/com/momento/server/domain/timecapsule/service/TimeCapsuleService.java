@@ -101,17 +101,25 @@ public class TimeCapsuleService {
 
     long memberCount =
         capsuleMemberRepository.countByTimeCapsuleIdAndStatus(capsuleId, MemberStatus.ACTIVE);
-    long letterCount =
-        timeCapsuleRepository.countLettersByStatus(capsuleId, LetterStatus.SUBMITTED);
+    long letterCount = countSubmittedLetters(capsuleId);
 
     return new TimeCapsuleDetail(
         capsule,
         me,
         memberCount,
         letterCount,
-        memberGroup(capsuleId, PARTICIPANT_ROLES),
-        memberGroup(capsuleId, RECIPIENT_ROLES),
+        participantGroup(capsuleId),
+        recipientGroup(capsuleId),
         permissionsOf(capsule, me));
+  }
+
+  /** 방장과 참여자. 방장이 맨 앞이다. 초대 미리보기도 상세 화면과 같은 기준으로 보여준다. */
+  public TimeCapsuleDetail.MemberGroup participantGroup(Long capsuleId) {
+    return memberGroup(capsuleId, PARTICIPANT_ROLES);
+  }
+
+  public TimeCapsuleDetail.MemberGroup recipientGroup(Long capsuleId) {
+    return memberGroup(capsuleId, RECIPIENT_ROLES);
   }
 
   private TimeCapsuleDetail.MemberGroup memberGroup(Long capsuleId, List<MemberRole> roles) {
@@ -227,6 +235,11 @@ public class TimeCapsuleService {
 
     capsuleMemberRepository.markOpenedIfAbsent(me.getId(), LocalDateTime.now(clock));
     return capsuleMemberRepository.findById(me.getId()).orElseThrow().getOpenedAt();
+  }
+
+  /** 제출됐고 삭제되지 않은 편지 수. 초대 미리보기에서도 같은 값을 보여줘 이쪽으로 모았다. */
+  public long countSubmittedLetters(Long capsuleId) {
+    return timeCapsuleRepository.countLettersByStatus(capsuleId, LetterStatus.SUBMITTED);
   }
 
   public TimeCapsule getActiveCapsule(Long capsuleId) {

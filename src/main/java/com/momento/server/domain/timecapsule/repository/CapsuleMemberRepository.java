@@ -18,6 +18,9 @@ public interface CapsuleMemberRepository extends JpaRepository<CapsuleMember, Lo
   Optional<CapsuleMember> findByTimeCapsuleIdAndUserIdAndStatus(
       Long timeCapsuleId, Long userId, MemberStatus status);
 
+  /** 상태 무관 조회. 초대 수락 시 나갔거나 제외됐던 회원인지 확인해 재활성화할지 새로 만들지 정하는 데 쓴다. */
+  Optional<CapsuleMember> findByTimeCapsuleIdAndUserId(Long timeCapsuleId, Long userId);
+
   long countByTimeCapsuleIdAndStatus(Long timeCapsuleId, MemberStatus status);
 
   long countByTimeCapsuleIdAndRoleInAndStatus(
