@@ -28,6 +28,7 @@ import com.momento.server.global.common.auth.service.TokenProvider;
 import jakarta.persistence.EntityManager;
 import java.time.Duration;
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -51,6 +52,10 @@ import org.springframework.transaction.support.TransactionTemplate;
 class CapsuleInviteIntegrationTest {
 
   private static final ObjectMapper JSON = new ObjectMapper();
+
+  /** Jackson 은 초가 0 이어도 초까지 쓴다. {@code LocalDateTime.toString()} 은 초가 0 이면 생략해 정각 초에 돌면 어긋난다. */
+  private static final DateTimeFormatter JSON_DATE_TIME =
+      DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss");
 
   @Autowired private MockMvc mockMvc;
   @Autowired private TokenProvider tokenProvider;
@@ -865,7 +870,7 @@ class CapsuleInviteIntegrationTest {
   }
 
   private static String formatted(LocalDateTime dateTime) {
-    return dateTime.withNano(0).toString();
+    return dateTime.format(JSON_DATE_TIME);
   }
 
   private void cleanUp() {
