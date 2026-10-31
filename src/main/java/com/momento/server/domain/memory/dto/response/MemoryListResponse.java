@@ -9,8 +9,8 @@ import org.springframework.data.domain.Page;
 @Schema(description = "추억 목록 조회 결과")
 public record MemoryListResponse(
     @Schema(
-            description = "\"공유받은 아카이브가 있어요\" 배너 표시 여부. 받은 아카이브 기능이 생기기 전까지는 항상 false 다.",
-            example = "false")
+            description = "\"공유받은 아카이브가 있어요\" 배너 표시 여부. 받은 아카이브 조회에 나올 것이 하나라도 있으면 true 다.",
+            example = "true")
         @JsonProperty("hasReceivedMemory")
         boolean hasReceivedMemory,
     @Schema(description = "추억 목록") List<MemorySummary> memories,
@@ -20,9 +20,10 @@ public record MemoryListResponse(
     @Schema(description = "전체 페이지 수", example = "1") int totalPages,
     @Schema(description = "다음 페이지 존재 여부", example = "false") boolean hasNext) {
 
-  public static MemoryListResponse of(Page<Memory> page, List<MemorySummary> memories) {
+  public static MemoryListResponse of(
+      Page<Memory> page, List<MemorySummary> memories, boolean hasReceivedMemory) {
     return new MemoryListResponse(
-        false,
+        hasReceivedMemory,
         memories,
         page.getNumber(),
         page.getSize(),

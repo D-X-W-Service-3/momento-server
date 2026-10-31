@@ -158,6 +158,18 @@ class ReceivedMemoryIntegrationTest {
   }
 
   @Test
+  @DisplayName("아카이브 목록의 배너는 받은 아카이브가 있을 때만 true 다")
+  void bannerOnArchiveList() throws Exception {
+    archiveList().andExpect(jsonPath("$.data.hasReceivedMemory").value(false));
+
+    ReceivedMemory received = receive(memory(friend, "친구 추억"));
+    archiveList().andExpect(jsonPath("$.data.hasReceivedMemory").value(true));
+
+    dismiss(received.getId()).andExpect(status().isOk());
+    archiveList().andExpect(jsonPath("$.data.hasReceivedMemory").value(false));
+  }
+
+  @Test
   @DisplayName("인증이 없으면 401 이다")
   void requiresAuthentication() throws Exception {
     mockMvc.perform(get("/v1/memories/received")).andExpect(status().isUnauthorized());
@@ -167,6 +179,10 @@ class ReceivedMemoryIntegrationTest {
 
   private ResultActions received() throws Exception {
     return mockMvc.perform(get("/v1/memories/received").header(AUTHORIZATION, bearer()));
+  }
+
+  private ResultActions archiveList() throws Exception {
+    return mockMvc.perform(get("/v1/memories").header(AUTHORIZATION, bearer()));
   }
 
   private ResultActions save(Long id) throws Exception {
