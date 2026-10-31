@@ -1,6 +1,7 @@
 package com.momento.server.domain.notification.repository;
 
 import com.momento.server.domain.notification.entity.Notification;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.domain.Pageable;
@@ -22,4 +23,11 @@ public interface NotificationRepository extends JpaRepository<Notification, Long
 
   /** 소유권 검증까지 한 번에 한다 — 타 회원 알림이면 존재하지 않는 것으로 취급한다. */
   Optional<Notification> findByIdAndUserId(Long id, Long userId);
+
+  /** 이 회원들에게 이 키로 이미 보낸 알림. (user_id, dedup_key) UNIQUE 인덱스를 탄다. */
+  @Query(
+      "select new com.momento.server.domain.notification.repository.SentKey(n.user.id, n.dedupKey)"
+          + " from Notification n where n.user.id in :userIds and n.dedupKey in :dedupKeys")
+  List<SentKey> findSentKeys(
+      @Param("userIds") Collection<Long> userIds, @Param("dedupKeys") Collection<String> dedupKeys);
 }

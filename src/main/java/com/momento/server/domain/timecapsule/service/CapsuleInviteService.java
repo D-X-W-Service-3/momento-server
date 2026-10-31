@@ -25,6 +25,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -48,6 +49,7 @@ public class CapsuleInviteService {
   private final TimeCapsuleRepository timeCapsuleRepository;
   private final TimeCapsuleService timeCapsuleService;
   private final UserService userService;
+  private final ApplicationEventPublisher eventPublisher;
   private final Clock clock;
 
   /** 해당 역할의 활성 링크가 있으면 그 링크를 그대로 돌려주고(캡슐 상세를 다시 열어도 같은 링크가 보이도록), 없으면 새로 만든다. */
@@ -137,6 +139,7 @@ public class CapsuleInviteService {
       throw new ApiException(CapsuleErrorCode.CAPSULE_NOT_EDITABLE);
     }
 
+    User user = userService.getActiveUser(userId);
     capsuleMemberRepository
         .findByTimeCapsuleIdAndUserId(capsuleId, userId)
         .ifPresentOrElse(
@@ -145,7 +148,7 @@ public class CapsuleInviteService {
                 capsuleMemberRepository.save(
                     CapsuleMember.builder()
                         .timeCapsule(capsule)
-                        .user(userService.getActiveUser(userId))
+                        .user(user)
                         .role(invite.getTargetRole())
                         .joinedAt(now)
                         .build()));
@@ -153,6 +156,8 @@ public class CapsuleInviteService {
     mine.ifPresentOrElse(
         CapsuleInvitee::accept,
         () -> capsuleInviteeRepository.save(newInvitee(invite, userId, InviteeStatus.ACCEPTED)));
+    eventPublisher.publishEvent(
+        new CapsuleMemberJoinedEvent(capsuleId, userId, user.getNickname()));
   }
 
   /**
