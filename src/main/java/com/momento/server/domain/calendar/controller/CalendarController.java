@@ -2,8 +2,10 @@ package com.momento.server.domain.calendar.controller;
 
 import com.momento.server.domain.calendar.dto.request.CalendarDailyRequest;
 import com.momento.server.domain.calendar.dto.request.CalendarMonthRequest;
+import com.momento.server.domain.calendar.dto.request.CalendarSearchRequest;
 import com.momento.server.domain.calendar.dto.response.CalendarDailyResponse;
 import com.momento.server.domain.calendar.dto.response.CalendarMonthResponse;
+import com.momento.server.domain.calendar.dto.response.CalendarSearchResponse;
 import com.momento.server.domain.calendar.facade.CalendarFacade;
 import com.momento.server.global.common.annotation.RestApiController;
 import com.momento.server.global.common.auth.UserPrincipal;
@@ -34,5 +36,13 @@ public class CalendarController implements CalendarApi {
       @AuthenticationPrincipal UserPrincipal principal,
       @Valid @ModelAttribute CalendarDailyRequest request) {
     return CommonResponse.ok(calendarFacade.getDaily(principal.getUserId(), request));
+  }
+
+  @Override
+  @GetMapping("/search")
+  public CommonResponse<CalendarSearchResponse> search(
+      @AuthenticationPrincipal UserPrincipal principal,
+      @Valid @ModelAttribute CalendarSearchRequest request) {
+    return CommonResponse.ok(calendarFacade.search(principal.getUserId(), request));
   }
 }
