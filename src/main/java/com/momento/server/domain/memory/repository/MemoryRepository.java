@@ -31,11 +31,16 @@ public interface MemoryRepository extends JpaRepository<Memory, Long> {
   Optional<Memory> findByShareTokenAndDeletedAtIsNull(String shareToken);
 
   /**
-   * 아카이브 목록 · 캘린더 · 통합 검색 · 개수가 함께 쓰는 "내 아카이브" 조건. 삭제되지 않았고 타임캡슐에서 옮겨지지 않은, 내가 등록한 추억이다. 조건이 바뀌면
-   * 여기만 고친다.
+   * 아카이브 목록 · 캘린더 · 통합 검색 · 개수가 함께 쓰는 "내 아카이브" 조건. 삭제되지 않았고 타임캡슐에서 옮겨지지 않은 추억 중, 내가 등록했거나 공유받아 저장한
+   * 것이다. 저장은 원본을 가리키므로 원본이 삭제되면 저장한 사람 쪽에서도 빠진다. 조건이 바뀌면 여기만 고친다.
    */
   String MY_ARCHIVE =
-      " where m.deletedAt is null" + " and m.timeCapsule is null" + " and m.user.id = :userId";
+      " where m.deletedAt is null"
+          + " and m.timeCapsule is null"
+          + " and (m.user.id = :userId"
+          + " or exists (select 1 from ReceivedMemory r"
+          + " where r.memory = m and r.receiver.id = :userId"
+          + " and r.status = com.momento.server.domain.memory.entity.ReceivedMemoryStatus.SAVED))";
 
   /** 아카이브 목록의 검색어 · 연도 조건. 목록과 목록 개수가 같이 쓴다. */
   String ARCHIVE_LIST_FILTER =
@@ -46,14 +51,15 @@ public interface MemoryRepository extends JpaRepository<Memory, Long> {
           + " and (:endDate is null or m.memoryDate <= :endDate)";
 
   /**
-   * 아카이브 탭 목록. 소프트 삭제된 것과 타임캡슐에서 옮겨진 것은 제외한다. 검색어는 이름 · 내용 중 한 곳에만 있어도 찾는다.
+   * 아카이브 탭 목록. 소프트 삭제된 것과 타임캡슐에서 옮겨진 것은 제외한다. 검색어는 이름 · 내용 중 한 곳에만 있어도 찾는다. 저장한 추억은 작성자가 제각각이라 작성자를
+   * 함께 읽는다.
    *
    * @param pattern {@link com.momento.server.global.common.util.LikePattern#contains} 로 만든 패턴. null
    *     이면 검색하지 않는다
    */
   @Query(
       value =
-          "select m from Memory m"
+          "select m from Memory m join fetch m.user"
               + MY_ARCHIVE
               + ARCHIVE_LIST_FILTER
               + " order by m.memoryDate desc, m.id desc",
@@ -74,7 +80,10 @@ public interface MemoryRepository extends JpaRepository<Memory, Long> {
       @Param("userId") Long userId, @Param("from") LocalDate from, @Param("to") LocalDate to);
 
   /** 캘린더 날짜별 추억. {@link #findMyMemories} 와 같은 추억 중 그 날 것을 등록 순으로 읽는다. */
-  @Query("select m from Memory m" + MY_ARCHIVE + " and m.memoryDate = :date order by m.id")
+  @Query(
+      "select m from Memory m join fetch m.user"
+          + MY_ARCHIVE
+          + " and m.memoryDate = :date order by m.id")
   List<Memory> findMyMemoriesOn(@Param("userId") Long userId, @Param("date") LocalDate date);
 
   /**
@@ -86,7 +95,7 @@ public interface MemoryRepository extends JpaRepository<Memory, Long> {
    * @param to null 이면 끝까지
    */
   @Query(
-      "select m from Memory m"
+      "select m from Memory m join fetch m.user"
           + MY_ARCHIVE
           + " and m.title like :pattern escape '!'"
           + " and (:from is null or m.memoryDate >= :from)"
