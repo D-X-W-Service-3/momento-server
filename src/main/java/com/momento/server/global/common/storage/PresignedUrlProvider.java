@@ -32,15 +32,16 @@ public class PresignedUrlProvider {
   private final S3Properties s3Properties;
 
   /**
-   * 업로드용 PUT 주소. 서명에 Content-Type 이 들어가므로 클라이언트는 같은 Content-Type 헤더로 올려야 한다. 만료 시각은 서버 기본 시간대(Clock
-   * 빈과 같은 시간대)로 돌려준다.
+   * 업로드용 PUT 주소. 서명에 Content-Type 과 Content-Length 가 들어가므로 클라이언트는 같은 형식 · 같은 크기의 파일만 올릴 수 있다. 크기를
+   * 서명에 넣지 않으면 발급받은 주소로 아무리 큰 파일도 올릴 수 있다. 만료 시각은 서버 기본 시간대(Clock 빈과 같은 시간대)로 돌려준다.
    */
-  public PresignedUpload uploadUrl(String key, String contentType) {
+  public PresignedUpload uploadUrl(String key, String contentType, long contentLength) {
     PutObjectRequest putObjectRequest =
         PutObjectRequest.builder()
             .bucket(s3Properties.getBucket())
             .key(key)
             .contentType(contentType)
+            .contentLength(contentLength)
             .build();
 
     PutObjectPresignRequest presignRequest =

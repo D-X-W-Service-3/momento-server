@@ -2,8 +2,10 @@ package com.momento.server.domain.calendar.controller;
 
 import com.momento.server.domain.calendar.dto.request.CalendarDailyRequest;
 import com.momento.server.domain.calendar.dto.request.CalendarMonthRequest;
+import com.momento.server.domain.calendar.dto.request.CalendarSearchRequest;
 import com.momento.server.domain.calendar.dto.response.CalendarDailyResponse;
 import com.momento.server.domain.calendar.dto.response.CalendarMonthResponse;
+import com.momento.server.domain.calendar.dto.response.CalendarSearchResponse;
 import com.momento.server.global.common.auth.UserPrincipal;
 import com.momento.server.global.common.dto.CommonResponse;
 import io.swagger.v3.oas.annotations.Operation;
@@ -39,4 +41,17 @@ public interface CalendarApi {
   CommonResponse<CalendarDailyResponse> getDaily(
       @Parameter(hidden = true) UserPrincipal principal,
       @ParameterObject @Valid CalendarDailyRequest request);
+
+  @Operation(
+      summary = "통합 검색",
+      description =
+          "캘린더 검색 화면에서 내 캡슐 · 기념일 · 아카이브를 이름으로 한 번에 검색한다. 캡슐은 이름 · 설명 · 함께하는 멤버 닉네임(타임캡슐 목록 검색과 같다), "
+              + "기념일은 이름, 아카이브는 제목에서 찾고, % · _ 는 글자 그대로 찾는다. 기간(year)과 정렬은 카드에 보이는 날짜가 기준이다(캡슐 개봉일 · "
+              + "기념일 날짜 · 추억 날짜). LATEST(기본)는 날짜 내림차순, OLDEST 는 오름차순이고 같은 날짜면 ID 순이다. 매년 반복 기념일은 한 건으로, "
+              + "기간이 없으면 다가오는 날, 있으면 그 해의 날짜이고 등록한 해보다 앞선 해에는 나오지 않는다. type 을 주면 다른 종류는 빈 목록이고, "
+              + "totalCount 는 세 목록 길이의 합이다. 페이지는 없다. keyword 가 없거나 공백뿐이거나 100자를 넘으면, year 가 1900~2100 밖이거나 "
+              + "type · sort 가 없는 값이면 400 INVALID_INPUT_VALUE 다.")
+  CommonResponse<CalendarSearchResponse> search(
+      @Parameter(hidden = true) UserPrincipal principal,
+      @ParameterObject @Valid CalendarSearchRequest request);
 }

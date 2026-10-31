@@ -14,6 +14,7 @@ import com.momento.server.domain.user.entity.User;
 import com.momento.server.global.common.code.GlobalErrorCode;
 import com.momento.server.global.common.exception.ApiException;
 import com.momento.server.global.common.storage.PresignedUrlProvider;
+import com.momento.server.global.common.util.LikePattern;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -178,7 +179,24 @@ public class MemoryService {
 
   /** 캘린더 날짜별 추억. 아카이브 목록과 같은 항목 형태로 만든다. */
   public List<MemorySummary> findMyMemoriesOn(Long userId, LocalDate date) {
-    List<Memory> memories = memoryRepository.findMyMemoriesOn(userId, date);
+    return summarize(memoryRepository.findMyMemoriesOn(userId, date));
+  }
+
+  /**
+   * 통합 검색. 아카이브 목록과 같은 추억 중 제목에 검색어가 들어 있고 날짜가 그 해인 것을 날짜 · ID 오름차순으로 읽는다. 아카이브 목록 검색과 달리 {@code %}
+   * · {@code _} 를 글자 그대로 찾는다.
+   *
+   * @param year null 이면 전체 기간
+   */
+  public List<MemorySummary> searchMyMemories(Long userId, String keyword, Integer year) {
+    LocalDate from = year == null ? null : LocalDate.of(year, 1, 1);
+    LocalDate to = year == null ? null : from.plusYears(1);
+    return summarize(
+        memoryRepository.searchMyMemories(userId, LikePattern.contains(keyword), from, to));
+  }
+
+  /** 아카이브 목록과 같은 항목 형태로 만든다. 이미지는 쿼리 한 번으로 모은다. */
+  private List<MemorySummary> summarize(List<Memory> memories) {
     Map<Long, List<MemoryImage>> imagesByMemory = findImagesByMemory(memories);
 
     return memories.stream()

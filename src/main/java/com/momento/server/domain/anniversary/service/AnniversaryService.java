@@ -6,6 +6,7 @@ import com.momento.server.domain.anniversary.exception.AnniversaryErrorCode;
 import com.momento.server.domain.anniversary.repository.AnniversaryRepository;
 import com.momento.server.domain.user.entity.User;
 import com.momento.server.global.common.exception.ApiException;
+import com.momento.server.global.common.util.LikePattern;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -45,6 +46,11 @@ public class AnniversaryService {
 
   public long countMine(Long userId) {
     return anniversaryRepository.countByUserId(userId);
+  }
+
+  /** 통합 검색. 이름에 검색어가 든 내 기념일. 기간 · 정렬은 날짜를 계산하는 쪽이 한다. */
+  public List<Anniversary> searchMine(Long userId, String keyword) {
+    return anniversaryRepository.searchMine(userId, LikePattern.contains(keyword));
   }
 
   /** 등록과 같은 값으로 통째로 바꾼다. */

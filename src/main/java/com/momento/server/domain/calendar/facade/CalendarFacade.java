@@ -1,20 +1,27 @@
 package com.momento.server.domain.calendar.facade;
 
+import com.momento.server.domain.anniversary.entity.Anniversary;
 import com.momento.server.domain.anniversary.service.AnniversaryService;
+import com.momento.server.domain.calendar.dto.CalendarSearchSort;
 import com.momento.server.domain.calendar.dto.CalendarType;
 import com.momento.server.domain.calendar.dto.request.CalendarDailyRequest;
 import com.momento.server.domain.calendar.dto.request.CalendarMonthRequest;
+import com.momento.server.domain.calendar.dto.request.CalendarSearchRequest;
 import com.momento.server.domain.calendar.dto.response.CalendarDailyResponse;
 import com.momento.server.domain.calendar.dto.response.CalendarMonthResponse;
+import com.momento.server.domain.calendar.dto.response.CalendarSearchResponse;
 import com.momento.server.domain.memory.dto.response.MemorySummary;
 import com.momento.server.domain.memory.service.MemoryService;
 import com.momento.server.domain.timecapsule.dto.response.TimeCapsuleCardResponse;
 import com.momento.server.domain.timecapsule.service.TimeCapsuleListService;
+import com.momento.server.domain.timecapsule.service.TimeCapsuleSummary;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.util.Collection;
+import java.util.Comparator;
 import java.util.EnumSet;
 import java.util.List;
+import java.util.Optional;
 import java.util.SortedMap;
 import java.util.TreeMap;
 import lombok.RequiredArgsConstructor;
@@ -72,16 +79,7 @@ public class CalendarFacade {
 
     List<TimeCapsuleCardResponse> capsules =
         includes(request.type(), CalendarType.CAPSULE)
-            ? timeCapsuleListService.getMyCapsulesOpeningOn(userId, date).stream()
-                .map(
-                    summary ->
-                        TimeCapsuleCardResponse.of(
-                            summary.capsule(),
-                            summary.openedByMe(),
-                            summary.memberCount(),
-                            summary.letterCount(),
-                            today))
-                .toList()
+            ? toCards(timeCapsuleListService.getMyCapsulesOpeningOn(userId, date), today)
             : List.of();
     List<CalendarDailyResponse.AnniversaryItem> anniversaries =
         includes(request.type(), CalendarType.ANNIVERSARY)
@@ -100,6 +98,71 @@ public class CalendarFacade {
             : List.of();
 
     return new CalendarDailyResponse(date, capsules, anniversaries, memories);
+  }
+
+  /**
+   * 세 종류를 각자의 카드 날짜(캡슐 개봉일 · 기념일 날짜 · 추억 날짜) 오름차순으로 모은 뒤, 최신순이면 뒤집는다. 페이지 없이 전부 읽으므로 뒤집으면 (날짜, ID)
+   * 내림차순이다.
+   *
+   * <p>매년 반복 기념일은 한 건이다. 기간이 없으면 다가오는 날, 있으면 그 해의 날짜이고 그 해에 없으면(등록한 해보다 앞섬) 빠진다.
+   */
+  public CalendarSearchResponse search(Long userId, CalendarSearchRequest request) {
+    String keyword = request.keyword();
+    Integer year = request.year();
+    LocalDate today = LocalDate.now(clock);
+
+    List<TimeCapsuleCardResponse> capsules =
+        includes(request.type(), CalendarType.CAPSULE)
+            ? toCards(timeCapsuleListService.searchMyCapsules(userId, keyword, year), today)
+            : List.of();
+    List<CalendarDailyResponse.AnniversaryItem> anniversaries =
+        includes(request.type(), CalendarType.ANNIVERSARY)
+            ? anniversaryService.searchMine(userId, keyword).stream()
+                .flatMap(
+                    anniversary ->
+                        dateOf(anniversary, year, today).stream()
+                            .map(
+                                date ->
+                                    CalendarDailyResponse.AnniversaryItem.of(
+                                        anniversary, date, today)))
+                .sorted(
+                    Comparator.comparing(CalendarDailyResponse.AnniversaryItem::date)
+                        .thenComparing(CalendarDailyResponse.AnniversaryItem::anniversaryId))
+                .toList()
+            : List.of();
+    List<MemorySummary> memories =
+        includes(request.type(), CalendarType.MEMORY)
+            ? memoryService.searchMyMemories(userId, keyword, year)
+            : List.of();
+
+    return CalendarSearchResponse.of(
+        ordered(capsules, request.sort()),
+        ordered(anniversaries, request.sort()),
+        ordered(memories, request.sort()));
+  }
+
+  private static Optional<LocalDate> dateOf(
+      Anniversary anniversary, Integer year, LocalDate today) {
+    return year == null ? Optional.of(anniversary.nextDate(today)) : anniversary.dateIn(year);
+  }
+
+  /** 오름차순 목록을 요청한 정렬로 바꾼다. */
+  private static <T> List<T> ordered(List<T> ascending, CalendarSearchSort sort) {
+    return sort == CalendarSearchSort.OLDEST ? ascending : ascending.reversed();
+  }
+
+  private static List<TimeCapsuleCardResponse> toCards(
+      List<TimeCapsuleSummary> summaries, LocalDate today) {
+    return summaries.stream()
+        .map(
+            summary ->
+                TimeCapsuleCardResponse.of(
+                    summary.capsule(),
+                    summary.openedByMe(),
+                    summary.memberCount(),
+                    summary.letterCount(),
+                    today))
+        .toList();
   }
 
   /** {@code type} 이 null 이면 전체다. */

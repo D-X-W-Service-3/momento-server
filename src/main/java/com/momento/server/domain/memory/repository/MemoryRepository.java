@@ -74,6 +74,31 @@ public interface MemoryRepository extends JpaRepository<Memory, Long> {
           """)
   List<Memory> findMyMemoriesOn(@Param("userId") Long userId, @Param("date") LocalDate date);
 
+  /**
+   * 통합 검색. {@link #findMyMemories} 와 같은 추억 중 제목에 검색어가 들어 있고 날짜가 {@code [from, to)} 인 것을 날짜 · ID
+   * 오름차순으로 읽는다. 최신순은 서비스가 뒤집는다.
+   *
+   * @param pattern {@link com.momento.server.global.common.util.LikePattern#contains} 로 만든 패턴
+   * @param from null 이면 처음부터
+   * @param to null 이면 끝까지
+   */
+  @Query(
+      """
+          SELECT m FROM Memory m
+          WHERE m.user.id = :userId
+            AND m.deletedAt IS NULL
+            AND m.timeCapsule IS NULL
+            AND m.title LIKE :pattern ESCAPE '!'
+            AND (:from IS NULL OR m.memoryDate >= :from)
+            AND (:to IS NULL OR m.memoryDate < :to)
+          ORDER BY m.memoryDate, m.id
+          """)
+  List<Memory> searchMyMemories(
+      @Param("userId") Long userId,
+      @Param("pattern") String pattern,
+      @Param("from") LocalDate from,
+      @Param("to") LocalDate to);
+
   /** 캘린더 탭 개수. {@link #findMyMemories} 에 검색 조건 없이 나오는 추억의 수다. */
   @Query(
       """
