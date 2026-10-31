@@ -121,6 +121,46 @@ class SavedMemoryIntegrationTest {
         .andExpect(status().isNotFound());
   }
 
+  @Test
+  @DisplayName("아카이브 목록에 저장한 아카이브가 공유한 사람 닉네임으로 함께 나온다")
+  void archiveList() throws Exception {
+    memory(me, "내 추억");
+    receive(memory(friend, "친구 추억"), true);
+    receive(memory(friend, "받기만 함"), false);
+
+    mockMvc
+        .perform(withToken(get("/v1/memories")))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.data.totalElements").value(2))
+        .andExpect(jsonPath("$.data.memories[?(@.title == '친구 추억')].authorNickname").value("유빈"))
+        .andExpect(jsonPath("$.data.memories[?(@.title == '내 추억')].authorNickname").value("나"));
+  }
+
+  @Test
+  @DisplayName("캘린더 월별 · 날짜별 · 통합 검색 · 탭 개수에도 저장한 아카이브가 나온다")
+  void calendarAndSearch() throws Exception {
+    memory(me, "내 추억");
+    receive(memory(friend, "친구 추억"), true);
+    receive(memory(friend, "받기만 함"), false);
+
+    mockMvc
+        .perform(withToken(get("/v1/calendar").param("year", "2026").param("month", "8")))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.data.counts.memory").value(2))
+        .andExpect(jsonPath("$.data.days[0].date").value("2026-08-15"))
+        .andExpect(jsonPath("$.data.days[0].types[0]").value("MEMORY"));
+    mockMvc
+        .perform(withToken(get("/v1/calendar/daily").param("date", "2026-08-15")))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.data.memories.length()").value(2))
+        .andExpect(jsonPath("$.data.memories[1].authorNickname").value("유빈"));
+    mockMvc
+        .perform(
+            withToken(get("/v1/calendar/search").param("keyword", "추억").param("type", "MEMORY")))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.data.totalCount").value(2));
+  }
+
   private void receive(Memory memory, boolean save) {
     transactionTemplate.executeWithoutResult(
         tx -> {
