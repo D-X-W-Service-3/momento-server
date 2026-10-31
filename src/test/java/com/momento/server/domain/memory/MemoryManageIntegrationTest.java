@@ -118,8 +118,8 @@ class MemoryManageIntegrationTest {
             .build());
   }
 
-  private void saveImage(Memory memory, String key, int order) {
-    memoryImageRepository.save(
+  private MemoryImage saveImage(Memory memory, String key, int order) {
+    return memoryImageRepository.save(
         MemoryImage.builder().memory(memory).imageUrl(key).displayOrder(order).build());
   }
 
@@ -198,6 +198,12 @@ class MemoryManageIntegrationTest {
             .content(body));
   }
 
+  private List<Long> imageIdsOf(Memory memory) {
+    return memoryImageRepository.findByMemoryIdOrderByDisplayOrderAsc(memory.getId()).stream()
+        .map(MemoryImage::getId)
+        .toList();
+  }
+
   private List<String> imageKeysOf(Memory memory) {
     return memoryImageRepository.findByMemoryIdOrderByDisplayOrderAsc(memory.getId()).stream()
         .map(MemoryImage::getImageUrl)
@@ -227,14 +233,14 @@ class MemoryManageIntegrationTest {
   }
 
   @Test
-  @DisplayName("imageKeys 를 보내면 사진 목록을 통째로 바꾸고, 대표 사진은 첫 번째로 옮긴다")
+  @DisplayName("imageKeys 를 보내면 빠진 사진은 지우고 새 사진을 더하고, 대표 사진은 첫 번째로 옮기며, 남은 사진의 imageId 는 그대로다")
   void replaceImages() throws Exception {
     Memory memory = saveMemory(me, "제주도 여행");
     String removed = imageKey(me);
     String kept = imageKey(me);
     String added = imageKey(me);
     saveImage(memory, removed, 0);
-    saveImage(memory, kept, 1);
+    MemoryImage keptImage = saveImage(memory, kept, 1);
 
     updateMemory(
             memory.getId(),
@@ -245,6 +251,7 @@ class MemoryManageIntegrationTest {
         .andExpect(status().isOk());
 
     assertThat(imageKeysOf(memory)).containsExactly(added, kept);
+    assertThat(imageIdsOf(memory).get(1)).isEqualTo(keptImage.getId());
     assertThat(reload(memory).getTitle()).isEqualTo("제주도 여행");
   }
 
@@ -260,20 +267,37 @@ class MemoryManageIntegrationTest {
   }
 
   @Test
-  @DisplayName("대표 사진 key 만 보내면 기존 사진 중 그 사진을 첫 번째로 옮긴다")
+  @DisplayName("대표 사진 key 만 보내면 기존 사진 중 그 사진을 첫 번째로 옮기고 imageId 는 그대로다")
   void changeRepresentativeOnly() throws Exception {
     Memory memory = saveMemory(me, "제주도 여행");
     String first = imageKey(me);
     String second = imageKey(me);
     String third = imageKey(me);
-    saveImage(memory, first, 0);
-    saveImage(memory, second, 1);
-    saveImage(memory, third, 2);
+    Long firstId = saveImage(memory, first, 0).getId();
+    Long secondId = saveImage(memory, second, 1).getId();
+    Long thirdId = saveImage(memory, third, 2).getId();
 
     updateMemory(memory.getId(), "{\"representativeImageKey\": \"%s\"}".formatted(third))
         .andExpect(status().isOk());
 
     assertThat(imageKeysOf(memory)).containsExactly(third, first, second);
+    assertThat(imageIdsOf(memory)).containsExactly(thirdId, firstId, secondId);
+  }
+
+  @Test
+  @DisplayName("순서만 바꾸면 모든 사진의 imageId 가 그대로다")
+  void reorderKeepsImageIds() throws Exception {
+    Memory memory = saveMemory(me, "제주도 여행");
+    String first = imageKey(me);
+    String second = imageKey(me);
+    Long firstId = saveImage(memory, first, 0).getId();
+    Long secondId = saveImage(memory, second, 1).getId();
+
+    updateMemory(memory.getId(), "{\"imageKeys\": [\"%s\", \"%s\"]}".formatted(second, first))
+        .andExpect(status().isOk());
+
+    assertThat(imageKeysOf(memory)).containsExactly(second, first);
+    assertThat(imageIdsOf(memory)).containsExactly(secondId, firstId);
   }
 
   @Test

@@ -72,20 +72,23 @@ public class MemoryService {
   }
 
   /**
-   * 보낸 값만 바꾼다. imageKeys 를 보내면 기존 사진을 지우고 보낸 순서대로 다시 붙인다. 대표 사진 key 만 보내면 기존 사진 중 그 사진을 첫 번째로 옮긴다.
-   * 사진 검증 규칙은 등록과 같다.
+   * 보낸 값만 바꾼다. imageKeys 를 보내면 사진 목록을 그 값으로 바꾸고, 대표 사진 key 만 보내면 기존 사진 중 그 사진을 첫 번째로 옮긴다. 사진 검증 규칙은
+   * 등록과 같다.
    */
   @Transactional
   public void update(Long memoryId, Long userId, MemoryUpdateRequest request) {
     Memory memory = getMine(memoryId, userId);
 
     if (request.changesImages()) {
+      List<MemoryImage> current =
+          memoryImageRepository.findByMemoryIdOrderByDisplayOrderAsc(memory.getId());
       List<String> imageKeys =
-          request.imageKeys() != null ? request.imageKeys() : currentImageKeys(memory);
+          request.imageKeys() != null
+              ? request.imageKeys()
+              : current.stream().map(MemoryImage::getImageUrl).toList();
       List<String> arranged = arrangeImageKeys(userId, imageKeys, request.representativeImageKey());
 
-      memoryImageRepository.deleteByMemoryId(memory.getId());
-      saveImages(memory, arranged);
+      replaceImages(memory, current, arranged);
     }
 
     memory.update(request.title(), request.content(), request.memoryDate());
@@ -97,10 +100,30 @@ public class MemoryService {
     getMine(memoryId, userId).delete(LocalDateTime.now(clock));
   }
 
-  private List<String> currentImageKeys(Memory memory) {
-    return memoryImageRepository.findByMemoryIdOrderByDisplayOrderAsc(memory.getId()).stream()
-        .map(MemoryImage::getImageUrl)
-        .toList();
+  /**
+   * 바뀐 사진만 반영한다. 목록에서 빠진 사진은 지우고, 남은 사진은 순서만 바꾸고, 새 사진만 추가한다. 행을 모두 지우고 다시 만들면 대표 사진만 바꿔도 상세 응답의
+   * imageId 가 수정할 때마다 바뀐다.
+   */
+  private void replaceImages(Memory memory, List<MemoryImage> current, List<String> arranged) {
+    Map<String, MemoryImage> currentByKey =
+        current.stream().collect(Collectors.toMap(MemoryImage::getImageUrl, image -> image));
+
+    memoryImageRepository.deleteAll(
+        current.stream().filter(image -> !arranged.contains(image.getImageUrl())).toList());
+
+    List<MemoryImage> added = new ArrayList<>();
+    for (int order = 0; order < arranged.size(); order++) {
+      String key = arranged.get(order);
+      MemoryImage existing = currentByKey.get(key);
+
+      if (existing != null) {
+        existing.changeDisplayOrder(order);
+      } else {
+        added.add(MemoryImage.builder().memory(memory).imageUrl(key).displayOrder(order).build());
+      }
+    }
+
+    memoryImageRepository.saveAll(added);
   }
 
   /** 내 아카이브를 찾는다. 없는 아카이브 · 삭제된 아카이브 · 다른 회원의 아카이브 · 타임캡슐에서 옮겨진 추억은 똑같이 404 다. */
