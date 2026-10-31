@@ -1,17 +1,22 @@
 package com.momento.server.domain.memory.service;
 
+import com.momento.server.domain.image.entity.ImageTarget;
+import com.momento.server.domain.image.service.ImageKeys;
 import com.momento.server.domain.memory.dto.request.MemoryCreateRequest;
 import com.momento.server.domain.memory.dto.response.MemorySummary;
 import com.momento.server.domain.memory.entity.Memory;
 import com.momento.server.domain.memory.entity.MemoryImage;
+import com.momento.server.domain.memory.exception.MemoryErrorCode;
 import com.momento.server.domain.memory.repository.MemoryImageRepository;
 import com.momento.server.domain.memory.repository.MemoryRepository;
 import com.momento.server.domain.user.entity.User;
 import com.momento.server.global.common.code.GlobalErrorCode;
 import com.momento.server.global.common.exception.ApiException;
+import com.momento.server.global.common.storage.PresignedUrlProvider;
 import com.momento.server.global.common.util.LikePattern;
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -33,10 +38,15 @@ public class MemoryService {
 
   private final MemoryRepository memoryRepository;
   private final MemoryImageRepository memoryImageRepository;
+  private final PresignedUrlProvider presignedUrlProvider;
 
   /** 추억 하나와 첨부 이미지를 저장한다. 공개 범위는 요청으로 받지 않고 엔티티 기본값(PRIVATE)을 쓴다. */
   @Transactional
-  public MemoryDetail create(User user, MemoryCreateRequest request) {
+  public void create(User user, MemoryCreateRequest request) {
+    List<String> imageKeys =
+        arrangeImageKeys(
+            user.getId(), request.imageKeysOrEmpty(), request.representativeImageKey());
+
     Memory memory =
         memoryRepository.save(
             Memory.builder()
@@ -46,25 +56,50 @@ public class MemoryService {
                 .memoryDate(request.memoryDate())
                 .build());
 
-    List<MemoryImage> images = saveImages(memory, request.imageUrlsOrEmpty());
-
-    return new MemoryDetail(memory, images);
+    saveImages(memory, imageKeys);
   }
 
-  /** 보낸 순서를 display_order 0, 1, 2... 로 저장한다. 0번이 목록의 대표 이미지가 된다. */
-  private List<MemoryImage> saveImages(Memory memory, List<String> imageUrls) {
+  /**
+   * 저장할 사진 순서를 정한다. 대표 사진은 display_order 0 번으로 옮기고, 나머지는 보낸 순서를 지킨다. 대표 사진 컬럼을 따로 두지 않고 0 번을 대표
+   * 사진으로 본다(명세: 대표 사진은 첫 사진).
+   *
+   * <p>이미지 업로드 URL 발급으로 내 경로에 만든 key 만 받는다. 아무 문자열이나 받으면 다른 회원이 올린 사진의 key 를 내 아카이브에 붙여 그 사진을 볼 수
+   * 있게 된다.
+   */
+  private List<String> arrangeImageKeys(
+      Long userId, List<String> imageKeys, String representativeImageKey) {
+    boolean allMine =
+        imageKeys.stream().allMatch(key -> ImageKeys.isOwnedBy(ImageTarget.MEMORY, key, userId));
+    boolean noDuplicate = new HashSet<>(imageKeys).size() == imageKeys.size();
+    boolean representativeIncluded =
+        representativeImageKey == null || imageKeys.contains(representativeImageKey);
+
+    if (!allMine || !noDuplicate || !representativeIncluded) {
+      throw new ApiException(MemoryErrorCode.INVALID_IMAGE_KEY);
+    }
+
+    List<String> arranged = new ArrayList<>(imageKeys);
+    if (representativeImageKey != null) {
+      arranged.remove(representativeImageKey);
+      arranged.add(0, representativeImageKey);
+    }
+    return arranged;
+  }
+
+  /** 정한 순서를 display_order 0, 1, 2... 로 저장한다. image_url 컬럼에는 S3 key 를 저장한다. */
+  private void saveImages(Memory memory, List<String> imageKeys) {
     List<MemoryImage> images = new ArrayList<>();
 
-    for (int order = 0; order < imageUrls.size(); order++) {
+    for (int order = 0; order < imageKeys.size(); order++) {
       images.add(
           MemoryImage.builder()
               .memory(memory)
-              .imageUrl(imageUrls.get(order))
+              .imageUrl(imageKeys.get(order))
               .displayOrder(order)
               .build());
     }
 
-    return memoryImageRepository.saveAll(images);
+    memoryImageRepository.saveAll(images);
   }
 
   /** 아카이브 탭 목록. 연도는 그 해의 1월 1일 ~ 12월 31일 범위로 바꿔 넘긴다. */
@@ -116,7 +151,10 @@ public class MemoryService {
     return memories.stream()
         .map(
             memory ->
-                MemorySummary.of(memory, imagesByMemory.getOrDefault(memory.getId(), List.of())))
+                MemorySummary.of(
+                    memory,
+                    imagesByMemory.getOrDefault(memory.getId(), List.of()),
+                    presignedUrlProvider::viewUrl))
         .toList();
   }
 
