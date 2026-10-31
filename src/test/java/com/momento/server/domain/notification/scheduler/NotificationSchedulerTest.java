@@ -57,6 +57,45 @@ class NotificationSchedulerTest {
     verify(dispatchService).dispatch(BOOT, BOOT.plusMinutes(2));
   }
 
+  @Test
+  @DisplayName("주기가 자정을 넘으면 어제의 마지막 구간부터 이어서 넘긴다")
+  void carriesOverYesterdayTailAcrossMidnight() {
+    LocalDateTime beforeMidnight = LocalDateTime.of(2045, 3, 10, 23, 59, 30);
+    LocalDateTime afterMidnight = beforeMidnight.plusMinutes(1);
+    at(beforeMidnight);
+    scheduler.dispatch();
+
+    at(afterMidnight);
+    scheduler.dispatch();
+    verify(dispatchService).dispatch(beforeMidnight, afterMidnight);
+  }
+
+  @Test
+  @DisplayName("발송이 실패한 채 자정을 한참 넘기면 어제 몫은 버리고 오늘 0시부터 넘긴다")
+  void dropsYesterdayAfterLongFailure() {
+    at(BOOT);
+    scheduler.dispatch();
+
+    willThrow(new IllegalStateException("실패")).given(dispatchService).dispatch(any(), any());
+    LocalDateTime nextDay = BOOT.plusDays(1).withHour(3);
+    at(nextDay);
+    assertThatThrownBy(scheduler::dispatch).isInstanceOf(IllegalStateException.class);
+    verify(dispatchService).dispatch(nextDay.toLocalDate().atStartOfDay(), nextDay);
+  }
+
+  @Test
+  @DisplayName("같은 날 안에서는 실패가 오래 이어져도 실패한 시각부터 다시 넘긴다")
+  void retriesWithinSameDay() {
+    at(BOOT);
+    scheduler.dispatch();
+
+    willThrow(new IllegalStateException("실패")).given(dispatchService).dispatch(any(), any());
+    LocalDateTime later = BOOT.plusHours(5);
+    at(later);
+    assertThatThrownBy(scheduler::dispatch).isInstanceOf(IllegalStateException.class);
+    verify(dispatchService).dispatch(BOOT, later);
+  }
+
   private void at(LocalDateTime now) {
     given(clock.instant()).willReturn(now.toInstant(ZoneOffset.UTC));
   }
