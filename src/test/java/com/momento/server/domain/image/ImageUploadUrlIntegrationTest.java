@@ -65,7 +65,7 @@ class ImageUploadUrlIntegrationTest {
 
     issue(
             """
-            {"target": "MEMORY", "files": [{"contentType": "image/jpeg"}, {"contentType": "image/png"}]}
+            {"target": "MEMORY", "files": [{"contentType": "image/jpeg", "contentLength": 1024}, {"contentType": "image/png", "contentLength": 2048}]}
             """)
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.data.uploads.length()").value(2))
@@ -84,7 +84,7 @@ class ImageUploadUrlIntegrationTest {
   void issueProfileUploadUrl() throws Exception {
     issue(
             """
-            {"target": "PROFILE", "files": [{"contentType": "image/webp"}]}
+            {"target": "PROFILE", "files": [{"contentType": "image/webp", "contentLength": 1024}]}
             """)
         .andExpect(status().isOk())
         .andExpect(
@@ -98,7 +98,7 @@ class ImageUploadUrlIntegrationTest {
     for (String contentType : List.of("image/gif", "IMAGE/JPEG", "")) {
       issue(
               """
-              {"target": "MEMORY", "files": [{"contentType": "image/jpeg"}, {"contentType": "%s"}]}
+              {"target": "MEMORY", "files": [{"contentType": "image/jpeg", "contentLength": 1024}, {"contentType": "%s", "contentLength": 1024}]}
               """
                   .formatted(contentType))
           .andExpect(status().isBadRequest())
@@ -112,8 +112,8 @@ class ImageUploadUrlIntegrationTest {
   void rejectsInvalidTarget() throws Exception {
     for (String body :
         List.of(
-            "{\"files\": [{\"contentType\": \"image/jpeg\"}]}",
-            "{\"target\": \"LETTER\", \"files\": [{\"contentType\": \"image/jpeg\"}]}")) {
+            "{\"files\": [{\"contentType\": \"image/jpeg\", \"contentLength\": 1024}]}",
+            "{\"target\": \"LETTER\", \"files\": [{\"contentType\": \"image/jpeg\", \"contentLength\": 1024}]}")) {
       issue(body)
           .andExpect(status().isBadRequest())
           .andExpect(jsonPath("$.code").value("INVALID_INPUT_VALUE"));
@@ -125,7 +125,7 @@ class ImageUploadUrlIntegrationTest {
   void fileCountIsLimited() throws Exception {
     String nine =
         IntStream.rangeClosed(1, 9)
-            .mapToObj(i -> "{\"contentType\": \"image/jpeg\"}")
+            .mapToObj(i -> "{\"contentType\": \"image/jpeg\", \"contentLength\": 1024}")
             .collect(Collectors.joining(","));
 
     for (String body :
@@ -147,7 +147,29 @@ class ImageUploadUrlIntegrationTest {
             post("/v1/images/presigned-urls")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(
-                    "{\"target\": \"MEMORY\", \"files\": [{\"contentType\": \"image/jpeg\"}]}"))
+                    "{\"target\": \"MEMORY\", \"files\": [{\"contentType\": \"image/jpeg\", \"contentLength\": 1024}]}"))
         .andExpect(status().isUnauthorized());
+  }
+
+  @Test
+  @DisplayName("파일 크기가 없거나 0 이하이거나 20MB 를 넘으면 400 INVALID_INPUT_VALUE 다")
+  void fileSizeIsLimited() throws Exception {
+    long max = 20L * 1024 * 1024;
+
+    for (String file :
+        List.of(
+            "{\"contentType\": \"image/jpeg\"}",
+            "{\"contentType\": \"image/jpeg\", \"contentLength\": 0}",
+            "{\"contentType\": \"image/jpeg\", \"contentLength\": " + (max + 1) + "}")) {
+      issue("{\"target\": \"MEMORY\", \"files\": [" + file + "]}")
+          .andExpect(status().isBadRequest())
+          .andExpect(jsonPath("$.code").value("INVALID_INPUT_VALUE"));
+    }
+
+    issue(
+            "{\"target\": \"MEMORY\", \"files\": [{\"contentType\": \"image/jpeg\", \"contentLength\": "
+                + max
+                + "}]}")
+        .andExpect(status().isOk());
   }
 }

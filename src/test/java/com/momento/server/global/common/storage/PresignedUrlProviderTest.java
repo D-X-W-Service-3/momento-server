@@ -43,16 +43,18 @@ class PresignedUrlProviderTest {
   }
 
   @Test
-  @DisplayName("업로드 주소는 버킷과 key 를 가리키고 10분 뒤 만료된다")
+  @DisplayName("업로드 주소는 버킷과 key 를 가리키고, 형식 · 크기를 서명에 넣고, 10분 뒤 만료된다")
   void uploadUrl() {
     LocalDateTime before = LocalDateTime.now();
 
-    PresignedUpload upload = provider.uploadUrl(KEY, "image/jpeg");
+    PresignedUpload upload = provider.uploadUrl(KEY, "image/jpeg", 1_024L);
 
     assertThat(upload.url())
         .startsWith("https://momento-test-bucket.s3.ap-northeast-2.amazonaws.com/" + KEY + "?")
         .contains("X-Amz-Expires=600")
-        .contains("X-Amz-Signature=");
+        .contains("X-Amz-Signature=")
+        .contains("content-length")
+        .contains("content-type");
     assertThat(upload.expiresAt())
         .isAfterOrEqualTo(before.plusMinutes(10).withNano(0))
         .isBeforeOrEqualTo(LocalDateTime.now().plusMinutes(10));

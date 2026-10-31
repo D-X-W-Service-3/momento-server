@@ -22,7 +22,8 @@ public class ImageFacade {
             .map(
                 file -> {
                   String key = ImageKeys.newKey(request.target(), userId, file.contentType());
-                  PresignedUpload upload = presignedUrlProvider.uploadUrl(key, file.contentType());
+                  PresignedUpload upload =
+                      presignedUrlProvider.uploadUrl(key, file.contentType(), file.contentLength());
                   return new ImageUploadUrlResponse.Upload(key, upload.url(), upload.expiresAt());
                 })
             .toList();
