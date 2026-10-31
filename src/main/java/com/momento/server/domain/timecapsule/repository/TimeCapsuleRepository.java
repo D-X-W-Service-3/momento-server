@@ -40,23 +40,12 @@ public interface TimeCapsuleRepository extends JpaRepository<TimeCapsule, Long> 
           + " and ku.nickname like :keyword escape '!'))";
 
   /**
-   * 검색어를 "포함" 검색용 LIKE 패턴으로 바꾼다. {@code %} · {@code _} 를 이스케이프하지 않으면 {@code %} 하나로 모든 캡슐이 나온다. 비어
-   * 있으면 null 이라 검색하지 않는다.
-   */
-  static String containsPattern(String keyword) {
-    if (keyword == null || keyword.isBlank()) {
-      return null;
-    }
-    String escaped = keyword.strip().replace("!", "!!").replace("%", "!%").replace("_", "!_");
-    return "%" + escaped + "%";
-  }
-
-  /**
    * 내가 속한 캡슐을 개봉일 · ID 오름차순으로 읽는다. 커서는 직전 페이지 마지막 캡슐의 (개봉일, ID) 다. 개봉일은 겹칠 수 있어서 개봉일만으로는 페이지 경계의
    * 캡슐이 빠지거나 겹친다.
    *
    * @param status null 이면 전체
-   * @param keyword {@link #containsPattern} 으로 만든 패턴. null 이면 검색하지 않는다
+   * @param keyword {@link com.momento.server.global.common.util.LikePattern#contains} 로 만든 패턴. null
+   *     이면 검색하지 않는다
    * @param cursorOpenAt null 이면 첫 페이지
    */
   @Query(
@@ -123,6 +112,26 @@ public interface TimeCapsuleRepository extends JpaRepository<TimeCapsule, Long> 
           + " order by c.openAt, c.id")
   List<MyCapsule> findMyCapsulesOpeningBetween(
       @Param("userId") Long userId,
+      @Param("from") LocalDateTime from,
+      @Param("to") LocalDateTime to);
+
+  /**
+   * 통합 검색. 검색어는 목록 검색과 같은 기준이고, 개봉일이 {@code [from, to)} 인 캡슐만 개봉일 · ID 오름차순으로 읽는다. 최신순은 서비스가 뒤집는다.
+   *
+   * @param keyword {@link com.momento.server.global.common.util.LikePattern#contains} 로 만든 패턴
+   * @param from null 이면 처음부터
+   * @param to null 이면 끝까지
+   */
+  @Query(
+      "select new com.momento.server.domain.timecapsule.repository.MyCapsule(c, m.openedAt)"
+          + MY_ACTIVE_CAPSULES
+          + KEYWORD_MATCHES
+          + " and (:from is null or c.openAt >= :from)"
+          + " and (:to is null or c.openAt < :to)"
+          + " order by c.openAt, c.id")
+  List<MyCapsule> searchMyCapsules(
+      @Param("userId") Long userId,
+      @Param("keyword") String keyword,
       @Param("from") LocalDateTime from,
       @Param("to") LocalDateTime to);
 

@@ -9,6 +9,7 @@ import com.momento.server.domain.timecapsule.repository.CapsuleMemberRepository;
 import com.momento.server.domain.timecapsule.repository.CapsuleStatusCount;
 import com.momento.server.domain.timecapsule.repository.MyCapsule;
 import com.momento.server.domain.timecapsule.repository.TimeCapsuleRepository;
+import com.momento.server.global.common.util.LikePattern;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -56,7 +57,7 @@ public class TimeCapsuleListService {
       LocalDateTime cursorOpenAt,
       Long cursorId,
       int size) {
-    String pattern = TimeCapsuleRepository.containsPattern(keyword);
+    String pattern = LikePattern.contains(keyword);
     List<MyCapsule> found =
         timeCapsuleRepository.findMyCapsules(
             userId, status, pattern, cursorOpenAt, cursorId, Limit.of(size + 1));
@@ -94,6 +95,20 @@ public class TimeCapsuleListService {
     return summarize(
         timeCapsuleRepository.findMyCapsulesOpeningBetween(
             userId, date.atStartOfDay(), date.plusDays(1).atStartOfDay()));
+  }
+
+  /**
+   * 통합 검색. 목록 검색과 같은 기준으로 찾고, 개봉일이 그 해인 캡슐만 개봉일 · ID 오름차순으로 카드로 읽는다. 캡슐과 멤버 수 · 편지 수를 같은 시점에 읽도록
+   * 묶는다.
+   *
+   * @param year null 이면 전체 기간
+   */
+  @Transactional(readOnly = true)
+  public List<TimeCapsuleSummary> searchMyCapsules(Long userId, String keyword, Integer year) {
+    LocalDateTime from = year == null ? null : LocalDate.of(year, 1, 1).atStartOfDay();
+    LocalDateTime to = year == null ? null : from.plusYears(1);
+    return summarize(
+        timeCapsuleRepository.searchMyCapsules(userId, LikePattern.contains(keyword), from, to));
   }
 
   private Map<CapsuleStatus, Long> countByStatus(Long userId, String keywordPattern) {

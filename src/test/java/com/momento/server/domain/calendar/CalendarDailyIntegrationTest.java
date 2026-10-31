@@ -1,5 +1,6 @@
 package com.momento.server.domain.calendar;
 
+import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.empty;
 import static org.hamcrest.Matchers.nullValue;
 import static org.mockito.BDDMockito.given;
@@ -166,7 +167,8 @@ class CalendarDailyIntegrationTest {
         .andExpect(jsonPath("$.data.memories[0].memoryId").value(memory.getId()))
         .andExpect(jsonPath("$.data.memories[0].title").value("추억"))
         .andExpect(jsonPath("$.data.memories[0].memoryDate").value("2026-11-05"))
-        .andExpect(jsonPath("$.data.memories[0].thumbnailUrl").value("memories/1/a.jpg"))
+        .andExpect(
+            jsonPath("$.data.memories[0].thumbnailUrl").value(containsString("/memories/1/a.jpg?")))
         .andExpect(jsonPath("$.data.memories[0].imageCount").value(2));
   }
 
