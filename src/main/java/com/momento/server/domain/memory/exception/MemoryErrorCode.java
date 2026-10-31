@@ -16,6 +16,12 @@ public enum MemoryErrorCode implements ErrorCode {
    * 못하게 막는다.
    */
   INVALID_IMAGE_KEY("업로드한 이미지 정보가 올바르지 않습니다.", HttpStatus.BAD_REQUEST),
+
+  /** 내 추억의 공유 링크를 내가 연 경우. 내 아카이브에 이미 있다. */
+  CANNOT_RECEIVE_OWN_MEMORY("내 아카이브는 공유받을 수 없습니다.", HttpStatus.BAD_REQUEST),
+
+  /** 없는 받은 아카이브, 다른 회원의 받은 아카이브, 이미 저장 · 닫기 한 받은 아카이브, 원본이 삭제된 받은 아카이브를 구분하지 않는다. */
+  RECEIVED_MEMORY_NOT_FOUND("공유받은 아카이브를 찾을 수 없습니다.", HttpStatus.NOT_FOUND),
   ;
 
   private final String message;

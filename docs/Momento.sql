@@ -97,6 +97,15 @@ CREATE TABLE `user_visits` (
 	`created_at`	DATETIME(6)	NOT NULL	COMMENT '그날 처음 방문한 일시'
 );
 
+CREATE TABLE `received_memories` (
+	`id`	BIGINT	NOT NULL	AUTO_INCREMENT	COMMENT '받은 아카이브 ID',
+	`memory_id`	BIGINT	NOT NULL	COMMENT '공유된 원본 추억 ID',
+	`receiver_id`	BIGINT	NOT NULL	COMMENT '링크로 받은 회원 ID',
+	`status`	VARCHAR(20)	NOT NULL	DEFAULT 'PENDING'	COMMENT '받은 상태: PENDING, SAVED, DISMISSED',
+	`created_at`	DATETIME(6)	NOT NULL	COMMENT '처음 받은 일시',
+	`updated_at`	DATETIME(6)	NOT NULL	COMMENT '수정 일시'
+);
+
 CREATE TABLE `notifications` (
 	`id`	BIGINT	NOT NULL	AUTO_INCREMENT	COMMENT '알림 ID',
 	`user_id`	BIGINT	NOT NULL	COMMENT '알림 수신 회원 ID',
@@ -199,6 +208,22 @@ ALTER TABLE `user_visits` ADD CONSTRAINT `PK_USER_VISITS` PRIMARY KEY (
 ALTER TABLE `user_visits` ADD CONSTRAINT `UK_USER_VISITS_USER_DATE` UNIQUE (
 	`user_id`,
 	`visit_date`
+);
+
+ALTER TABLE `received_memories` ADD CONSTRAINT `PK_RECEIVED_MEMORIES` PRIMARY KEY (
+	`id`
+);
+
+-- 공유 링크로 받은 아카이브는 추억 · 받은 회원마다 한 행이다 (이슈 #81)
+ALTER TABLE `received_memories` ADD CONSTRAINT `UK_RECEIVED_MEMORIES_MEMORY_RECEIVER` UNIQUE (
+	`memory_id`,
+	`receiver_id`
+);
+
+-- 회원별 받은 아카이브 · 저장한 아카이브 조회다 (이슈 #81)
+ALTER TABLE `received_memories` ADD INDEX `IDX_RECEIVED_MEMORIES_RECEIVER_ID_STATUS` (
+	`receiver_id`,
+	`status`
 );
 
 ALTER TABLE `notifications` ADD CONSTRAINT `PK_NOTIFICATIONS` PRIMARY KEY (

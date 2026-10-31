@@ -16,6 +16,7 @@ import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.function.Supplier;
 import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -80,6 +81,23 @@ public class Memory extends BaseTimeEntity {
     if (memoryDate != null) {
       this.memoryDate = memoryDate;
     }
+  }
+
+  /**
+   * 공유 링크를 연다. 처음이면 토큰을 만들고 공개 범위를 LINK 로 바꾼다. 이미 공유했으면 같은 토큰을 그대로 쓴다 — 링크 하나를 여러 사람이 받는다.
+   *
+   * @return 공유 토큰
+   */
+  public String share(Supplier<String> newToken) {
+    if (shareToken == null) {
+      this.shareToken = newToken.get();
+      this.visibilityType = MemoryVisibilityType.LINK;
+    }
+    return shareToken;
+  }
+
+  public boolean isOwnedBy(Long userId) {
+    return user.getId().equals(userId);
   }
 
   /** 소프트 삭제. 아카이브 목록 · 캘린더 · 상세 쿼리가 모두 {@code deletedAt} 이 빈 추억만 읽는다. */
