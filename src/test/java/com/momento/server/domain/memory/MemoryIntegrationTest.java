@@ -329,6 +329,24 @@ class MemoryIntegrationTest {
   }
 
   @Test
+  @DisplayName("검색어의 % · _ 는 글자 그대로 찾는다")
+  void keywordWildcardsAreLiteral() throws Exception {
+    saveMemory(me, "100% 성공", LocalDate.of(2026, 8, 15));
+    saveMemory(me, "제주도 여행", LocalDate.of(2026, 7, 2));
+
+    mockMvc
+        .perform(
+            get("/v1/memories").param("keyword", "%").header("Authorization", "Bearer " + token))
+        .andExpect(jsonPath("$.data.totalElements").value(1))
+        .andExpect(jsonPath("$.data.memories[0].title").value("100% 성공"));
+
+    mockMvc
+        .perform(
+            get("/v1/memories").param("keyword", "_").header("Authorization", "Bearer " + token))
+        .andExpect(jsonPath("$.data.totalElements").value(0));
+  }
+
+  @Test
   @DisplayName("허용 범위를 벗어난 연도가 오면 400 을 반환한다")
   void yearRangeIsValidated() throws Exception {
     for (String year : List.of("1000000000", "1899", "2101")) {

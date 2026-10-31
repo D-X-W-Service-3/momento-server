@@ -18,7 +18,12 @@ public interface MemoryRepository extends JpaRepository<Memory, Long> {
    */
   Optional<Memory> findByIdAndUserIdAndTimeCapsuleIsNullAndDeletedAtIsNull(Long id, Long userId);
 
-  /** 아카이브 탭에 노출할 "내가 직접 등록한 추억" 목록. 소프트 삭제된 것과 타임캡슐에서 옮겨진 것은 제외한다. 검색어는 이름 · 내용 중 한 곳에만 있어도 찾는다. */
+  /**
+   * 아카이브 탭에 노출할 "내가 직접 등록한 추억" 목록. 소프트 삭제된 것과 타임캡슐에서 옮겨진 것은 제외한다. 검색어는 이름 · 내용 중 한 곳에만 있어도 찾는다.
+   *
+   * @param pattern {@link com.momento.server.global.common.util.LikePattern#contains} 로 만든 패턴. null
+   *     이면 검색하지 않는다
+   */
   @Query(
       value =
           """
@@ -26,9 +31,9 @@ public interface MemoryRepository extends JpaRepository<Memory, Long> {
                     WHERE m.user.id = :userId
                       AND m.deletedAt IS NULL
                       AND m.timeCapsule IS NULL
-                      AND (:keyword IS NULL
-                           OR m.title LIKE CONCAT('%', :keyword, '%')
-                           OR m.content LIKE CONCAT('%', :keyword, '%'))
+                      AND (:pattern IS NULL
+                           OR m.title LIKE :pattern ESCAPE '!'
+                           OR m.content LIKE :pattern ESCAPE '!')
                       AND (:startDate IS NULL OR m.memoryDate >= :startDate)
                       AND (:endDate IS NULL OR m.memoryDate <= :endDate)
                     ORDER BY m.memoryDate DESC, m.id DESC
@@ -39,15 +44,15 @@ public interface MemoryRepository extends JpaRepository<Memory, Long> {
                     WHERE m.user.id = :userId
                       AND m.deletedAt IS NULL
                       AND m.timeCapsule IS NULL
-                      AND (:keyword IS NULL
-                           OR m.title LIKE CONCAT('%', :keyword, '%')
-                           OR m.content LIKE CONCAT('%', :keyword, '%'))
+                      AND (:pattern IS NULL
+                           OR m.title LIKE :pattern ESCAPE '!'
+                           OR m.content LIKE :pattern ESCAPE '!')
                       AND (:startDate IS NULL OR m.memoryDate >= :startDate)
                       AND (:endDate IS NULL OR m.memoryDate <= :endDate)
                     """)
   Page<Memory> findMyMemories(
       @Param("userId") Long userId,
-      @Param("keyword") String keyword,
+      @Param("pattern") String pattern,
       @Param("startDate") LocalDate startDate,
       @Param("endDate") LocalDate endDate,
       Pageable pageable);

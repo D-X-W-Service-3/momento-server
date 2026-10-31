@@ -153,9 +153,12 @@ public class MemoryService {
     memoryImageRepository.saveAll(images);
   }
 
-  /** 아카이브 탭 목록. 연도는 그 해의 1월 1일 ~ 12월 31일 범위로 바꿔 넘긴다. */
+  /**
+   * 아카이브 탭 목록. 연도는 그 해의 1월 1일 ~ 12월 31일 범위로 바꿔 넘긴다. 검색어의 {@code %} · {@code _} 는 캘린더 통합 검색과 같이 글자
+   * 그대로 찾는다.
+   */
   public MemoryPage findMyMemories(Long userId, String keyword, Integer year, int page, int size) {
-    String trimmedKeyword = (keyword == null || keyword.isBlank()) ? null : keyword.trim();
+    String pattern = LikePattern.contains(keyword);
     LocalDate startDate = null;
     LocalDate endDate = null;
 
@@ -167,7 +170,7 @@ public class MemoryService {
 
     Pageable pageable = PageRequest.of(Math.max(page, 0), clampSize(size));
     Page<Memory> memories =
-        memoryRepository.findMyMemories(userId, trimmedKeyword, startDate, endDate, pageable);
+        memoryRepository.findMyMemories(userId, pattern, startDate, endDate, pageable);
 
     return new MemoryPage(memories, findImagesByMemory(memories.getContent()));
   }
