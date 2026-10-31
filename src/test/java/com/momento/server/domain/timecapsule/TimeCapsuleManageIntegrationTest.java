@@ -313,7 +313,9 @@ class TimeCapsuleManageIntegrationTest {
               () -> {
                 start.await();
                 return letterService.create(
-                    capsule.getId(), participant.getId(), new LetterCreateRequest("편지", null));
+                    capsule.getId(),
+                    participant.getId(),
+                    new LetterCreateRequest("제목", "편지", "COZY"));
               });
       Future<?> remove =
           executor.submit(

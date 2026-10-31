@@ -45,6 +45,10 @@ public class Letter extends BaseTimeEntity {
   @JoinColumn(name = "author_id", nullable = false)
   private User author;
 
+  /** 기존 편지는 제목이 없을 수 있다. 새 작성에서는 요청 검증으로 필수 입력을 보장한다. */
+  @Column(name = "title", length = 50)
+  private String title;
+
   @Column(name = "content", nullable = false, columnDefinition = "TEXT")
   private String content;
 
@@ -63,4 +67,11 @@ public class Letter extends BaseTimeEntity {
 
   @Column(name = "deleted_at")
   private LocalDateTime deletedAt;
+
+  /** 처음 삭제한 시각을 보존한다. 접근 권한과 기간은 서비스가 검사한다. */
+  public void delete(LocalDateTime now) {
+    if (deletedAt == null) {
+      deletedAt = now;
+    }
+  }
 }

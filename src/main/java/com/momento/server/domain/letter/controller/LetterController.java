@@ -22,12 +22,12 @@ public class LetterController implements LetterApi {
 
   @Override
   @PostMapping
-  public CommonResponse<LetterResponse> create(
+  public CommonResponse<Void> create(
       @AuthenticationPrincipal UserPrincipal principal,
       @PathVariable Long capsuleId,
       @Valid @RequestBody LetterCreateRequest request) {
-    return CommonResponse.success(
-        SuccessCode.CREATED, letterFacade.create(capsuleId, principal.getUserId(), request));
+    letterFacade.create(capsuleId, principal.getUserId(), request);
+    return CommonResponse.success(SuccessCode.CREATED);
   }
 
   @Override

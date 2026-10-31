@@ -89,6 +89,29 @@ class TimeCapsuleTest {
     assertThat(capsule.getDeletedAt()).isEqualTo(now);
   }
 
+  @ParameterizedTest
+  @CsvSource({
+    "WRITING,1,60,true", "WRITING,0,60,false", "WRITING,-1,60,false",
+    "WRITING,60,1,true", "WRITING,60,0,false", "WRITING,60,-1,false",
+    "LOCKED,60,60,false", "OPENED,60,60,false"
+  })
+  void letterPeriodChecksStatusDeadlineAndOpening(
+      CapsuleStatus status, int openOffset, int deadlineOffset, boolean expected) {
+    LocalDateTime now = LocalDateTime.of(2027, 1, 1, 12, 0);
+    TimeCapsule capsule =
+        TimeCapsule.builder()
+            .status(status)
+            .visibilityType(VisibilityType.ALL_MEMBERS)
+            .openAt(now.plusSeconds(openOffset))
+            .letterDeadlineAt(now.plusSeconds(deadlineOffset))
+            .build();
+    assertThat(capsule.isLetterWritingOpen(now)).isEqualTo(expected);
+    for (MemberRole role : MemberRole.values()) {
+      assertThat(capsule.getLetterWritingEligibility(role, now))
+          .isEqualTo(expected ? LetterWritingEligibility.ALLOWED : LetterWritingEligibility.CLOSED);
+    }
+  }
+
   private TimeCapsule capsule(CapsuleStatus status, VisibilityType visibility) {
     return TimeCapsule.builder()
         .iconType("ICE_CREAM")
