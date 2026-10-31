@@ -103,10 +103,10 @@ public class MemoryService {
         .toList();
   }
 
-  /** 내 아카이브를 찾는다. 없는 아카이브 · 삭제된 아카이브 · 다른 회원의 아카이브는 똑같이 404 다. */
+  /** 내 아카이브를 찾는다. 없는 아카이브 · 삭제된 아카이브 · 다른 회원의 아카이브 · 타임캡슐에서 옮겨진 추억은 똑같이 404 다. */
   private Memory getMine(Long memoryId, Long userId) {
     return memoryRepository
-        .findByIdAndUserIdAndDeletedAtIsNull(memoryId, userId)
+        .findByIdAndUserIdAndTimeCapsuleIsNullAndDeletedAtIsNull(memoryId, userId)
         .orElseThrow(() -> new ApiException(MemoryErrorCode.MEMORY_NOT_FOUND));
   }
 

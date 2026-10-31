@@ -12,6 +12,11 @@ import com.momento.server.domain.memory.entity.Memory;
 import com.momento.server.domain.memory.entity.MemoryImage;
 import com.momento.server.domain.memory.repository.MemoryImageRepository;
 import com.momento.server.domain.memory.repository.MemoryRepository;
+import com.momento.server.domain.timecapsule.entity.CapsuleStatus;
+import com.momento.server.domain.timecapsule.entity.CapsuleType;
+import com.momento.server.domain.timecapsule.entity.TimeCapsule;
+import com.momento.server.domain.timecapsule.entity.VisibilityType;
+import com.momento.server.domain.timecapsule.repository.TimeCapsuleRepository;
 import com.momento.server.domain.user.entity.User;
 import com.momento.server.domain.user.repository.UserRepository;
 import com.momento.server.global.common.auth.service.TokenProvider;
@@ -42,6 +47,7 @@ class MemoryManageIntegrationTest {
   @Autowired private UserRepository userRepository;
   @Autowired private MemoryRepository memoryRepository;
   @Autowired private MemoryImageRepository memoryImageRepository;
+  @Autowired private TimeCapsuleRepository timeCapsuleRepository;
   @Autowired private TokenProvider tokenProvider;
 
   private User me;
@@ -64,6 +70,7 @@ class MemoryManageIntegrationTest {
   private void clearAll() {
     memoryImageRepository.deleteAll();
     memoryRepository.deleteAll();
+    timeCapsuleRepository.deleteAll();
     userRepository.deleteAll();
   }
 
@@ -85,6 +92,30 @@ class MemoryManageIntegrationTest {
     Memory memory = saveMemory(owner, "지운 추억");
     memory.delete(LocalDateTime.of(2026, 10, 1, 0, 0));
     return memoryRepository.save(memory);
+  }
+
+  /** 타임캡슐에서 옮겨진 내 추억. 목록에 보이지 않는다. */
+  private Memory saveMovedFromCapsule(User owner) {
+    LocalDateTime openAt = LocalDateTime.of(2045, 1, 1, 0, 0);
+    TimeCapsule capsule =
+        timeCapsuleRepository.save(
+            TimeCapsule.builder()
+                .creator(owner)
+                .iconType("ICE_CREAM")
+                .title("캡슐")
+                .capsuleType(CapsuleType.GROUP)
+                .visibilityType(VisibilityType.ALL_MEMBERS)
+                .status(CapsuleStatus.WRITING)
+                .letterDeadlineAt(openAt.minusDays(10))
+                .openAt(openAt)
+                .build());
+    return memoryRepository.save(
+        Memory.builder()
+            .user(owner)
+            .timeCapsule(capsule)
+            .title("옮긴 추억")
+            .memoryDate(LocalDate.of(2026, 8, 15))
+            .build());
   }
 
   private void saveImage(Memory memory, String key, int order) {
@@ -359,6 +390,26 @@ class MemoryManageIntegrationTest {
 
     Memory unchanged = reload(memory);
     assertThat(unchanged.getTitle()).isEqualTo("제주도 여행");
+    assertThat(unchanged.getDeletedAt()).isNull();
+  }
+
+  @Test
+  @DisplayName("타임캡슐에서 옮겨진 추억은 목록처럼 상세 · 수정 · 삭제에서도 404 MEMORY_NOT_FOUND 이고 바뀌지 않는다")
+  void movedFromCapsuleIsNotFound() throws Exception {
+    Memory moved = saveMovedFromCapsule(me);
+
+    getMemory(moved.getId())
+        .andExpect(status().isNotFound())
+        .andExpect(jsonPath("$.code").value("MEMORY_NOT_FOUND"));
+    updateMemory(moved.getId(), "{\"title\": \"바뀐 이름\"}")
+        .andExpect(status().isNotFound())
+        .andExpect(jsonPath("$.code").value("MEMORY_NOT_FOUND"));
+    deleteMemory(moved.getId())
+        .andExpect(status().isNotFound())
+        .andExpect(jsonPath("$.code").value("MEMORY_NOT_FOUND"));
+
+    Memory unchanged = reload(moved);
+    assertThat(unchanged.getTitle()).isEqualTo("옮긴 추억");
     assertThat(unchanged.getDeletedAt()).isNull();
   }
 }

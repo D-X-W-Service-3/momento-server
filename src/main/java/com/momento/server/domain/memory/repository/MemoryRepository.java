@@ -12,8 +12,11 @@ import org.springframework.data.repository.query.Param;
 
 public interface MemoryRepository extends JpaRepository<Memory, Long> {
 
-  /** 상세 · 수정 · 삭제 대상. 내 아카이브이고 삭제되지 않은 것만 찾는다. */
-  Optional<Memory> findByIdAndUserIdAndDeletedAtIsNull(Long id, Long userId);
+  /**
+   * 상세 · 수정 · 삭제 대상. 목록 · 캘린더와 같이 내가 직접 등록했고 삭제되지 않은 아카이브만 찾는다. 타임캡슐에서 옮겨진 추억은 목록에 보이지 않으므로 ID 로도
+   * 찾지 않는다.
+   */
+  Optional<Memory> findByIdAndUserIdAndTimeCapsuleIsNullAndDeletedAtIsNull(Long id, Long userId);
 
   /** 아카이브 탭에 노출할 "내가 직접 등록한 추억" 목록. 소프트 삭제된 것과 타임캡슐에서 옮겨진 것은 제외한다. 검색어는 이름 · 내용 중 한 곳에만 있어도 찾는다. */
   @Query(
