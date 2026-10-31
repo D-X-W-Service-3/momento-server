@@ -1,12 +1,14 @@
 package com.momento.server.domain.memory.repository;
 
 import com.momento.server.domain.memory.entity.Memory;
+import jakarta.persistence.LockModeType;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -17,6 +19,16 @@ public interface MemoryRepository extends JpaRepository<Memory, Long> {
    * 찾지 않는다.
    */
   Optional<Memory> findByIdAndUserIdAndTimeCapsuleIsNullAndDeletedAtIsNull(Long id, Long userId);
+
+  /** 공유 링크 발급 대상. 상세 · 수정 · 삭제와 같은 내 아카이브이고, 두 요청이 동시에 토큰을 만들어 먼저 받은 토큰이 덮이지 않게 잠근다. */
+  @Lock(LockModeType.PESSIMISTIC_WRITE)
+  @Query(
+      "select m from Memory m where m.id = :id and m.user.id = :userId"
+          + " and m.timeCapsule is null and m.deletedAt is null")
+  Optional<Memory> findMineForUpdate(@Param("id") Long id, @Param("userId") Long userId);
+
+  /** 공유 링크로 받을 추억. 삭제된 추억의 링크는 없는 링크와 같다. */
+  Optional<Memory> findByShareTokenAndDeletedAtIsNull(String shareToken);
 
   /**
    * 아카이브 탭에 노출할 "내가 직접 등록한 추억" 목록. 소프트 삭제된 것과 타임캡슐에서 옮겨진 것은 제외한다. 검색어는 이름 · 내용 중 한 곳에만 있어도 찾는다.
