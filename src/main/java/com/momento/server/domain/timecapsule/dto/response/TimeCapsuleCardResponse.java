@@ -60,8 +60,8 @@ public record TimeCapsuleCardResponse(
         letterCount);
   }
 
-  /** 오늘부터 그 날짜까지 남은 날 수. 상세 조회도 같은 계산을 쓴다. */
-  static int daysUntil(LocalDate today, LocalDateTime target) {
+  /** 오늘부터 그 날짜까지 남은 날 수. 상세 조회 · 홈도 같은 계산을 쓴다. */
+  public static int daysUntil(LocalDate today, LocalDateTime target) {
     return (int) ChronoUnit.DAYS.between(today, target.toLocalDate());
   }
 }
