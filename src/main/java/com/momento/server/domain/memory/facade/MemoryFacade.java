@@ -5,6 +5,7 @@ import com.momento.server.domain.memory.dto.request.MemoryUpdateRequest;
 import com.momento.server.domain.memory.dto.response.MemoryDetailResponse;
 import com.momento.server.domain.memory.dto.response.MemoryListResponse;
 import com.momento.server.domain.memory.dto.response.MemorySummary;
+import com.momento.server.domain.memory.entity.Memory;
 import com.momento.server.domain.memory.service.MemoryDetail;
 import com.momento.server.domain.memory.service.MemoryPage;
 import com.momento.server.domain.memory.service.MemoryService;
@@ -31,13 +32,17 @@ public class MemoryFacade {
     memoryService.create(user, request);
   }
 
-  /** 내 아카이브만 조회할 수 있으므로 작성자는 나이고 isMine 은 항상 true 다. */
+  /** 저장한 추억이면 작성자는 공유한 사람이고 isMine 은 false 다. 수정 · 삭제는 작성자만 할 수 있다. */
   public MemoryDetailResponse getDetail(Long memoryId, Long userId) {
     MemoryDetail detail = memoryService.getDetail(memoryId, userId);
-    String nickname = userService.getActiveUser(userId).getNickname();
+    Memory memory = detail.memory();
 
     return MemoryDetailResponse.of(
-        detail.memory(), detail.images(), nickname, true, presignedUrlProvider::viewUrl);
+        memory,
+        detail.images(),
+        memory.getUser().getNickname(),
+        memory.isOwnedBy(userId),
+        presignedUrlProvider::viewUrl);
   }
 
   public void update(Long memoryId, Long userId, MemoryUpdateRequest request) {

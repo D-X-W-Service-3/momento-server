@@ -71,6 +71,10 @@ public interface MemoryRepository extends JpaRepository<Memory, Long> {
       @Param("endDate") LocalDate endDate,
       Pageable pageable);
 
+  /** 상세 열람 대상. 목록에 나오는 추억(내 추억 · 저장한 추억)만 열 수 있다. 작성자 닉네임 · 수정 가능 여부를 위해 작성자를 함께 읽는다. */
+  @Query("select m from Memory m join fetch m.user" + MY_ARCHIVE + " and m.id = :id")
+  Optional<Memory> findViewable(@Param("id") Long id, @Param("userId") Long userId);
+
   /** 캘린더 월별 점. {@link #findMyMemories} 와 같은 추억 중 날짜가 {@code [from, to)} 인 것의 날짜만 읽는다. */
   @Query(
       "select m.memoryDate from Memory m"

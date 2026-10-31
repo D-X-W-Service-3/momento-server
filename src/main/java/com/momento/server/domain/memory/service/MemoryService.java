@@ -63,9 +63,12 @@ public class MemoryService {
     saveImages(memory, imageKeys);
   }
 
-  /** 아카이브 상세. 사진은 표시 순서대로다. */
+  /** 아카이브 상세. 내 추억과 공유받아 저장한 추억을 열 수 있다. 사진은 표시 순서대로다. */
   public MemoryDetail getDetail(Long memoryId, Long userId) {
-    Memory memory = getMine(memoryId, userId);
+    Memory memory =
+        memoryRepository
+            .findViewable(memoryId, userId)
+            .orElseThrow(() -> new ApiException(MemoryErrorCode.MEMORY_NOT_FOUND));
 
     return new MemoryDetail(
         memory, memoryImageRepository.findByMemoryIdOrderByDisplayOrderAsc(memory.getId()));
