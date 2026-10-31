@@ -43,7 +43,8 @@ public interface InviteApi {
       summary = "초대 거절",
       description =
           "이 링크에 대한 내 응답을 거절로 기록한다. 거절한 링크로는 다시 볼 수도 참여할 수도 없고(404), 방장이 재생성한 새 링크로는 다시 받을 수 있다."
-              + " 이미 거절했으면 그대로 성공하고, 이미 이 캡슐의 멤버면 409 ALREADY_CAPSULE_MEMBER 다.")
+              + " 이미 거절했으면 그대로 성공하고, 이미 이 캡슐의 멤버면 409 ALREADY_CAPSULE_MEMBER 다."
+              + " 이 링크로 수락했다가 나가거나 내보내졌으면 수락 기록을 거절로 덮지 않고 409 INVITE_ALREADY_ACCEPTED 다.")
   CommonResponse<?> rejectInvite(
       @Parameter(hidden = true) UserPrincipal principal,
       @Parameter(description = "초대 토큰", example = "1a2b3c4d5e6f") String inviteToken);

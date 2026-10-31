@@ -701,6 +701,22 @@ class CapsuleInviteIntegrationTest {
   }
 
   @Test
+  @DisplayName("수락했다가 나간 회원이 같은 링크를 거절하면 409 이고 수락 기록과 재참여는 그대로다")
+  void rejectKeepsAcceptedRecordAfterLeaving() throws Exception {
+    User member = saveUser("member-kakao-id", "민건");
+    String token = issue(ownerToken, capsule.getId(), "PARTICIPANT");
+    accept(token, member).andExpect(status().isOk());
+    leave(capsule, member);
+
+    reject(token, member)
+        .andExpect(status().isConflict())
+        .andExpect(jsonPath("$.code").value("INVITE_ALREADY_ACCEPTED"));
+
+    assertThat(inviteeStatus(token, member)).isEqualTo(InviteeStatus.ACCEPTED);
+    accept(token, member).andExpect(status().isOk());
+  }
+
+  @Test
   @DisplayName("존재하지 않는 토큰을 거절하면 404 다")
   void rejectUnknownTokenIsNotFound() throws Exception {
     reject("no-such-token", owner)
@@ -807,6 +823,19 @@ class CapsuleInviteIntegrationTest {
                 .createQuery("update TimeCapsule c set c.status = :status where c.id = :id")
                 .setParameter("status", CapsuleStatus.LOCKED)
                 .setParameter("id", capsule.getId())
+                .executeUpdate());
+  }
+
+  private void leave(TimeCapsule capsule, User user) {
+    transactionTemplate.executeWithoutResult(
+        tx ->
+            entityManager
+                .createQuery(
+                    "update CapsuleMember m set m.status = :status"
+                        + " where m.timeCapsule.id = :capsuleId and m.user.id = :userId")
+                .setParameter("status", MemberStatus.LEFT)
+                .setParameter("capsuleId", capsule.getId())
+                .setParameter("userId", user.getId())
                 .executeUpdate());
   }
 

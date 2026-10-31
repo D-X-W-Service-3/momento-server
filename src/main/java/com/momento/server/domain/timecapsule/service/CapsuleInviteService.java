@@ -157,7 +157,7 @@ public class CapsuleInviteService {
 
   /**
    * 내 기록을 DECLINED 로 바꾼다. 미리보기를 거치지 않았으면 기록을 새로 만든다. 이미 거절했으면 그대로 성공한다. 이미 이 캡슐의 멤버면 거절할 대상이 없어 409
-   * 다.
+   * 다. 이 링크로 수락했다가 나가거나 내보내졌으면 수락 기록을 거절로 덮지 않고 409 다.
    */
   @Transactional
   public void reject(String inviteToken, Long userId) {
@@ -167,11 +167,13 @@ public class CapsuleInviteService {
       throw new ApiException(CapsuleErrorCode.ALREADY_CAPSULE_MEMBER);
     }
 
-    findMine(invite, userId)
-        .ifPresentOrElse(
-            CapsuleInvitee::decline,
-            () ->
-                capsuleInviteeRepository.save(newInvitee(invite, userId, InviteeStatus.DECLINED)));
+    Optional<CapsuleInvitee> mine = findMine(invite, userId);
+    if (mine.filter(CapsuleInvitee::isAccepted).isPresent()) {
+      throw new ApiException(CapsuleErrorCode.INVITE_ALREADY_ACCEPTED);
+    }
+    mine.ifPresentOrElse(
+        CapsuleInvitee::decline,
+        () -> capsuleInviteeRepository.save(newInvitee(invite, userId, InviteeStatus.DECLINED)));
   }
 
   /** 내가 열고 아직 응답하지 않은 초대. 탭 홈 배너와 같은 조건이다. */
