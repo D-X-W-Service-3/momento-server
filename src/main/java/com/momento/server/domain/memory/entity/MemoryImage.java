@@ -16,7 +16,7 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
-/** 추억에 첨부된 S3 이미지. 등록 후 수정하지 않아 생성 시각만 관리한다. */
+/** 추억에 첨부된 S3 이미지. 등록 후에는 표시 순서만 바뀌어 생성 시각만 관리한다. */
 @Entity
 @Table(name = "memory_images")
 @Getter
@@ -40,4 +40,9 @@ public class MemoryImage extends BaseCreatedTimeEntity {
   @Builder.Default
   @Column(name = "display_order", nullable = false)
   private int displayOrder = 0;
+
+  /** 아카이브 수정에서 남은 사진의 순서만 바꾼다. 행을 지우고 다시 만들지 않아 imageId 가 유지된다. */
+  public void changeDisplayOrder(int displayOrder) {
+    this.displayOrder = displayOrder;
+  }
 }

@@ -1,8 +1,11 @@
 package com.momento.server.domain.memory.facade;
 
 import com.momento.server.domain.memory.dto.request.MemoryCreateRequest;
+import com.momento.server.domain.memory.dto.request.MemoryUpdateRequest;
+import com.momento.server.domain.memory.dto.response.MemoryDetailResponse;
 import com.momento.server.domain.memory.dto.response.MemoryListResponse;
 import com.momento.server.domain.memory.dto.response.MemorySummary;
+import com.momento.server.domain.memory.service.MemoryDetail;
 import com.momento.server.domain.memory.service.MemoryPage;
 import com.momento.server.domain.memory.service.MemoryService;
 import com.momento.server.domain.user.entity.User;
@@ -26,16 +29,34 @@ public class MemoryFacade {
     memoryService.create(user, request);
   }
 
+  /** 내 아카이브만 조회할 수 있으므로 작성자는 나이고 isMine 은 항상 true 다. */
+  public MemoryDetailResponse getDetail(Long memoryId, Long userId) {
+    MemoryDetail detail = memoryService.getDetail(memoryId, userId);
+    String nickname = userService.getActiveUser(userId).getNickname();
+
+    return MemoryDetailResponse.of(
+        detail.memory(), detail.images(), nickname, true, presignedUrlProvider::viewUrl);
+  }
+
+  public void update(Long memoryId, Long userId, MemoryUpdateRequest request) {
+    memoryService.update(memoryId, userId, request);
+  }
+
+  public void delete(Long memoryId, Long userId) {
+    memoryService.delete(memoryId, userId);
+  }
+
   public MemoryListResponse findMyMemories(
-      Long userId, String title, Integer year, int page, int size) {
-    MemoryPage result = memoryService.findMyMemories(userId, title, year, page, size);
+      Long userId, String keyword, Integer year, int page, int size) {
+    MemoryPage result = memoryService.findMyMemories(userId, keyword, year, page, size);
+    String nickname = userService.getActiveUser(userId).getNickname();
 
     List<MemorySummary> summaries =
         result.memories().getContent().stream()
             .map(
                 memory ->
                     MemorySummary.of(
-                        memory, result.imagesOf(memory), presignedUrlProvider::viewUrl))
+                        memory, result.imagesOf(memory), nickname, presignedUrlProvider::viewUrl))
             .toList();
 
     return MemoryListResponse.of(result.memories(), summaries);

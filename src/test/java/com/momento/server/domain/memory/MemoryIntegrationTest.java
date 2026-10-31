@@ -221,7 +221,7 @@ class MemoryIntegrationTest {
   }
 
   @Test
-  @DisplayName("목록은 본인 추억만 memoryDate 내림차순으로, 대표 이미지 1장만 담아 반환한다")
+  @DisplayName("목록은 본인 추억만 memoryDate 내림차순으로, 대표 사진 1장 · 사진 수 · 작성자 닉네임을 담아 반환한다")
   void findMyMemories() throws Exception {
     User other = userRepository.save(User.builder().kakaoId("kakao-other").nickname("남").build());
     saveMemory(other, "남의 추억", LocalDate.of(2026, 12, 31));
@@ -255,20 +255,34 @@ class MemoryIntegrationTest {
         .andExpect(jsonPath("$.data.memories[1].title").value("생일 파티"))
         .andExpect(jsonPath("$.data.memories[1].thumbnailUrl").isEmpty())
         .andExpect(jsonPath("$.data.memories[0].imageCount").value(2))
-        .andExpect(jsonPath("$.data.memories[1].imageCount").value(0));
+        .andExpect(jsonPath("$.data.memories[1].imageCount").value(0))
+        .andExpect(jsonPath("$.data.memories[0].authorNickname").value("서현"))
+        .andExpect(jsonPath("$.data.hasReceivedMemory").value(false));
   }
 
   @Test
-  @DisplayName("제목 부분검색과 연도 필터로 목록을 좁힐 수 있다")
+  @DisplayName("검색어는 이름 · 내용에서 찾고, 연도 필터와 함께 쓸 수 있다")
   void filterMemories() throws Exception {
     saveMemory(me, "제주도 여행", LocalDate.of(2026, 8, 15));
     saveMemory(me, "부산 여행", LocalDate.of(2025, 5, 1));
-    saveMemory(me, "생일 파티", LocalDate.of(2026, 7, 2));
+    memoryRepository.save(
+        Memory.builder()
+            .user(me)
+            .title("생일 파티")
+            .content("여행 계획을 세웠다")
+            .memoryDate(LocalDate.of(2026, 7, 2))
+            .build());
 
     mockMvc
         .perform(
-            get("/v1/memories").param("title", "여행").header("Authorization", "Bearer " + token))
-        .andExpect(jsonPath("$.data.totalElements").value(2));
+            get("/v1/memories").param("keyword", "여행").header("Authorization", "Bearer " + token))
+        .andExpect(jsonPath("$.data.totalElements").value(3));
+
+    mockMvc
+        .perform(
+            get("/v1/memories").param("keyword", "계획").header("Authorization", "Bearer " + token))
+        .andExpect(jsonPath("$.data.totalElements").value(1))
+        .andExpect(jsonPath("$.data.memories[0].title").value("생일 파티"));
 
     mockMvc
         .perform(
@@ -278,11 +292,10 @@ class MemoryIntegrationTest {
     mockMvc
         .perform(
             get("/v1/memories")
-                .param("title", "여행")
+                .param("keyword", "부산")
                 .param("year", "2026")
                 .header("Authorization", "Bearer " + token))
-        .andExpect(jsonPath("$.data.totalElements").value(1))
-        .andExpect(jsonPath("$.data.memories[0].title").value("제주도 여행"));
+        .andExpect(jsonPath("$.data.totalElements").value(0));
   }
 
   @Test
@@ -313,6 +326,24 @@ class MemoryIntegrationTest {
 
     assertThat(memoryRepository.count()).isZero();
     assertThat(memoryImageRepository.count()).isZero();
+  }
+
+  @Test
+  @DisplayName("검색어의 % · _ 는 글자 그대로 찾는다")
+  void keywordWildcardsAreLiteral() throws Exception {
+    saveMemory(me, "100% 성공", LocalDate.of(2026, 8, 15));
+    saveMemory(me, "제주도 여행", LocalDate.of(2026, 7, 2));
+
+    mockMvc
+        .perform(
+            get("/v1/memories").param("keyword", "%").header("Authorization", "Bearer " + token))
+        .andExpect(jsonPath("$.data.totalElements").value(1))
+        .andExpect(jsonPath("$.data.memories[0].title").value("100% 성공"));
+
+    mockMvc
+        .perform(
+            get("/v1/memories").param("keyword", "_").header("Authorization", "Bearer " + token))
+        .andExpect(jsonPath("$.data.totalElements").value(0));
   }
 
   @Test

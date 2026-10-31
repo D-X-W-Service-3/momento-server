@@ -3,6 +3,7 @@ package com.momento.server.domain.memory.service;
 import com.momento.server.domain.image.entity.ImageTarget;
 import com.momento.server.domain.image.service.ImageKeys;
 import com.momento.server.domain.memory.dto.request.MemoryCreateRequest;
+import com.momento.server.domain.memory.dto.request.MemoryUpdateRequest;
 import com.momento.server.domain.memory.dto.response.MemorySummary;
 import com.momento.server.domain.memory.entity.Memory;
 import com.momento.server.domain.memory.entity.MemoryImage;
@@ -14,7 +15,9 @@ import com.momento.server.global.common.code.GlobalErrorCode;
 import com.momento.server.global.common.exception.ApiException;
 import com.momento.server.global.common.storage.PresignedUrlProvider;
 import com.momento.server.global.common.util.LikePattern;
+import java.time.Clock;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -39,6 +42,7 @@ public class MemoryService {
   private final MemoryRepository memoryRepository;
   private final MemoryImageRepository memoryImageRepository;
   private final PresignedUrlProvider presignedUrlProvider;
+  private final Clock clock;
 
   /** 추억 하나와 첨부 이미지를 저장한다. 공개 범위는 요청으로 받지 않고 엔티티 기본값(PRIVATE)을 쓴다. */
   @Transactional
@@ -57,6 +61,76 @@ public class MemoryService {
                 .build());
 
     saveImages(memory, imageKeys);
+  }
+
+  /** 아카이브 상세. 사진은 표시 순서대로다. */
+  public MemoryDetail getDetail(Long memoryId, Long userId) {
+    Memory memory = getMine(memoryId, userId);
+
+    return new MemoryDetail(
+        memory, memoryImageRepository.findByMemoryIdOrderByDisplayOrderAsc(memory.getId()));
+  }
+
+  /**
+   * 보낸 값만 바꾼다. imageKeys 를 보내면 사진 목록을 그 값으로 바꾸고, 대표 사진 key 만 보내면 기존 사진 중 그 사진을 첫 번째로 옮긴다. 사진 검증 규칙은
+   * 등록과 같다.
+   */
+  @Transactional
+  public void update(Long memoryId, Long userId, MemoryUpdateRequest request) {
+    Memory memory = getMine(memoryId, userId);
+
+    if (request.changesImages()) {
+      List<MemoryImage> current =
+          memoryImageRepository.findByMemoryIdOrderByDisplayOrderAsc(memory.getId());
+      List<String> imageKeys =
+          request.imageKeys() != null
+              ? request.imageKeys()
+              : current.stream().map(MemoryImage::getImageUrl).toList();
+      List<String> arranged = arrangeImageKeys(userId, imageKeys, request.representativeImageKey());
+
+      replaceImages(memory, current, arranged);
+    }
+
+    memory.update(request.title(), request.content(), request.memoryDate());
+  }
+
+  /** 소프트 삭제. 사진 행과 S3 파일은 남겨 둔다. */
+  @Transactional
+  public void delete(Long memoryId, Long userId) {
+    getMine(memoryId, userId).delete(LocalDateTime.now(clock));
+  }
+
+  /**
+   * 바뀐 사진만 반영한다. 목록에서 빠진 사진은 지우고, 남은 사진은 순서만 바꾸고, 새 사진만 추가한다. 행을 모두 지우고 다시 만들면 대표 사진만 바꿔도 상세 응답의
+   * imageId 가 수정할 때마다 바뀐다.
+   */
+  private void replaceImages(Memory memory, List<MemoryImage> current, List<String> arranged) {
+    Map<String, MemoryImage> currentByKey =
+        current.stream().collect(Collectors.toMap(MemoryImage::getImageUrl, image -> image));
+
+    memoryImageRepository.deleteAll(
+        current.stream().filter(image -> !arranged.contains(image.getImageUrl())).toList());
+
+    List<MemoryImage> added = new ArrayList<>();
+    for (int order = 0; order < arranged.size(); order++) {
+      String key = arranged.get(order);
+      MemoryImage existing = currentByKey.get(key);
+
+      if (existing != null) {
+        existing.changeDisplayOrder(order);
+      } else {
+        added.add(MemoryImage.builder().memory(memory).imageUrl(key).displayOrder(order).build());
+      }
+    }
+
+    memoryImageRepository.saveAll(added);
+  }
+
+  /** 내 아카이브를 찾는다. 없는 아카이브 · 삭제된 아카이브 · 다른 회원의 아카이브 · 타임캡슐에서 옮겨진 추억은 똑같이 404 다. */
+  private Memory getMine(Long memoryId, Long userId) {
+    return memoryRepository
+        .findByIdAndUserIdAndTimeCapsuleIsNullAndDeletedAtIsNull(memoryId, userId)
+        .orElseThrow(() -> new ApiException(MemoryErrorCode.MEMORY_NOT_FOUND));
   }
 
   /**
@@ -102,9 +176,12 @@ public class MemoryService {
     memoryImageRepository.saveAll(images);
   }
 
-  /** 아카이브 탭 목록. 연도는 그 해의 1월 1일 ~ 12월 31일 범위로 바꿔 넘긴다. */
-  public MemoryPage findMyMemories(Long userId, String title, Integer year, int page, int size) {
-    String keyword = (title == null || title.isBlank()) ? null : title.trim();
+  /**
+   * 아카이브 탭 목록. 연도는 그 해의 1월 1일 ~ 12월 31일 범위로 바꿔 넘긴다. 검색어의 {@code %} · {@code _} 는 캘린더 통합 검색과 같이 글자
+   * 그대로 찾는다.
+   */
+  public MemoryPage findMyMemories(Long userId, String keyword, Integer year, int page, int size) {
+    String pattern = LikePattern.contains(keyword);
     LocalDate startDate = null;
     LocalDate endDate = null;
 
@@ -116,7 +193,7 @@ public class MemoryService {
 
     Pageable pageable = PageRequest.of(Math.max(page, 0), clampSize(size));
     Page<Memory> memories =
-        memoryRepository.findMyMemories(userId, keyword, startDate, endDate, pageable);
+        memoryRepository.findMyMemories(userId, pattern, startDate, endDate, pageable);
 
     return new MemoryPage(memories, findImagesByMemory(memories.getContent()));
   }
@@ -154,6 +231,7 @@ public class MemoryService {
                 MemorySummary.of(
                     memory,
                     imagesByMemory.getOrDefault(memory.getId(), List.of()),
+                    memory.getUser().getNickname(),
                     presignedUrlProvider::viewUrl))
         .toList();
   }

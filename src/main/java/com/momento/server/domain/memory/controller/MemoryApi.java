@@ -1,6 +1,8 @@
 package com.momento.server.domain.memory.controller;
 
 import com.momento.server.domain.memory.dto.request.MemoryCreateRequest;
+import com.momento.server.domain.memory.dto.request.MemoryUpdateRequest;
+import com.momento.server.domain.memory.dto.response.MemoryDetailResponse;
 import com.momento.server.domain.memory.dto.response.MemoryListResponse;
 import com.momento.server.global.common.auth.UserPrincipal;
 import com.momento.server.global.common.dto.CommonResponse;
@@ -24,13 +26,47 @@ public interface MemoryApi {
       @Parameter(hidden = true) UserPrincipal principal, @Valid MemoryCreateRequest request);
 
   @Operation(
+      summary = "아카이브 상세 조회",
+      description =
+          "아카이브 상세 화면(사진 슬라이드 · 날짜 · 이름 · 내용 · 사진 목록)을 조회한다. 본인이 등록한 아카이브만 조회할 수 있다. 사진은 displayOrder"
+              + " 오름차순이고 첫 사진이 대표 사진(isRepresentative)이다. imageUrl 은 조회 시점에 만든 1시간짜리 presigned GET URL,"
+              + " imageKey 는 수정 요청에 그대로 보내는 값이다. 없는 아카이브 · 삭제된 아카이브 · 다른 회원의 아카이브는 똑같이 404"
+              + " MEMORY_NOT_FOUND 다.")
+  CommonResponse<MemoryDetailResponse> getMemory(
+      @Parameter(hidden = true) UserPrincipal principal,
+      @Parameter(description = "아카이브 식별자", example = "3") Long memoryId);
+
+  @Operation(
+      summary = "아카이브 수정",
+      description =
+          "아카이브 수정 화면에서 사진 · 이름 · 내용을 수정한다. 등록과 같은 필드를 받지만 모두 선택이고, title · content · memoryDate 는 보낸"
+              + " 경우에만 바꾼다. imageKeys 를 보내면 사진 목록 전체를 그 값으로 바꾸고 빠진 사진은 삭제된다. 기존 사진은 상세 조회의 imageKey 를,"
+              + " 새 사진은 업로드 후 받은 key 를 넣는다. representativeImageKey 를 주면 그 사진을 첫 번째(대표 사진)로 옮긴다. 내 key 가"
+              + " 아니거나 중복이거나 대표 사진 key 가 목록에 없으면 400 INVALID_IMAGE_KEY 다. 없는 아카이브 · 삭제된 아카이브 · 다른 회원의"
+              + " 아카이브는 똑같이 404 MEMORY_NOT_FOUND 다. 응답 데이터는 없다.")
+  CommonResponse<?> updateMemory(
+      @Parameter(hidden = true) UserPrincipal principal,
+      @Parameter(description = "아카이브 식별자", example = "3") Long memoryId,
+      @Valid MemoryUpdateRequest request);
+
+  @Operation(
+      summary = "아카이브 삭제",
+      description =
+          "아카이브 상세 메뉴의 '삭제하기' 로 아카이브를 삭제한다. memories.deleted_at 을 채우는 소프트 삭제이고, 지운 아카이브는 상세 · 목록 ·"
+              + " 캘린더에 나오지 않는다. 본인이 등록한 아카이브만 삭제할 수 있고, 없는 아카이브 · 이미 삭제된 아카이브 · 다른 회원의 아카이브는"
+              + " 똑같이 404 MEMORY_NOT_FOUND 다. 응답 데이터는 없다.")
+  CommonResponse<?> deleteMemory(
+      @Parameter(hidden = true) UserPrincipal principal,
+      @Parameter(description = "아카이브 식별자", example = "3") Long memoryId);
+
+  @Operation(
       summary = "추억 목록 조회",
       description =
           "로그인한 사용자가 직접 등록한 추억만 memoryDate 최신순으로 조회한다. "
               + "타임캡슐에서 옮겨진 추억과 삭제된 추억은 제외한다. 각 항목에는 대표 이미지 1장만 담긴다.")
   CommonResponse<MemoryListResponse> findMyMemories(
       UserPrincipal principal,
-      @Parameter(description = "제목 부분검색어", example = "제주") String title,
+      @Parameter(description = "검색어. 아카이브 이름 · 내용에서 찾는다", example = "카페") String keyword,
       @Parameter(description = "연도 필터", example = "2026") Integer year,
       @Parameter(description = "페이지 번호(0부터)", example = "0") int page,
       @Parameter(description = "페이지당 개수(1~100)", example = "20") int size);
