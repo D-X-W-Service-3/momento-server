@@ -7,9 +7,26 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.EnumSource;
 
 /** 편지 한 통을 누가 볼 수 있는지. 편지 목록 API 가 이 판정으로 편지를 거른다. */
 class TimeCapsuleTest {
+
+  @ParameterizedTest
+  @EnumSource(CapsuleStatus.class)
+  void allLetterPermissionMatchesVisibilityAndIndividualPermission(CapsuleStatus status) {
+    for (VisibilityType visibility : VisibilityType.values()) {
+      TimeCapsule capsule = capsule(status, visibility);
+      for (MemberRole role : MemberRole.values()) {
+        boolean expected =
+            status == CapsuleStatus.OPENED
+                && (visibility == VisibilityType.ALL_MEMBERS || role == MemberRole.RECIPIENT);
+        assertThat(capsule.canViewAllLetters(role)).isEqualTo(expected);
+        assertThat(capsule.canViewLetter(role, false)).isEqualTo(expected);
+        assertThat(capsule.canViewLetter(role, true)).isEqualTo(status == CapsuleStatus.OPENED);
+      }
+    }
+  }
 
   @ParameterizedTest(name = "{0} 캡슐의 {1}, 내가 쓴 편지={2} → {3}")
   @CsvSource({

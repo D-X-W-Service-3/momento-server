@@ -93,12 +93,17 @@ public class TimeCapsule extends BaseTimeEntity {
    * @param isAuthor 이 편지를 조회하는 회원이 쓴 편지인지
    */
   public boolean canViewLetter(MemberRole role, boolean isAuthor) {
+    return canViewAllLetters(role) || (canViewLetters(role) && isAuthor);
+  }
+
+  /** 열린 캡슐에서 작성자가 아닌 편지까지 모두 열람할 수 있는지 판정한다. */
+  public boolean canViewAllLetters(MemberRole role) {
     if (!canViewLetters(role)) {
       return false;
     }
     return switch (visibilityType) {
       case ALL_MEMBERS -> true;
-      case RECIPIENT_AND_AUTHOR -> role == MemberRole.RECIPIENT || isAuthor;
+      case RECIPIENT_AND_AUTHOR -> role == MemberRole.RECIPIENT;
     };
   }
 
