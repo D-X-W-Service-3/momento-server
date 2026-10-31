@@ -52,4 +52,23 @@ class MemoryTest {
     assertThat(memory.getDeletedAt()).isEqualTo(now);
     assertThat(memory.getTitle()).isEqualTo("제주도 여행");
   }
+
+  @Test
+  @DisplayName("처음 공유하면 토큰을 만들고 공개 범위를 LINK 로 바꾼다")
+  void shareFirstTime() {
+    Memory memory = memory();
+
+    assertThat(memory.share(() -> "token-1")).isEqualTo("token-1");
+    assertThat(memory.getShareToken()).isEqualTo("token-1");
+    assertThat(memory.getVisibilityType()).isEqualTo(MemoryVisibilityType.LINK);
+  }
+
+  @Test
+  @DisplayName("이미 공유했으면 같은 토큰을 그대로 쓴다")
+  void shareAgainKeepsToken() {
+    Memory memory = memory();
+    memory.share(() -> "token-1");
+
+    assertThat(memory.share(() -> "token-2")).isEqualTo("token-1");
+  }
 }

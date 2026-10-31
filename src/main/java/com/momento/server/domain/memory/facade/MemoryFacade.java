@@ -8,6 +8,7 @@ import com.momento.server.domain.memory.dto.response.MemorySummary;
 import com.momento.server.domain.memory.service.MemoryDetail;
 import com.momento.server.domain.memory.service.MemoryPage;
 import com.momento.server.domain.memory.service.MemoryService;
+import com.momento.server.domain.memory.service.MemoryShareService;
 import com.momento.server.domain.user.entity.User;
 import com.momento.server.domain.user.service.UserService;
 import com.momento.server.global.common.storage.PresignedUrlProvider;
@@ -21,6 +22,7 @@ public class MemoryFacade {
 
   private final UserService userService;
   private final MemoryService memoryService;
+  private final MemoryShareService memoryShareService;
   private final PresignedUrlProvider presignedUrlProvider;
 
   /** 등록 후 아카이브 목록으로 돌아가 목록을 다시 조회하므로 돌려주는 값이 없다. */
@@ -59,6 +61,7 @@ public class MemoryFacade {
                         memory, result.imagesOf(memory), nickname, presignedUrlProvider::viewUrl))
             .toList();
 
-    return MemoryListResponse.of(result.memories(), summaries);
+    return MemoryListResponse.of(
+        result.memories(), summaries, memoryShareService.hasReceived(userId));
   }
 }
