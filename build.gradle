@@ -55,8 +55,9 @@ dependencies {
     // 외부 AI 서버 연동 (OpenFeign)
     implementation 'org.springframework.cloud:spring-cloud-starter-openfeign'
 
-    // AWS S3 (추억 아카이빙 이미지 업로드)
-    implementation 'io.awspring.cloud:spring-cloud-starter-aws:2.4.4'
+    // AWS S3 (추억 이미지 presigned URL 발급)
+    implementation platform('software.amazon.awssdk:bom:2.55.1')
+    implementation 'software.amazon.awssdk:s3'
     implementation 'org.apache.tika:tika-core:2.9.2'
 
     // API 문서화
@@ -69,6 +70,10 @@ dependencies {
     // DB
     runtimeOnly 'com.mysql:mysql-connector-j'
     runtimeOnly 'com.h2database:h2'
+
+    // 스키마 마이그레이션 (Flyway 10 부터 DB 별 모듈이 분리돼 MySQL 은 별도 모듈이 필요하다. H2 는 core 에 포함)
+    implementation 'org.flywaydb:flyway-core'
+    runtimeOnly 'org.flywaydb:flyway-mysql'
 
     // Dev
     developmentOnly 'org.springframework.boot:spring-boot-devtools'

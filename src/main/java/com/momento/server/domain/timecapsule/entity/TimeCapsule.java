@@ -1,0 +1,155 @@
+package com.momento.server.domain.timecapsule.entity;
+
+import com.momento.server.domain.user.entity.User;
+import com.momento.server.global.common.entity.BaseTimeEntity;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.Index;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
+import jakarta.persistence.Table;
+import java.time.LocalDateTime;
+import lombok.AccessLevel;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
+
+/** 정해진 시각에 열리는 타임캡슐. 삭제는 {@code deletedAt} 을 채우는 소프트 삭제로 처리한다. */
+@Entity
+@Table(
+    name = "time_capsules",
+    indexes = @Index(name = "IDX_TIME_CAPSULES_STATUS_OPEN_AT", columnList = "status, open_at"))
+@Getter
+@Builder
+@AllArgsConstructor
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
+public class TimeCapsule extends BaseTimeEntity {
+
+  @Id
+  @GeneratedValue(strategy = GenerationType.IDENTITY)
+  @Column(name = "id", nullable = false)
+  private Long id;
+
+  @ManyToOne(fetch = FetchType.LAZY)
+  @JoinColumn(name = "creator_id", nullable = false)
+  private User creator;
+
+  /** 캡슐 대표 아이콘. 값 목록이 확정되지 않아 문자열로 둔다. */
+  @Column(name = "icon_type", nullable = false, length = 30)
+  private String iconType;
+
+  @Column(name = "title", nullable = false, length = 50)
+  private String title;
+
+  @Column(name = "description", columnDefinition = "TEXT")
+  private String description;
+
+  @Enumerated(EnumType.STRING)
+  @JdbcTypeCode(SqlTypes.VARCHAR)
+  @Column(name = "capsule_type", nullable = false, length = 20)
+  private CapsuleType capsuleType;
+
+  @Enumerated(EnumType.STRING)
+  @JdbcTypeCode(SqlTypes.VARCHAR)
+  @Column(name = "visibility_type", nullable = false, length = 30)
+  private VisibilityType visibilityType;
+
+  @Builder.Default
+  @Enumerated(EnumType.STRING)
+  @JdbcTypeCode(SqlTypes.VARCHAR)
+  @Column(name = "status", nullable = false, length = 20)
+  private CapsuleStatus status = CapsuleStatus.WRITING;
+
+  @Column(name = "open_at", nullable = false)
+  private LocalDateTime openAt;
+
+  /** 편지 작성 마감 일시. 이 시각부터 편지를 쓸 수 없고 캡슐이 잠긴다. */
+  @Column(name = "letter_deadline_at", nullable = false)
+  private LocalDateTime letterDeadlineAt;
+
+  @Column(name = "deleted_at")
+  private LocalDateTime deletedAt;
+
+  /**
+   * 이 역할의 참여자가 편지함에 들어갈 수 있는지. 캡슐이 열리면 공개 범위와 관계없이 참여자 전원이 들어가되, 어떤 편지가 보이는지는 {@link
+   * #canViewLetter} 로 한 통씩 정한다. OWNER 도 예외 없이 편지를 쓴 참여자로 취급한다.
+   */
+  public boolean canViewLetters(MemberRole role) {
+    return status == CapsuleStatus.OPENED;
+  }
+
+  /**
+   * 이 역할의 참여자가 편지 한 통을 볼 수 있는지. 공개 범위의 값 이름이 그대로 "볼 수 있는 사람" 이다.
+   *
+   * @param isAuthor 이 편지를 조회하는 회원이 쓴 편지인지
+   */
+  public boolean canViewLetter(MemberRole role, boolean isAuthor) {
+    return canViewAllLetters(role) || (canViewLetters(role) && isAuthor);
+  }
+
+  /** 열린 캡슐에서 작성자가 아닌 편지까지 모두 열람할 수 있는지 판정한다. */
+  public boolean canViewAllLetters(MemberRole role) {
+    if (!canViewLetters(role)) {
+      return false;
+    }
+    return switch (visibilityType) {
+      case ALL_MEMBERS -> true;
+      case RECIPIENT_AND_AUTHOR -> role == MemberRole.RECIPIENT;
+    };
+  }
+
+  /**
+   * 아이콘 · 이름 · 설명을 고치고, 캡슐을 지우고, 멤버를 바꿀 수 있는지. 편지 수정 마감 전에만 된다.
+   *
+   * <p>저장된 상태와 마감 시각을 함께 본다. 마감이 지나도 스케줄러가 LOCKED 로 바꾸기 전까지(최대 한 주기) 상태는 WRITING 이다. 상태만 보면 그 사이에는
+   * 편지는 못 쓰는데 캡슐은 고치고 지울 수 있게 된다. 편지 작성 판정({@link #getLetterWritingEligibility})과 같은 기준으로 맞춘다.
+   */
+  public boolean isEditable(LocalDateTime now) {
+    return status == CapsuleStatus.WRITING && now.isBefore(letterDeadlineAt);
+  }
+
+  public void updateIconType(String iconType) {
+    this.iconType = iconType;
+  }
+
+  public void updateTitle(String title) {
+    this.title = title;
+  }
+
+  /** null 이면 지운다. */
+  public void updateDescription(String description) {
+    this.description = description;
+  }
+
+  /** 소프트 삭제. 목록 · 탭 홈 · 상세 쿼리가 모두 {@code deletedAt} 이 빈 캡슐만 읽는다. */
+  public void delete(LocalDateTime now) {
+    this.deletedAt = now;
+  }
+
+  /** 수신자는 ALL_MEMBERS에서만 작성할 수 있다. 권한을 기간보다 먼저 확인한다. */
+  public LetterWritingEligibility getLetterWritingEligibility(MemberRole role, LocalDateTime now) {
+    if (role == MemberRole.RECIPIENT && visibilityType != VisibilityType.ALL_MEMBERS) {
+      return LetterWritingEligibility.NOT_ALLOWED;
+    }
+    if (!isLetterWritingOpen(now)) {
+      return LetterWritingEligibility.CLOSED;
+    }
+    return LetterWritingEligibility.ALLOWED;
+  }
+
+  /** 편지 작성·삭제 기간의 공통 조건. 스케줄러 전이 전에도 마감·공개 정각부터 닫힌다. */
+  public boolean isLetterWritingOpen(LocalDateTime now) {
+    return status == CapsuleStatus.WRITING
+        && now.isBefore(letterDeadlineAt)
+        && now.isBefore(openAt);
+  }
+}

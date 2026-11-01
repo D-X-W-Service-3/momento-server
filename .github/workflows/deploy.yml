@@ -1,0 +1,73 @@
+name: Deploy
+
+on:
+  push:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+# 배포가 겹치면 앞 배포가 끝난 뒤 다음 배포를 돌린다
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+
+env:
+  IMAGE: ghcr.io/d-x-w-service-3/momento-server
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    # 테스트는 main 으로 가는 PR 의 CI 가 맡는다. 이미지는 Dockerfile 이 빌드 단계에서 jar 를 만든다
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          tags: |
+            ${{ env.IMAGE }}:${{ github.sha }}
+            ${{ env.IMAGE }}:latest
+
+      # 운영 시크릿은 EC2 의 ~/momento/.env 에만 있다. 여기서는 이미지를 받아 그 파일로 띄우기만 한다
+      - name: Deploy to EC2
+        uses: appleboy/ssh-action@v1
+        env:
+          TAG: ${{ github.sha }}
+          GHCR_USER: ${{ github.actor }}
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ubuntu
+          key: ${{ secrets.EC2_SSH_KEY }}
+          envs: IMAGE,TAG,GHCR_USER,GHCR_TOKEN
+          script: |
+            set -e
+            echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
+            docker pull "$IMAGE:$TAG"
+            docker logout ghcr.io
+            docker rm -f momento || true
+            docker run -d --name momento --restart unless-stopped \
+              -p 8080:8080 --env-file "$HOME/momento/.env" "$IMAGE:$TAG"
+            for i in $(seq 1 30); do
+              if curl -fs http://localhost:8080/health-check > /dev/null; then
+                docker image prune -af --filter "until=72h"
+                exit 0
+              fi
+              sleep 5
+            done
+            docker logs --tail 200 momento
+            exit 1

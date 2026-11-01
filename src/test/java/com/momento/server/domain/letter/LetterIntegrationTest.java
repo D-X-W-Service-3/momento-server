@@ -1,0 +1,672 @@
+package com.momento.server.domain.letter;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.BDDMockito.given;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.momento.server.domain.letter.entity.Letter;
+import com.momento.server.domain.letter.entity.LetterStatus;
+import com.momento.server.domain.letter.repository.LetterRepository;
+import com.momento.server.domain.timecapsule.entity.CapsuleMember;
+import com.momento.server.domain.timecapsule.entity.CapsuleStatus;
+import com.momento.server.domain.timecapsule.entity.CapsuleType;
+import com.momento.server.domain.timecapsule.entity.MemberRole;
+import com.momento.server.domain.timecapsule.entity.TimeCapsule;
+import com.momento.server.domain.timecapsule.entity.VisibilityType;
+import com.momento.server.domain.timecapsule.repository.CapsuleMemberRepository;
+import com.momento.server.domain.timecapsule.repository.TimeCapsuleRepository;
+import com.momento.server.domain.user.entity.User;
+import com.momento.server.domain.user.repository.UserRepository;
+import com.momento.server.global.common.auth.service.TokenProvider;
+import java.time.Clock;
+import java.time.Duration;
+import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.EnumSource;
+import org.junit.jupiter.params.provider.ValueSource;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.http.MediaType;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.ResultActions;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
+
+/** 실제 인증 필터와 트랜잭션 커밋을 포함한다. 테스트 전체를 트랜잭션으로 감싸지 않는다. */
+@SpringBootTest
+@AutoConfigureMockMvc
+class LetterIntegrationTest {
+  private static final String BODY =
+      "{\"title\":\"편지 제목\",\"content\":\"내 편지\",\"themeType\":\"WATERCOLOR\"}";
+  @Autowired private MockMvc mvc;
+  @Autowired private TokenProvider tokens;
+  @Autowired private UserRepository users;
+  @Autowired private TimeCapsuleRepository capsules;
+  @Autowired private CapsuleMemberRepository members;
+  @Autowired private LetterRepository letters;
+  @Autowired private JdbcTemplate jdbc;
+  @Autowired private ObjectMapper objectMapper;
+  @Autowired private PlatformTransactionManager transactionManager;
+  @MockitoBean private Clock clock;
+  private static final Instant NOW = Instant.parse("2026-09-14T12:00:00Z");
+  private User owner;
+  private TimeCapsule capsule;
+  private String token;
+
+  @BeforeEach
+  void setUp() {
+    clean();
+    given(clock.instant()).willReturn(NOW);
+    given(clock.getZone()).willReturn(ZoneOffset.UTC);
+    owner = users.save(User.builder().kakaoId("letter-owner").nickname("작성자").build());
+    capsule =
+        capsules.save(
+            TimeCapsule.builder()
+                .creator(owner)
+                .iconType("ICE_CREAM")
+                .title("캡슐")
+                .capsuleType(CapsuleType.GROUP)
+                .visibilityType(VisibilityType.ALL_MEMBERS)
+                .letterDeadlineAt(LocalDateTime.ofInstant(NOW, ZoneOffset.UTC).plusDays(1))
+                .openAt(LocalDateTime.ofInstant(NOW, ZoneOffset.UTC).plusDays(1))
+                .build());
+    join(owner);
+    token = tokens.generateToken(owner, Duration.ofHours(1));
+  }
+
+  @AfterEach
+  void clean() {
+    letters.deleteAll();
+    members.deleteAll();
+    capsules.deleteAll();
+    users.deleteAll();
+  }
+
+  @Test
+  void createsSubmittedLetterAndReadsOwnLetter() throws Exception {
+    create(token, BODY)
+        .andExpect(status().isCreated())
+        .andExpect(jsonPath("$.status").value(201))
+        .andExpect(jsonPath("$.code").value("SUCCESS"))
+        .andExpect(jsonPath("$.message").value("요청에 성공했습니다."))
+        .andExpect(jsonPath("$.data").doesNotExist());
+    Letter saved = letters.findAll().getFirst();
+    assertThat(saved.getStatus()).isEqualTo(LetterStatus.SUBMITTED);
+    assertThat(saved.getSubmittedAt()).isEqualTo(LocalDateTime.ofInstant(NOW, ZoneOffset.UTC));
+    assertThat(saved.getTitle()).isEqualTo("편지 제목");
+    assertThat(saved.getContent()).isEqualTo("내 편지");
+    assertThat(saved.getThemeType()).isEqualTo("WATERCOLOR");
+    assertThat(capsules.countLettersByStatus(capsule.getId(), LetterStatus.SUBMITTED)).isEqualTo(1);
+    assertThat(saved.getAuthor().getId()).isEqualTo(owner.getId());
+    read(token)
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.data.letterId").value(saved.getId()))
+        .andExpect(jsonPath("$.data.canDelete").value(true));
+  }
+
+  @Test
+  void requiresAuthenticationForBothEndpoints() throws Exception {
+    mvc.perform(post(path()).contentType(MediaType.APPLICATION_JSON).content(BODY))
+        .andExpect(status().isUnauthorized());
+    mvc.perform(get(path() + "/me")).andExpect(status().isUnauthorized());
+    assertThat(letters.count()).isZero();
+  }
+
+  @Test
+  void duplicateDoesNotOverwrite() throws Exception {
+    create(token, BODY).andExpect(status().isCreated());
+    create(token, "{\"title\":\"다른 제목\",\"content\":\"덮어쓰기\",\"themeType\":\"COZY\"}")
+        .andExpect(status().isConflict())
+        .andExpect(jsonPath("$.code").value("LETTER_ALREADY_EXISTS"));
+    assertThat(letters.count()).isEqualTo(1);
+    assertThat(letters.findAll().getFirst().getContent()).isEqualTo("내 편지");
+  }
+
+  @Test
+  void missingOwnLetterDoesNotExposeAnotherAuthorsLetter() throws Exception {
+    create(token, BODY).andExpect(status().isCreated());
+    User other = users.save(User.builder().kakaoId("other").nickname("다른 사람").build());
+    join(other);
+    read(tokens.generateToken(other, Duration.ofHours(1)))
+        .andExpect(status().isNotFound())
+        .andExpect(jsonPath("$.code").value("LETTER_NOT_FOUND"));
+  }
+
+  @Test
+  void nonMemberCannotCreateOrRead() throws Exception {
+    User stranger = users.save(User.builder().kakaoId("stranger").nickname("외부인").build());
+    String strangerToken = tokens.generateToken(stranger, Duration.ofHours(1));
+    create(strangerToken, BODY)
+        .andExpect(status().isNotFound())
+        .andExpect(jsonPath("$.code").value("CAPSULE_NOT_FOUND"));
+    read(strangerToken)
+        .andExpect(status().isNotFound())
+        .andExpect(jsonPath("$.code").value("CAPSULE_NOT_FOUND"));
+    assertThat(letters.count()).isZero();
+  }
+
+  @Test
+  void inactiveMemberCannotAccessExistingLetter() throws Exception {
+    create(token, BODY).andExpect(status().isCreated());
+    for (String memberStatus : List.of("LEFT", "REMOVED")) {
+      jdbc.update(
+          "update capsule_members set status = ? where time_capsule_id = ?",
+          memberStatus,
+          capsule.getId());
+      create(token, BODY)
+          .andExpect(status().isNotFound())
+          .andExpect(jsonPath("$.code").value("CAPSULE_NOT_FOUND"));
+      read(token)
+          .andExpect(status().isNotFound())
+          .andExpect(jsonPath("$.code").value("CAPSULE_NOT_FOUND"));
+    }
+    assertThat(letters.count()).isEqualTo(1);
+  }
+
+  @Test
+  void missingAndDeletedCapsulesReturnSameError() throws Exception {
+    mvc.perform(
+            post("/v1/time-capsules/9223372036854775807/letters")
+                .header("Authorization", "Bearer " + token)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(BODY))
+        .andExpect(status().isNotFound())
+        .andExpect(jsonPath("$.code").value("CAPSULE_NOT_FOUND"));
+    mvc.perform(
+            get("/v1/time-capsules/9223372036854775807/letters/me")
+                .header("Authorization", "Bearer " + token))
+        .andExpect(status().isNotFound())
+        .andExpect(jsonPath("$.code").value("CAPSULE_NOT_FOUND"));
+    create(token, BODY).andExpect(status().isCreated());
+    jdbc.update(
+        "update time_capsules set deleted_at = ? where id = ?",
+        LocalDateTime.now(),
+        capsule.getId());
+    create(token, BODY)
+        .andExpect(status().isNotFound())
+        .andExpect(jsonPath("$.code").value("CAPSULE_NOT_FOUND"));
+    read(token)
+        .andExpect(status().isNotFound())
+        .andExpect(jsonPath("$.code").value("CAPSULE_NOT_FOUND"));
+    assertThat(letters.count()).isEqualTo(1);
+  }
+
+  @Test
+  void deletedLetterIsAbsentAndCanBeRecreated() throws Exception {
+    Letter deleted =
+        letters.save(
+            Letter.builder()
+                .timeCapsule(capsule)
+                .author(owner)
+                .content("삭제됨")
+                .deletedAt(LocalDateTime.now())
+                .build());
+    read(token)
+        .andExpect(status().isNotFound())
+        .andExpect(jsonPath("$.code").value("LETTER_NOT_FOUND"));
+    create(token, BODY).andExpect(status().isCreated());
+    assertThat(letters.count()).isEqualTo(2);
+    assertThat(
+            letters
+                .findByTimeCapsuleIdAndAuthorIdAndDeletedAtIsNull(capsule.getId(), owner.getId())
+                .orElseThrow()
+                .getId())
+        .isNotEqualTo(deleted.getId());
+  }
+
+  @Test
+  void malformedRequestsReturn400WithoutSaving() throws Exception {
+    create(token, "{")
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.code").value("INVALID_INPUT_VALUE"));
+    mvc.perform(
+            get("/v1/time-capsules/invalid/letters/me").header("Authorization", "Bearer " + token))
+        .andExpect(status().isBadRequest());
+    assertThat(letters.count()).isZero();
+  }
+
+  @Test
+  void concurrentRequestsCommitExactlyOneLetter() throws Exception {
+    int count = 6;
+    CountDownLatch ready = new CountDownLatch(count);
+    CountDownLatch start = new CountDownLatch(1);
+    try (var executor = Executors.newFixedThreadPool(count)) {
+      List<Future<Integer>> results = new ArrayList<>();
+      for (int i = 0; i < count; i++) {
+        results.add(
+            executor.submit(
+                () -> {
+                  ready.countDown();
+                  if (!start.await(10, TimeUnit.SECONDS)) {
+                    throw new IllegalStateException("동시 요청 시작 시간 초과");
+                  }
+                  return create(token, BODY).andReturn().getResponse().getStatus();
+                }));
+      }
+      try {
+        assertThat(ready.await(10, TimeUnit.SECONDS)).isTrue();
+      } finally {
+        start.countDown();
+      }
+      List<Integer> statuses = new ArrayList<>();
+      for (Future<Integer> result : results) {
+        statuses.add(result.get(20, TimeUnit.SECONDS));
+      }
+      assertThat(statuses).containsExactlyInAnyOrder(201, 409, 409, 409, 409, 409);
+    }
+    assertThat(letters.count()).isEqualTo(1);
+  }
+
+  private void join(User user) {
+    members.save(
+        CapsuleMember.builder().timeCapsule(capsule).user(user).role(MemberRole.OWNER).build());
+  }
+
+  @ParameterizedTest
+  @CsvSource({
+    "OWNER,RECIPIENT_AND_AUTHOR,201",
+    "OWNER,ALL_MEMBERS,201",
+    "PARTICIPANT,RECIPIENT_AND_AUTHOR,201",
+    "PARTICIPANT,ALL_MEMBERS,201",
+    "RECIPIENT,RECIPIENT_AND_AUTHOR,403",
+    "RECIPIENT,ALL_MEMBERS,201"
+  })
+  void creationChecksRoleAndVisibility(
+      MemberRole role, VisibilityType visibility, int expectedStatus) throws Exception {
+    jdbc.update(
+        "update capsule_members set role = ? where time_capsule_id = ?",
+        role.name(),
+        capsule.getId());
+    jdbc.update(
+        "update time_capsules set visibility_type = ? where id = ?",
+        visibility.name(),
+        capsule.getId());
+    create(token, BODY).andExpect(status().is(expectedStatus));
+    if (expectedStatus == 403) {
+      assertThat(letters.count()).isZero();
+    } else {
+      assertThat(letters.count()).isEqualTo(1);
+      assertThat(letters.findAll().getFirst().getStatus()).isEqualTo(LetterStatus.SUBMITTED);
+    }
+  }
+
+  @ParameterizedTest
+  @CsvSource({"1,60,201", "0,60,409", "-1,60,409", "60,1,201", "60,0,409", "60,-1,409"})
+  void creationHonorsExactTimeBoundaries(long openOffset, long deadlineOffset, int expectedStatus)
+      throws Exception {
+    LocalDateTime now = LocalDateTime.ofInstant(NOW, ZoneOffset.UTC);
+    jdbc.update(
+        "update time_capsules set open_at = ?, letter_deadline_at = ? where id = ?",
+        now.plusSeconds(openOffset),
+        now.plusSeconds(deadlineOffset),
+        capsule.getId());
+    ResultActions result = create(token, BODY).andExpect(status().is(expectedStatus));
+    if (expectedStatus == 409) {
+      result.andExpect(jsonPath("$.code").value("LETTER_WRITING_CLOSED"));
+      assertThat(letters.count()).isZero();
+    } else {
+      assertThat(letters.count()).isEqualTo(1);
+    }
+  }
+
+  @ParameterizedTest
+  @EnumSource(
+      value = CapsuleStatus.class,
+      names = {"LOCKED", "OPENED"})
+  void nonWritingStatesRejectCreationEvenBeforeDeadline(CapsuleStatus capsuleStatus)
+      throws Exception {
+    jdbc.update(
+        "update time_capsules set status = ? where id = ?", capsuleStatus.name(), capsule.getId());
+    create(token, BODY)
+        .andExpect(status().isConflict())
+        .andExpect(jsonPath("$.code").value("LETTER_WRITING_CLOSED"));
+    assertThat(letters.count()).isZero();
+  }
+
+  @ParameterizedTest
+  @CsvSource({
+    "WRITING,DRAFT",
+    "LOCKED,DRAFT",
+    "OPENED,DRAFT",
+    "WRITING,SUBMITTED",
+    "LOCKED,SUBMITTED",
+    "OPENED,SUBMITTED"
+  })
+  void ownLetterRemainsReadableAfterDeadline(CapsuleStatus capsuleStatus, LetterStatus letterStatus)
+      throws Exception {
+    Letter letter =
+        letters.save(
+            Letter.builder()
+                .timeCapsule(capsule)
+                .author(owner)
+                .content("본인 편지")
+                .status(letterStatus)
+                .submittedAt(letterStatus == LetterStatus.SUBMITTED ? LocalDateTime.now() : null)
+                .build());
+    LocalDateTime past = LocalDateTime.ofInstant(NOW, ZoneOffset.UTC).minusDays(1);
+    jdbc.update(
+        "update time_capsules set status = ?, open_at = ?, letter_deadline_at = ? where id = ?",
+        capsuleStatus.name(),
+        past,
+        past,
+        capsule.getId());
+    read(token)
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.data.letterId").value(letter.getId()))
+        .andExpect(jsonPath("$.data.content").value("본인 편지"))
+        .andExpect(jsonPath("$.data.canDelete").value(false));
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"{}", "{\"content\":null}"})
+  void absentOrNullContentIsRejected(String body) throws Exception {
+    create(token, body)
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.code").value("INVALID_INPUT_VALUE"));
+    assertThat(letters.count()).isZero();
+  }
+
+  @Test
+  void missingThemeIsRejected() throws Exception {
+    create(token, "{\"title\":\"제목\",\"content\":\"내 편지\"}").andExpect(status().isBadRequest());
+    assertThat(letters.count()).isZero();
+  }
+
+  @Test
+  void acceptsMaximumContentAndThemeLengths() throws Exception {
+    String content = "가".repeat(500);
+    String theme = "T".repeat(20);
+    create(
+            token,
+            objectMapper.writeValueAsString(
+                java.util.Map.of("title", "가".repeat(50), "content", content, "themeType", theme)))
+        .andExpect(status().isCreated());
+    Letter saved = letters.findAll().getFirst();
+    assertThat(saved.getTitle()).isEqualTo("가".repeat(50));
+    assertThat(saved.getContent()).isEqualTo(content);
+    assertThat(saved.getThemeType()).isEqualTo(theme);
+  }
+
+  @ParameterizedTest
+  @CsvSource({"501,20", "500,21"})
+  void rejectsLengthsAboveLimits(int contentLength, int themeLength) throws Exception {
+    create(
+            token,
+            objectMapper.writeValueAsString(
+                java.util.Map.of(
+                    "title",
+                    "제목",
+                    "content",
+                    "가".repeat(contentLength),
+                    "themeType",
+                    "T".repeat(themeLength))))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.code").value("INVALID_INPUT_VALUE"));
+    assertThat(letters.count()).isZero();
+  }
+
+  @Test
+  void deletedLetterCannotBeRecreatedAfterDeadline() throws Exception {
+    letters.save(
+        Letter.builder()
+            .timeCapsule(capsule)
+            .author(owner)
+            .content("삭제된 편지")
+            .deletedAt(LocalDateTime.now())
+            .build());
+    jdbc.update(
+        "update time_capsules set open_at = ? where id = ?",
+        LocalDateTime.ofInstant(NOW, ZoneOffset.UTC),
+        capsule.getId());
+    create(token, BODY)
+        .andExpect(status().isConflict())
+        .andExpect(jsonPath("$.code").value("LETTER_WRITING_CLOSED"));
+    assertThat(letters.count()).isEqualTo(1);
+    assertThat(
+            letters.findByTimeCapsuleIdAndAuthorIdAndDeletedAtIsNull(
+                capsule.getId(), owner.getId()))
+        .isEmpty();
+  }
+
+  @ParameterizedTest
+  @CsvSource({
+    "RECIPIENT_AND_AUTHOR,403,LETTER_WRITING_NOT_ALLOWED",
+    "ALL_MEMBERS,409,LETTER_WRITING_CLOSED"
+  })
+  void recipientPermissionIsCheckedBeforeDeadline(
+      VisibilityType visibility, int expectedStatus, String expectedCode) throws Exception {
+    jdbc.update(
+        "update capsule_members set role = 'RECIPIENT' where time_capsule_id = ?", capsule.getId());
+    jdbc.update(
+        "update time_capsules set visibility_type = ?, open_at = ? where id = ?",
+        visibility.name(),
+        LocalDateTime.ofInstant(NOW, ZoneOffset.UTC),
+        capsule.getId());
+    create(token, BODY)
+        .andExpect(status().is(expectedStatus))
+        .andExpect(jsonPath("$.code").value(expectedCode));
+    assertThat(letters.count()).isZero();
+  }
+
+  @Test
+  void recipientCanReadOwnLetterAndCannotCreateDuplicate() throws Exception {
+    create(token, BODY).andExpect(status().isCreated());
+    jdbc.update(
+        "update capsule_members set role = 'RECIPIENT' where time_capsule_id = ?", capsule.getId());
+    jdbc.update(
+        "update time_capsules set visibility_type = 'RECIPIENT_AND_AUTHOR' where id = ?",
+        capsule.getId());
+    read(token).andExpect(status().isOk()).andExpect(jsonPath("$.data.content").value("내 편지"));
+    create(token, BODY)
+        .andExpect(status().isConflict())
+        .andExpect(jsonPath("$.code").value("LETTER_ALREADY_EXISTS"));
+    assertThat(letters.count()).isEqualTo(1);
+  }
+
+  @Test
+  void creationWaitingForCapsuleLockRechecksDeadline() throws Exception {
+    Instant deadline = NOW.plusSeconds(1);
+    jdbc.update(
+        "update time_capsules set letter_deadline_at = ? where id = ?",
+        LocalDateTime.ofInstant(deadline, ZoneOffset.UTC),
+        capsule.getId());
+    try (var executor = Executors.newSingleThreadExecutor()) {
+      List<Future<Integer>> pending = new ArrayList<>();
+      new TransactionTemplate(transactionManager)
+          .executeWithoutResult(
+              tx -> {
+                capsules.findActiveByIdForUpdate(capsule.getId()).orElseThrow();
+                CountDownLatch started = new CountDownLatch(1);
+                Future<Integer> result =
+                    executor.submit(
+                        () -> {
+                          started.countDown();
+                          return create(token, BODY).andReturn().getResponse().getStatus();
+                        });
+                pending.add(result);
+                try {
+                  assertThat(started.await(5, TimeUnit.SECONDS)).isTrue();
+                  assertThatThrownBy(() -> result.get(200, TimeUnit.MILLISECONDS))
+                      .isInstanceOf(TimeoutException.class);
+                  given(clock.instant()).willReturn(deadline);
+                } catch (InterruptedException e) {
+                  Thread.currentThread().interrupt();
+                  throw new IllegalStateException(e);
+                }
+              });
+      assertThat(pending.getFirst().get(10, TimeUnit.SECONDS)).isEqualTo(409);
+    }
+    assertThat(letters.count()).isZero();
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"title", "content", "themeType"})
+  void rejectsMissingNullEmptyAndBlankFields(String field) throws Exception {
+    for (String value : new String[] {null, "", " ", "\t\n"}) {
+      Map<String, Object> body =
+          new HashMap<>(Map.of("title", "제목", "content", "본문", "themeType", "COZY"));
+      body.put(field, value);
+      create(token, objectMapper.writeValueAsString(body))
+          .andExpect(status().isBadRequest())
+          .andExpect(jsonPath("$.code").value("INVALID_INPUT_VALUE"));
+    }
+    Map<String, Object> body =
+        new HashMap<>(Map.of("title", "제목", "content", "본문", "themeType", "COZY"));
+    body.remove(field);
+    create(token, objectMapper.writeValueAsString(body)).andExpect(status().isBadRequest());
+    assertThat(letters.count()).isZero();
+  }
+
+  @Test
+  void rejectsTitleAboveFiftyCharacters() throws Exception {
+    create(
+            token,
+            objectMapper.writeValueAsString(
+                Map.of("title", "가".repeat(51), "content", "본문", "themeType", "COZY")))
+        .andExpect(status().isBadRequest());
+    assertThat(letters.count()).isZero();
+  }
+
+  @Test
+  void ownLetterReturnsExactNewResponseContract() throws Exception {
+    create(token, BODY).andExpect(status().isCreated());
+    Letter saved = letters.findAll().getFirst();
+    LocalDateTime createdAt = LocalDateTime.of(2027, 3, 1, 21, 0);
+    jdbc.update("update letters set created_at = ? where id = ?", createdAt, saved.getId());
+
+    var response = read(token).andExpect(status().isOk()).andReturn().getResponse();
+    var data = objectMapper.readTree(response.getContentAsString()).get("data");
+    assertThat(data.isObject()).isTrue();
+    assertThat(data.size()).isEqualTo(6);
+    assertThat(data.get("letterId").longValue()).isEqualTo(saved.getId());
+    assertThat(data.get("themeType").textValue()).isEqualTo("WATERCOLOR");
+    assertThat(data.get("title").textValue()).isEqualTo("편지 제목");
+    assertThat(data.get("content").textValue()).isEqualTo("내 편지");
+    assertThat(data.get("createdAt")).isEqualTo(objectMapper.valueToTree(createdAt));
+    assertThat(data.get("canDelete").booleanValue()).isTrue();
+    assertThat(data.has("capsuleId")).isFalse();
+    assertThat(data.has("status")).isFalse();
+  }
+
+  @ParameterizedTest
+  @CsvSource({
+    "WRITING,1,60,true", "WRITING,0,60,false", "WRITING,-1,60,false",
+    "WRITING,60,1,true", "WRITING,60,0,false", "WRITING,60,-1,false",
+    "LOCKED,60,60,false", "OPENED,60,60,false"
+  })
+  void ownLetterDeletionFlagChecksStateAndExactTimeBoundaries(
+      CapsuleStatus state, int openOffset, int deadlineOffset, boolean expected) throws Exception {
+    create(token, BODY).andExpect(status().isCreated());
+    LocalDateTime now = LocalDateTime.ofInstant(NOW, ZoneOffset.UTC);
+    jdbc.update(
+        "update time_capsules set status = ?, open_at = ?, letter_deadline_at = ? where id = ?",
+        state.name(),
+        now.plusSeconds(openOffset),
+        now.plusSeconds(deadlineOffset),
+        capsule.getId());
+    read(token).andExpect(status().isOk()).andExpect(jsonPath("$.data.canDelete").value(expected));
+    assertThat(letters.findAll().getFirst().getDeletedAt()).isNull();
+  }
+
+  @ParameterizedTest
+  @CsvSource({"true,true", "true,false", "false,true", "false,false"})
+  void legacyLetterReturnsNullFieldsWithoutReplacingOrOmittingThem(
+      boolean missingTitle, boolean missingTheme) throws Exception {
+    Letter saved =
+        letters.save(
+            Letter.builder()
+                .timeCapsule(capsule)
+                .author(owner)
+                .title(missingTitle ? null : "기존 제목")
+                .themeType(missingTheme ? null : "COZY")
+                .content("기존 본문")
+                .build());
+    var data =
+        objectMapper
+            .readTree(
+                read(token)
+                    .andExpect(status().isOk())
+                    .andReturn()
+                    .getResponse()
+                    .getContentAsString())
+            .get("data");
+    assertThat(data.has("title")).isTrue();
+    assertThat(data.has("themeType")).isTrue();
+    assertThat(data.get("title").isNull()).isEqualTo(missingTitle);
+    assertThat(data.get("themeType").isNull()).isEqualTo(missingTheme);
+    if (!missingTitle) {
+      assertThat(data.get("title").textValue()).isEqualTo("기존 제목");
+    }
+    if (!missingTheme) {
+      assertThat(data.get("themeType").textValue()).isEqualTo("COZY");
+    }
+    assertThat(data.get("canDelete").booleanValue()).isTrue();
+    Letter unchanged = letters.findById(saved.getId()).orElseThrow();
+    assertThat(unchanged.getTitle()).isEqualTo(saved.getTitle());
+    assertThat(unchanged.getThemeType()).isEqualTo(saved.getThemeType());
+    assertThat(unchanged.getStatus()).isEqualTo(LetterStatus.DRAFT);
+    assertThat(unchanged.getSubmittedAt()).isNull();
+  }
+
+  @ParameterizedTest
+  @CsvSource({
+    "OWNER,RECIPIENT_AND_AUTHOR", "OWNER,ALL_MEMBERS",
+    "PARTICIPANT,RECIPIENT_AND_AUTHOR", "PARTICIPANT,ALL_MEMBERS",
+    "RECIPIENT,RECIPIENT_AND_AUTHOR", "RECIPIENT,ALL_MEMBERS"
+  })
+  void ownLetterReadAndDeletionFlagAllowAllActiveRoles(MemberRole role, VisibilityType visibility)
+      throws Exception {
+    create(token, BODY).andExpect(status().isCreated());
+    jdbc.update(
+        "update capsule_members set role = ? where time_capsule_id = ?",
+        role.name(),
+        capsule.getId());
+    jdbc.update(
+        "update time_capsules set visibility_type = ? where id = ?",
+        visibility.name(),
+        capsule.getId());
+    read(token)
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.data.title").value("편지 제목"))
+        .andExpect(jsonPath("$.data.canDelete").value(true));
+  }
+
+  private String path() {
+    return "/v1/time-capsules/" + capsule.getId() + "/letters";
+  }
+
+  private ResultActions create(String accessToken, String body) throws Exception {
+    return mvc.perform(
+        post(path())
+            .header("Authorization", "Bearer " + accessToken)
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(body));
+  }
+
+  private ResultActions read(String accessToken) throws Exception {
+    return mvc.perform(get(path() + "/me").header("Authorization", "Bearer " + accessToken));
+  }
+}

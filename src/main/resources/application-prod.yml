@@ -12,5 +12,8 @@ spring:
         dialect: org.hibernate.dialect.MySQLDialect
         dialect.storage_engine: innodb
     show-sql: false
+    # 스키마는 Flyway 가 만든다(기동 시 db/migration 의 마이그레이션을 순서대로 적용).
+    # validate 는 그 뒤에 엔티티와 실제 테이블이 맞는지 확인만 한다 — 테이블·컬럼·타입만 보고
+    # NULL 허용 여부·인덱스·FK 는 검사하지 않으므로, 그 부분은 마이그레이션이 유일한 보장 수단이다.
     hibernate:
       ddl-auto: validate
