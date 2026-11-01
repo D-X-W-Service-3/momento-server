@@ -32,8 +32,9 @@ public class SwaggerConfig {
                     .type(SecurityScheme.Type.HTTP)
                     .scheme("bearer")
                     .bearerFormat("JWT"));
+    // 상대 경로라 Swagger 를 연 서버(로컬 · 운영)로 요청이 간다
     return new OpenAPI()
-        .servers(List.of(new Server().url("http://localhost:8080").description("Local")))
+        .servers(List.of(new Server().url("/").description("Current")))
         .addSecurityItem(securityRequirement)
         .components(components);
   }
