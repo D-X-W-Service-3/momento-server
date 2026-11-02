@@ -11,6 +11,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.momento.server.domain.letter.entity.Letter;
 import com.momento.server.domain.letter.entity.LetterStatus;
+import com.momento.server.domain.letter.entity.LetterThemeType;
 import com.momento.server.domain.letter.repository.LetterRepository;
 import com.momento.server.domain.timecapsule.entity.CapsuleMember;
 import com.momento.server.domain.timecapsule.entity.CapsuleStatus;
@@ -118,7 +119,7 @@ class LetterIntegrationTest {
     assertThat(saved.getSubmittedAt()).isEqualTo(LocalDateTime.ofInstant(NOW, ZoneOffset.UTC));
     assertThat(saved.getTitle()).isEqualTo("편지 제목");
     assertThat(saved.getContent()).isEqualTo("내 편지");
-    assertThat(saved.getThemeType()).isEqualTo("WATERCOLOR");
+    assertThat(saved.getThemeType()).isEqualTo(LetterThemeType.WATERCOLOR);
     assertThat(capsules.countLettersByStatus(capsule.getId(), LetterStatus.SUBMITTED)).isEqualTo(1);
     assertThat(saved.getAuthor().getId()).isEqualTo(owner.getId());
     read(token)
@@ -138,7 +139,7 @@ class LetterIntegrationTest {
   @Test
   void duplicateDoesNotOverwrite() throws Exception {
     create(token, BODY).andExpect(status().isCreated());
-    create(token, "{\"title\":\"다른 제목\",\"content\":\"덮어쓰기\",\"themeType\":\"COZY\"}")
+    create(token, "{\"title\":\"다른 제목\",\"content\":\"덮어쓰기\",\"themeType\":\"PASTEL\"}")
         .andExpect(status().isConflict())
         .andExpect(jsonPath("$.code").value("LETTER_ALREADY_EXISTS"));
     assertThat(letters.count()).isEqualTo(1);
@@ -396,33 +397,38 @@ class LetterIntegrationTest {
   }
 
   @Test
-  void acceptsMaximumContentAndThemeLengths() throws Exception {
+  void acceptsMaximumContentLength() throws Exception {
     String content = "가".repeat(500);
-    String theme = "T".repeat(20);
-    create(
-            token,
-            objectMapper.writeValueAsString(
-                java.util.Map.of("title", "가".repeat(50), "content", content, "themeType", theme)))
-        .andExpect(status().isCreated());
-    Letter saved = letters.findAll().getFirst();
-    assertThat(saved.getTitle()).isEqualTo("가".repeat(50));
-    assertThat(saved.getContent()).isEqualTo(content);
-    assertThat(saved.getThemeType()).isEqualTo(theme);
-  }
-
-  @ParameterizedTest
-  @CsvSource({"501,20", "500,21"})
-  void rejectsLengthsAboveLimits(int contentLength, int themeLength) throws Exception {
     create(
             token,
             objectMapper.writeValueAsString(
                 java.util.Map.of(
-                    "title",
-                    "제목",
-                    "content",
-                    "가".repeat(contentLength),
-                    "themeType",
-                    "T".repeat(themeLength))))
+                    "title", "가".repeat(50), "content", content, "themeType", "WATERCOLOR")))
+        .andExpect(status().isCreated());
+    Letter saved = letters.findAll().getFirst();
+    assertThat(saved.getTitle()).isEqualTo("가".repeat(50));
+    assertThat(saved.getContent()).isEqualTo(content);
+    assertThat(saved.getThemeType()).isEqualTo(LetterThemeType.WATERCOLOR);
+  }
+
+  @Test
+  void rejectsContentAboveFiveHundredCharacters() throws Exception {
+    create(
+            token,
+            objectMapper.writeValueAsString(
+                java.util.Map.of("title", "제목", "content", "가".repeat(501), "themeType", "PASTEL")))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.code").value("INVALID_INPUT_VALUE"));
+    assertThat(letters.count()).isZero();
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"COZY", "pastel", "Pastel"})
+  void rejectsUnknownThemeType(String theme) throws Exception {
+    create(
+            token,
+            objectMapper.writeValueAsString(
+                java.util.Map.of("title", "제목", "content", "본문", "themeType", theme)))
         .andExpect(status().isBadRequest())
         .andExpect(jsonPath("$.code").value("INVALID_INPUT_VALUE"));
     assertThat(letters.count()).isZero();
@@ -527,14 +533,14 @@ class LetterIntegrationTest {
   void rejectsMissingNullEmptyAndBlankFields(String field) throws Exception {
     for (String value : new String[] {null, "", " ", "\t\n"}) {
       Map<String, Object> body =
-          new HashMap<>(Map.of("title", "제목", "content", "본문", "themeType", "COZY"));
+          new HashMap<>(Map.of("title", "제목", "content", "본문", "themeType", "PASTEL"));
       body.put(field, value);
       create(token, objectMapper.writeValueAsString(body))
           .andExpect(status().isBadRequest())
           .andExpect(jsonPath("$.code").value("INVALID_INPUT_VALUE"));
     }
     Map<String, Object> body =
-        new HashMap<>(Map.of("title", "제목", "content", "본문", "themeType", "COZY"));
+        new HashMap<>(Map.of("title", "제목", "content", "본문", "themeType", "PASTEL"));
     body.remove(field);
     create(token, objectMapper.writeValueAsString(body)).andExpect(status().isBadRequest());
     assertThat(letters.count()).isZero();
@@ -545,7 +551,7 @@ class LetterIntegrationTest {
     create(
             token,
             objectMapper.writeValueAsString(
-                Map.of("title", "가".repeat(51), "content", "본문", "themeType", "COZY")))
+                Map.of("title", "가".repeat(51), "content", "본문", "themeType", "PASTEL")))
         .andExpect(status().isBadRequest());
     assertThat(letters.count()).isZero();
   }
@@ -601,7 +607,7 @@ class LetterIntegrationTest {
                 .timeCapsule(capsule)
                 .author(owner)
                 .title(missingTitle ? null : "기존 제목")
-                .themeType(missingTheme ? null : "COZY")
+                .themeType(missingTheme ? null : LetterThemeType.PASTEL)
                 .content("기존 본문")
                 .build());
     var data =
@@ -621,7 +627,7 @@ class LetterIntegrationTest {
       assertThat(data.get("title").textValue()).isEqualTo("기존 제목");
     }
     if (!missingTheme) {
-      assertThat(data.get("themeType").textValue()).isEqualTo("COZY");
+      assertThat(data.get("themeType").textValue()).isEqualTo("PASTEL");
     }
     assertThat(data.get("canDelete").booleanValue()).isTrue();
     Letter unchanged = letters.findById(saved.getId()).orElseThrow();

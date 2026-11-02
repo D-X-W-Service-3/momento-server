@@ -8,6 +8,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.momento.server.domain.letter.entity.Letter;
 import com.momento.server.domain.letter.entity.LetterStatus;
+import com.momento.server.domain.letter.entity.LetterThemeType;
 import com.momento.server.domain.letter.repository.LetterRepository;
 import com.momento.server.domain.timecapsule.entity.CapsuleMember;
 import com.momento.server.domain.timecapsule.entity.CapsuleStatus;
@@ -128,7 +129,7 @@ class PublicLetterIntegrationTest {
             .andExpect(jsonPath("$.data.letters[0].letterId").value(oldest.getId()))
             .andExpect(jsonPath("$.data.letters[1].letterId").value(first.getId()))
             .andExpect(jsonPath("$.data.letters[2].letterId").value(second.getId()))
-            .andExpect(jsonPath("$.data.letters[1].themeType").value("COZY"))
+            .andExpect(jsonPath("$.data.letters[1].themeType").value("PASTEL"))
             .andExpect(jsonPath("$.data.letters[1].title").value("제목"))
             .andExpect(jsonPath("$.data.letters[1].content").value("내용"))
             .andExpect(jsonPath("$.data.letters[1].authorNickname").value(owner.getNickname()))
@@ -290,7 +291,7 @@ class PublicLetterIntegrationTest {
             .author(author)
             .title("제목")
             .content("내용")
-            .themeType("COZY")
+            .themeType(LetterThemeType.PASTEL)
             .status(state)
             .build());
   }

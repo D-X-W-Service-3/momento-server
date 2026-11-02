@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.momento.server.domain.letter.entity.Letter;
 import com.momento.server.domain.letter.entity.LetterStatus;
+import com.momento.server.domain.letter.entity.LetterThemeType;
 import java.time.LocalDateTime;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
@@ -17,7 +18,7 @@ class LetterTest {
     Letter letter =
         Letter.builder()
             .content("본문")
-            .themeType("COZY")
+            .themeType(LetterThemeType.PASTEL)
             .status(status)
             .submittedAt(submittedAt)
             .build();
@@ -27,6 +28,6 @@ class LetterTest {
     assertThat(letter.getStatus()).isEqualTo(status);
     assertThat(letter.getSubmittedAt()).isEqualTo(submittedAt);
     assertThat(letter.getContent()).isEqualTo("본문");
-    assertThat(letter.getThemeType()).isEqualTo("COZY");
+    assertThat(letter.getThemeType()).isEqualTo(LetterThemeType.PASTEL);
   }
 }

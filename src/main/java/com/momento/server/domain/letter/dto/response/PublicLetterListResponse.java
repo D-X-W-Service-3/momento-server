@@ -2,6 +2,7 @@ package com.momento.server.domain.letter.dto.response;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.momento.server.domain.letter.entity.Letter;
+import com.momento.server.domain.letter.entity.LetterThemeType;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -15,7 +16,8 @@ public record PublicLetterListResponse(List<Item> letters) {
   @JsonInclude(JsonInclude.Include.ALWAYS)
   public record Item(
       Long letterId,
-      @Schema(description = "편지지 화풍. 기존 데이터는 null일 수 있다.", nullable = true) String themeType,
+      @Schema(description = "편지지 화풍. 기존 데이터는 null일 수 있다.", nullable = true)
+          LetterThemeType themeType,
       @Schema(description = "편지 제목. 기존 데이터는 null일 수 있다.", nullable = true) String title,
       String content,
       String authorNickname,
