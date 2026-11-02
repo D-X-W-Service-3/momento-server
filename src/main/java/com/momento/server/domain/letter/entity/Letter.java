@@ -49,6 +49,12 @@ public class Letter extends BaseTimeEntity {
   @Column(name = "title", length = 50)
   private String title;
 
+  /** 편지 유형. 기존 편지는 없을 수 있다. 새 작성에서는 요청 검증으로 필수 입력을 보장한다. */
+  @Enumerated(EnumType.STRING)
+  @JdbcTypeCode(SqlTypes.VARCHAR)
+  @Column(name = "letter_type", length = 20)
+  private LetterType letterType;
+
   @Column(name = "content", nullable = false, columnDefinition = "TEXT")
   private String content;
 
