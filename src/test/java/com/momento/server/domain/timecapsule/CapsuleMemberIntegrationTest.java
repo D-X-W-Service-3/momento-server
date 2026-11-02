@@ -13,6 +13,7 @@ import com.momento.server.domain.letter.dto.request.LetterCreateRequest;
 import com.momento.server.domain.letter.entity.Letter;
 import com.momento.server.domain.letter.entity.LetterStatus;
 import com.momento.server.domain.letter.entity.LetterThemeType;
+import com.momento.server.domain.letter.entity.LetterType;
 import com.momento.server.domain.letter.repository.LetterRepository;
 import com.momento.server.domain.letter.service.LetterService;
 import com.momento.server.domain.timecapsule.entity.CapsuleMember;
@@ -260,7 +261,8 @@ class CapsuleMemberIntegrationTest {
             post("/v1/time-capsules/{capsuleId}/letters", capsule.getId())
                 .header(AUTHORIZATION, bearer(participant))
                 .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"title\": \"제목\", \"content\": \"편지\", \"themeType\": \"PASTEL\"}"))
+                .content(
+                    "{\"title\": \"제목\", \"content\": \"편지\", \"themeType\": \"PASTEL\", \"letterType\": \"BIRTHDAY\"}"))
         .andExpect(status().isNotFound())
         .andExpect(jsonPath("$.code").value("CAPSULE_NOT_FOUND"));
   }
@@ -363,7 +365,8 @@ class CapsuleMemberIntegrationTest {
                 return letterService.create(
                     capsule.getId(),
                     participant.getId(),
-                    new LetterCreateRequest("제목", "편지", LetterThemeType.PASTEL));
+                    new LetterCreateRequest(
+                        "제목", "편지", LetterThemeType.PASTEL, LetterType.BIRTHDAY));
               });
       Future<?> remove =
           executor.submit(

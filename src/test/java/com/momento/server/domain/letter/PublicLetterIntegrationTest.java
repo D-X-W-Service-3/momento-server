@@ -9,6 +9,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.momento.server.domain.letter.entity.Letter;
 import com.momento.server.domain.letter.entity.LetterStatus;
 import com.momento.server.domain.letter.entity.LetterThemeType;
+import com.momento.server.domain.letter.entity.LetterType;
 import com.momento.server.domain.letter.repository.LetterRepository;
 import com.momento.server.domain.timecapsule.entity.CapsuleMember;
 import com.momento.server.domain.timecapsule.entity.CapsuleStatus;
@@ -129,6 +130,7 @@ class PublicLetterIntegrationTest {
             .andExpect(jsonPath("$.data.letters[0].letterId").value(oldest.getId()))
             .andExpect(jsonPath("$.data.letters[1].letterId").value(first.getId()))
             .andExpect(jsonPath("$.data.letters[2].letterId").value(second.getId()))
+            .andExpect(jsonPath("$.data.letters[1].letterType").value("CHRISTMAS"))
             .andExpect(jsonPath("$.data.letters[1].themeType").value("PASTEL"))
             .andExpect(jsonPath("$.data.letters[1].title").value("제목"))
             .andExpect(jsonPath("$.data.letters[1].content").value("내용"))
@@ -141,7 +143,7 @@ class PublicLetterIntegrationTest {
             .path("data")
             .path("letters")
             .get(1);
-    assertThat(item.size()).isEqualTo(7);
+    assertThat(item.size()).isEqualTo(8);
     assertThat(item.has("imageUrl")).isTrue();
     assertThat(item.path("imageUrl").isNull()).isTrue();
   }
@@ -189,7 +191,7 @@ class PublicLetterIntegrationTest {
             .path("letters")
             .get(0);
     assertThat(item.path("letterId").asLong()).isEqualTo(legacy.getId());
-    for (String field : new String[] {"title", "themeType", "imageUrl"}) {
+    for (String field : new String[] {"title", "letterType", "themeType", "imageUrl"}) {
       assertThat(item.has(field)).isTrue();
       assertThat(item.path(field).isNull()).isTrue();
     }
@@ -291,6 +293,7 @@ class PublicLetterIntegrationTest {
             .author(author)
             .title("제목")
             .content("내용")
+            .letterType(LetterType.CHRISTMAS)
             .themeType(LetterThemeType.PASTEL)
             .status(state)
             .build());

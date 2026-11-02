@@ -499,6 +499,7 @@ class LetterDeleteIntegrationTest {
         post("/v1/time-capsules/{id}/letters", capsule.getId())
             .header("Authorization", "Bearer " + token)
             .contentType(MediaType.APPLICATION_JSON)
-            .content("{\"title\":\"다시 작성\",\"content\":\"새 본문\",\"themeType\":\"PASTEL\"}"));
+            .content(
+                "{\"title\":\"다시 작성\",\"content\":\"새 본문\",\"themeType\":\"PASTEL\",\"letterType\":\"BIRTHDAY\"}"));
   }
 }
