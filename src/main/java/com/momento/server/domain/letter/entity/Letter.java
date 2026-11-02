@@ -49,12 +49,20 @@ public class Letter extends BaseTimeEntity {
   @Column(name = "title", length = 50)
   private String title;
 
+  /** 편지 유형. 기존 편지는 없을 수 있다. 새 작성에서는 요청 검증으로 필수 입력을 보장한다. */
+  @Enumerated(EnumType.STRING)
+  @JdbcTypeCode(SqlTypes.VARCHAR)
+  @Column(name = "letter_type", length = 20)
+  private LetterType letterType;
+
   @Column(name = "content", nullable = false, columnDefinition = "TEXT")
   private String content;
 
-  /** 편지지 테마. ERD 에 값이 정의되지 않아 문자열로 둔다. 값이 확정되면 편지 API 이슈에서 enum 으로 전환한다. */
+  /** 편지지 화풍. 기존 편지는 없을 수 있다. 새 작성에서는 요청 검증으로 필수 입력을 보장한다. */
+  @Enumerated(EnumType.STRING)
+  @JdbcTypeCode(SqlTypes.VARCHAR)
   @Column(name = "theme_type", length = 20)
-  private String themeType;
+  private LetterThemeType themeType;
 
   @Builder.Default
   @Enumerated(EnumType.STRING)
