@@ -53,7 +53,7 @@ class LetterTitleMigrationTest {
           submittedAt);
       var before = jdbc.queryForList("SELECT * FROM letters ORDER BY id");
 
-      Flyway.configure().dataSource(source).load().migrate();
+      Flyway.configure().dataSource(source).target("11").load().migrate();
 
       var after = jdbc.queryForList("SELECT * FROM letters ORDER BY id");
       assertThat(after).hasSize(2);

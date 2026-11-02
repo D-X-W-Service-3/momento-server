@@ -47,6 +47,7 @@ public class LetterService {
             .author(member.getUser())
             .title(request.title())
             .content(request.content())
+            .letterType(request.letterType())
             .themeType(request.themeType())
             .status(LetterStatus.SUBMITTED)
             .submittedAt(now)

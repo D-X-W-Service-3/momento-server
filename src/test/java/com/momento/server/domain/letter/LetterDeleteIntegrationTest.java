@@ -12,6 +12,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.momento.server.domain.letter.entity.Letter;
 import com.momento.server.domain.letter.entity.LetterStatus;
+import com.momento.server.domain.letter.entity.LetterThemeType;
 import com.momento.server.domain.letter.repository.LetterRepository;
 import com.momento.server.domain.timecapsule.entity.CapsuleMember;
 import com.momento.server.domain.timecapsule.entity.CapsuleType;
@@ -433,7 +434,7 @@ class LetterDeleteIntegrationTest {
         .andExpect(jsonPath("$.data.letterId").value(first.getId()))
         .andExpect(jsonPath("$.data.title").value("다시 작성"))
         .andExpect(jsonPath("$.data.content").value("새 본문"))
-        .andExpect(jsonPath("$.data.themeType").value("COZY"))
+        .andExpect(jsonPath("$.data.themeType").value("PASTEL"))
         .andExpect(jsonPath("$.data.createdAt").exists())
         .andExpect(jsonPath("$.data.canDelete").value(true))
         .andExpect(jsonPath("$.data.status").doesNotExist())
@@ -472,7 +473,7 @@ class LetterDeleteIntegrationTest {
             .timeCapsule(capsule)
             .author(author)
             .content("본문")
-            .themeType("COZY")
+            .themeType(LetterThemeType.PASTEL)
             .status(status)
             .submittedAt(status == LetterStatus.SUBMITTED ? now().minusHours(1) : null)
             .build());
@@ -498,6 +499,7 @@ class LetterDeleteIntegrationTest {
         post("/v1/time-capsules/{id}/letters", capsule.getId())
             .header("Authorization", "Bearer " + token)
             .contentType(MediaType.APPLICATION_JSON)
-            .content("{\"title\":\"다시 작성\",\"content\":\"새 본문\",\"themeType\":\"COZY\"}"));
+            .content(
+                "{\"title\":\"다시 작성\",\"content\":\"새 본문\",\"themeType\":\"PASTEL\",\"letterType\":\"BIRTHDAY\"}"));
   }
 }
