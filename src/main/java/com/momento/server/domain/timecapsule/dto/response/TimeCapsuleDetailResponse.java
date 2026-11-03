@@ -8,10 +8,12 @@ import com.momento.server.domain.timecapsule.entity.VisibilityType;
 import com.momento.server.domain.timecapsule.repository.MemberPreview;
 import com.momento.server.domain.timecapsule.service.CapsulePermissions;
 import com.momento.server.domain.timecapsule.service.TimeCapsuleDetail;
+import com.momento.server.domain.user.entity.User;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.function.Function;
 
 @Schema(description = "타임캡슐 상세 응답")
 public record TimeCapsuleDetailResponse(
@@ -37,7 +39,11 @@ public record TimeCapsuleDetailResponse(
   /**
    * @param today 서버 시간대의 오늘. 호출하는 쪽이 {@code LocalDate.now(clock)} 으로 넘긴다
    */
-  public static TimeCapsuleDetailResponse of(TimeCapsuleDetail detail, LocalDate today) {
+  /**
+   * @param viewUrlOf 올린 프로필 사진의 key 를 조회 주소로 바꾼다
+   */
+  public static TimeCapsuleDetailResponse of(
+      TimeCapsuleDetail detail, LocalDate today, Function<String, String> viewUrlOf) {
     TimeCapsule capsule = detail.capsule();
     return new TimeCapsuleDetailResponse(
         capsule.getId(),
@@ -54,8 +60,8 @@ public record TimeCapsuleDetailResponse(
         detail.memberCount(),
         detail.letterCount(),
         detail.me().getRole(),
-        Members.from(detail.participants()),
-        Members.from(detail.recipients()),
+        Members.from(detail.participants(), viewUrlOf),
+        Members.from(detail.recipients(), viewUrlOf),
         Permissions.from(detail.permissions()));
   }
 
@@ -64,8 +70,10 @@ public record TimeCapsuleDetailResponse(
       @Schema(description = "전체 인원 수", example = "12") long count,
       @Schema(description = "앞에서부터 최대 5명. 방장이 맨 앞이고, 나머지는 참여한 순서다.") List<Preview> previews) {
 
-    static Members from(TimeCapsuleDetail.MemberGroup group) {
-      return new Members(group.count(), group.previews().stream().map(Preview::from).toList());
+    static Members from(TimeCapsuleDetail.MemberGroup group, Function<String, String> viewUrlOf) {
+      return new Members(
+          group.count(),
+          group.previews().stream().map(preview -> Preview.from(preview, viewUrlOf)).toList());
     }
   }
 
@@ -73,10 +81,16 @@ public record TimeCapsuleDetailResponse(
   public record Preview(
       @Schema(description = "회원 ID", example = "1") Long userId,
       @Schema(description = "닉네임", example = "유빈") String nickname,
-      @Schema(description = "프로필 이미지 URL", nullable = true) String profileImageUrl) {
+      @Schema(
+              description = "프로필 이미지 URL. 올린 사진이면 조회용 presigned URL, 아니면 카카오 프로필 이미지다.",
+              nullable = true)
+          String profileImageUrl) {
 
-    static Preview from(MemberPreview preview) {
-      return new Preview(preview.userId(), preview.nickname(), preview.profileImageUrl());
+    static Preview from(MemberPreview preview, Function<String, String> viewUrlOf) {
+      return new Preview(
+          preview.userId(),
+          preview.nickname(),
+          User.profileImageUrl(preview.profileImageKey(), preview.profileImageUrl(), viewUrlOf));
     }
   }
 

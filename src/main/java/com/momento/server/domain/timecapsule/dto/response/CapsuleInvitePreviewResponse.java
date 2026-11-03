@@ -8,6 +8,7 @@ import com.momento.server.domain.timecapsule.entity.TimeCapsule;
 import com.momento.server.domain.timecapsule.service.CapsuleInvitePreview;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.LocalDateTime;
+import java.util.function.Function;
 
 /** 초대 링크를 연 회원에게 보여줄 초대 화면. 참여자 · 수신자 미리보기는 캡슐 상세 화면과 같은 모양 · 같은 기준이다. */
 @Schema(description = "초대 미리보기 응답")
@@ -17,7 +18,11 @@ public record CapsuleInvitePreviewResponse(
         boolean alreadyJoined,
     @Schema(description = "캡슐 정보") CapsuleSummary capsule) {
 
-  public static CapsuleInvitePreviewResponse of(CapsuleInvitePreview preview) {
+  /**
+   * @param viewUrlOf 올린 프로필 사진의 key 를 조회 주소로 바꾼다
+   */
+  public static CapsuleInvitePreviewResponse of(
+      CapsuleInvitePreview preview, Function<String, String> viewUrlOf) {
     TimeCapsule capsule = preview.capsule();
     return new CapsuleInvitePreviewResponse(
         preview.invite().getTargetRole(),
@@ -32,8 +37,8 @@ public record CapsuleInvitePreviewResponse(
             capsule.getOpenAt(),
             preview.memberCount(),
             preview.letterCount(),
-            Members.from(preview.participants()),
-            Members.from(preview.recipients())));
+            Members.from(preview.participants(), viewUrlOf),
+            Members.from(preview.recipients(), viewUrlOf)));
   }
 
   @Schema(description = "초대 미리보기용 캡슐 요약")

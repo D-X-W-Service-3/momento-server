@@ -1,6 +1,7 @@
 package com.momento.server.domain.timecapsule;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.containsString;
 import static org.springframework.http.HttpHeaders.AUTHORIZATION;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -387,6 +388,24 @@ class CapsuleInviteIntegrationTest {
             jsonPath("$.data.capsule.participants.previews[1].userId").value(participant.getId()))
         .andExpect(jsonPath("$.data.capsule.recipients.count").value(1))
         .andExpect(jsonPath("$.data.capsule.recipients.previews[0].nickname").value("유빈"));
+  }
+
+  @Test
+  @DisplayName("초대 미리보기의 프로필 사진도 올린 사진이면 presigned URL 이다")
+  void previewShowsUploadedProfileImage() throws Exception {
+    String key = "profiles/" + owner.getId() + "/3f2b6c1e-8a4d-4f1b-9c3e-2d7a5b6c8e9f.jpg";
+    owner.changeProfileImage(key);
+    userRepository.save(owner);
+    String token = issue(ownerToken, capsule.getId(), "PARTICIPANT");
+    User viewer = saveUser("viewer-kakao-id", "서현");
+
+    mockMvc
+        .perform(
+            get("/v1/invites/{inviteToken}", token).header(AUTHORIZATION, bearer(tokenOf(viewer))))
+        .andExpect(status().isOk())
+        .andExpect(
+            jsonPath("$.data.capsule.participants.previews[0].profileImageUrl")
+                .value(containsString("/" + key + "?")));
   }
 
   @Test
