@@ -8,6 +8,7 @@ import com.momento.server.domain.user.dto.response.NicknameAvailabilityResponse;
 import com.momento.server.domain.user.dto.response.NotificationSettingsResponse;
 import com.momento.server.domain.user.entity.User;
 import com.momento.server.domain.user.service.UserService;
+import com.momento.server.global.common.storage.PresignedUrlProvider;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
@@ -17,19 +18,26 @@ public class UserFacade {
 
   private final UserService userService;
   private final TimeCapsuleListService timeCapsuleListService;
+  private final PresignedUrlProvider presignedUrlProvider;
 
   /** 활동 요약은 저장하지 않고 조회할 때 센다. 캡슐 기준은 타임캡슐 목록 조회의 탭별 개수와 같다. */
   public MyProfileResponse getMyProfile(Long userId) {
     User user = userService.getActiveUser(userId);
 
-    return MyProfileResponse.of(user, timeCapsuleListService.countMyCapsulesByStatus(userId));
+    return MyProfileResponse.of(
+        user,
+        timeCapsuleListService.countMyCapsulesByStatus(userId),
+        presignedUrlProvider::viewUrl);
   }
 
   /** 수정 후 조회와 같은 형태를 돌려준다. 프로필 설정 화면이 저장 뒤 다시 조회하지 않아도 되게 한다. */
   public MyProfileResponse updateMyProfile(Long userId, UserUpdateRequest request) {
     User user = userService.updateProfile(userId, request);
 
-    return MyProfileResponse.of(user, timeCapsuleListService.countMyCapsulesByStatus(userId));
+    return MyProfileResponse.of(
+        user,
+        timeCapsuleListService.countMyCapsulesByStatus(userId),
+        presignedUrlProvider::viewUrl);
   }
 
   public NicknameAvailabilityResponse checkNickname(Long userId, String nickname) {

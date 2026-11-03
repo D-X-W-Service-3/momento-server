@@ -10,7 +10,7 @@ import java.time.LocalDate;
 /**
  * 내 정보 수정 요청. 보낸 필드만 바꾸고, 보내지 않았거나 null 인 필드는 그대로 둔다.
  *
- * <p>문자열은 검증 전에 앞뒤 공백을 뺀다. 이메일 · 전화번호는 빈 문자열을 보내면 지운다. 생일은 지울 수 없다.
+ * <p>문자열은 검증 전에 앞뒤 공백을 뺀다. 이메일 · 전화번호 · 프로필 사진은 빈 문자열을 보내면 지운다. 생일은 지울 수 없다.
  */
 @Schema(description = "내 정보 수정 요청. 보낸 필드만 바꾼다.")
 public record UserUpdateRequest(
@@ -29,7 +29,13 @@ public record UserUpdateRequest(
         String email,
     @Schema(description = "전화번호. 010-1234-5678 형식. 빈 문자열을 보내면 지운다.", example = "010-1234-5678")
         @Pattern(regexp = "^$|^010-\\d{4}-\\d{4}$", message = "전화번호는 010-1234-5678 형식이어야 합니다.")
-        String phoneNumber) {
+        String phoneNumber,
+    @Schema(
+            description =
+                "프로필 사진 key. 이미지 업로드 URL 발급(target PROFILE)에서 받은 key 다. 빈 문자열을 보내면 사진을 지워 profileImageUrl 이"
+                    + " null 이 된다.",
+            example = "profiles/1/3f2b6c1e-8a4d-4f1b-9c3e-2d7a5b6c8e9f.jpg")
+        String profileImageKey) {
 
   public static final int NICKNAME_MIN_LENGTH = 2;
   public static final int NICKNAME_MAX_LENGTH = 20;
@@ -39,6 +45,7 @@ public record UserUpdateRequest(
     nickname = strip(nickname);
     email = strip(email);
     phoneNumber = strip(phoneNumber);
+    profileImageKey = strip(profileImageKey);
   }
 
   private static String strip(String value) {
