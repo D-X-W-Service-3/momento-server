@@ -23,12 +23,24 @@ public record NotificationListResponse(
   @Schema(name = "NotificationListItem", description = "알림 항목")
   public record Item(
       @Schema(description = "알림 ID", example = "101") Long notificationId,
-      @Schema(description = "알림 유형") NotificationType type,
+      @Schema(
+              description =
+                  "알림 유형. 누르면 이동할 화면을 정한다. CAPSULE_OPENED · CAPSULE_D_DAY · NEW_MEMBER → 캡슐 상세,"
+                      + " LETTER_DEADLINE → 그 캡슐의 내 편지, MEMORY_REMINDER → 추억 상세,"
+                      + " ANNIVERSARY_REMINDER → 기념일. LETTER_MILESTONE · IMAGE_GENERATED 는 아직 보내지 않는다.",
+              example = "CAPSULE_OPENED")
+          NotificationType type,
       @Schema(description = "알림 제목") String title,
       @Schema(description = "알림 내용") String content,
       @Schema(description = "읽음 여부") boolean isRead,
       @Schema(description = "생성 일시") LocalDateTime createdAt,
-      @Schema(description = "알림이 가리키는 리소스 ID", example = "12", nullable = true) Long referenceId) {
+      @Schema(
+              description =
+                  "이동할 대상의 ID. type 에 따라 캡슐 ID (CAPSULE_OPENED · CAPSULE_D_DAY · NEW_MEMBER ·"
+                      + " LETTER_DEADLINE), 추억 ID (MEMORY_REMINDER), 기념일 ID (ANNIVERSARY_REMINDER) 다.",
+              example = "21",
+              nullable = true)
+          Long referenceId) {
 
     public static Item from(Notification notification) {
       return new Item(
