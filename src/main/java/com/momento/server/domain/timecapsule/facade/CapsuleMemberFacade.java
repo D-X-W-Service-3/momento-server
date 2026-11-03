@@ -6,6 +6,7 @@ import com.momento.server.domain.timecapsule.service.CapsuleMemberList;
 import com.momento.server.domain.timecapsule.service.CapsuleMemberService;
 import com.momento.server.global.common.code.GlobalErrorCode;
 import com.momento.server.global.common.exception.ApiException;
+import com.momento.server.global.common.storage.PresignedUrlProvider;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
@@ -14,6 +15,7 @@ import org.springframework.stereotype.Component;
 public class CapsuleMemberFacade {
 
   private final CapsuleMemberService capsuleMemberService;
+  private final PresignedUrlProvider presignedUrlProvider;
 
   /**
    * {@code role} 은 필수지만 {@code @RequestParam} 을 필수로 두지 않고 여기서 확인한다. 필수로 두면 빠졌을 때 처리기가 없는 {@code
@@ -26,7 +28,8 @@ public class CapsuleMemberFacade {
     }
     CapsuleMemberList list = capsuleMemberService.getMembers(capsuleId, userId, role);
 
-    return CapsuleMemberListResponse.of(list.role(), list.members(), list.canManage());
+    return CapsuleMemberListResponse.of(
+        list.role(), list.members(), list.canManage(), presignedUrlProvider::viewUrl);
   }
 
   public void remove(Long capsuleId, Long userId, Long memberId) {

@@ -50,7 +50,7 @@ public record HomeResponse(
     }
   }
 
-  @Schema(description = "방문 기록 하루")
+  @Schema(name = "HomeDay", description = "방문 기록 하루")
   public record Day(
       @Schema(description = "날짜", example = "2026-10-29") LocalDate date,
       @Schema(description = "이 날 들렀는지") boolean visited) {}

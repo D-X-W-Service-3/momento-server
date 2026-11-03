@@ -5,6 +5,7 @@ import com.momento.server.domain.timecapsule.dto.response.CapsuleInvitePreviewRe
 import com.momento.server.domain.timecapsule.dto.response.CapsuleInviteReceivedListResponse;
 import com.momento.server.domain.timecapsule.dto.response.CapsuleInviteResponse;
 import com.momento.server.domain.timecapsule.service.CapsuleInviteService;
+import com.momento.server.global.common.storage.PresignedUrlProvider;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
@@ -13,6 +14,7 @@ import org.springframework.stereotype.Component;
 public class CapsuleInviteFacade {
 
   private final CapsuleInviteService capsuleInviteService;
+  private final PresignedUrlProvider presignedUrlProvider;
 
   public CapsuleInviteResponse issue(
       Long capsuleId, Long userId, CapsuleInviteCreateRequest request) {
@@ -25,7 +27,8 @@ public class CapsuleInviteFacade {
   }
 
   public CapsuleInvitePreviewResponse getPreview(String inviteToken, Long userId) {
-    return CapsuleInvitePreviewResponse.of(capsuleInviteService.getPreview(inviteToken, userId));
+    return CapsuleInvitePreviewResponse.of(
+        capsuleInviteService.getPreview(inviteToken, userId), presignedUrlProvider::viewUrl);
   }
 
   public void accept(String inviteToken, Long userId) {

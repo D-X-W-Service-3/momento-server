@@ -29,7 +29,7 @@ public interface CapsuleMemberRepository extends JpaRepository<CapsuleMember, Lo
   /** 상세 화면 미리보기. 방장을 맨 앞에 두고, 나머지는 참여한 순서다. 인원이 많아도 {@code limit} 명만 읽는다. */
   @Query(
       "select new com.momento.server.domain.timecapsule.repository.MemberPreview("
-          + "u.id, u.nickname, u.profileImageUrl)"
+          + "u.id, u.nickname, u.profileImageKey, u.profileImageUrl)"
           + " from CapsuleMember m join m.user u"
           + " where m.timeCapsule.id = :capsuleId and m.role in :roles"
           + " and m.status = com.momento.server.domain.timecapsule.entity.MemberStatus.ACTIVE"

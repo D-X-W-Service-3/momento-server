@@ -1,5 +1,7 @@
 package com.momento.server.domain.user.service;
 
+import com.momento.server.domain.image.entity.ImageTarget;
+import com.momento.server.domain.image.service.ImageKeys;
 import com.momento.server.domain.user.dto.request.NotificationSettingsUpdateRequest;
 import com.momento.server.domain.user.dto.request.UserUpdateRequest;
 import com.momento.server.domain.user.entity.User;
@@ -35,7 +37,10 @@ public class UserService {
   }
 
   /**
-   * 보낸 필드만 바꾼다. 이메일 · 전화번호는 빈 문자열이면 지운다.
+   * 보낸 필드만 바꾼다. 이메일 · 전화번호 · 프로필 사진은 빈 문자열이면 지운다.
+   *
+   * <p>프로필 사진은 이미지 업로드 URL 발급으로 내 경로에 만든 key 만 받는다. 아무 문자열이나 받으면 다른 회원이 올린 사진의 key 를 내 프로필에 붙여 그
+   * 사진을 볼 수 있게 된다.
    *
    * <p>닉네임은 저장 전에 다른 회원이 쓰는지 먼저 확인해 409 로 돌려준다. 다만 두 요청이 동시에 같은 닉네임으로 바꾸면 둘 다 확인을 통과하므로, 최종 판정은 DB
    * 의 닉네임 UNIQUE 다. {@code saveAndFlush} 로 위반을 이 자리에서 드러내 같은 409 로 바꾼다. 커밋 시점까지 미루면 트랜잭션 밖에서 터져 500
@@ -60,12 +65,26 @@ public class UserService {
     if (request.phoneNumber() != null) {
       user.updatePhoneNumber(emptyToNull(request.phoneNumber()));
     }
+    if (request.profileImageKey() != null) {
+      updateProfileImage(user, request.profileImageKey());
+    }
 
     try {
       return userRepository.saveAndFlush(user);
     } catch (DataIntegrityViolationException exception) {
       throw new ApiException(UserErrorCode.NICKNAME_DUPLICATED, exception);
     }
+  }
+
+  private void updateProfileImage(User user, String profileImageKey) {
+    if (profileImageKey.isEmpty()) {
+      user.removeProfileImage();
+      return;
+    }
+    if (!ImageKeys.isOwnedBy(ImageTarget.PROFILE, profileImageKey, user.getId())) {
+      throw new ApiException(UserErrorCode.INVALID_PROFILE_IMAGE_KEY);
+    }
+    user.changeProfileImage(profileImageKey);
   }
 
   /** 보낸 항목만 바꾼다. 알림 설정에는 UNIQUE 같은 제약이 없어 dirty checking 으로 저장한다. */

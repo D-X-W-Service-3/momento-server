@@ -23,7 +23,7 @@ public record MemoryDetailResponse(
     @Schema(description = "사진 목록. displayOrder 오름차순") List<Image> images,
     @Schema(description = "등록 일시") LocalDateTime createdAt) {
 
-  @Schema(description = "아카이브 사진 하나")
+  @Schema(name = "MemoryDetailImage", description = "아카이브 사진 하나")
   public record Image(
       @Schema(description = "사진 식별자", example = "11") Long imageId,
       @Schema(

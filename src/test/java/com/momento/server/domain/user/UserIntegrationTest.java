@@ -1,12 +1,16 @@
 package com.momento.server.domain.user;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.nullValue;
 import static org.springframework.http.HttpHeaders.AUTHORIZATION;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.momento.server.domain.letter.entity.Letter;
+import com.momento.server.domain.letter.entity.LetterStatus;
+import com.momento.server.domain.letter.repository.LetterRepository;
 import com.momento.server.domain.timecapsule.entity.CapsuleMember;
 import com.momento.server.domain.timecapsule.entity.CapsuleStatus;
 import com.momento.server.domain.timecapsule.entity.CapsuleType;
@@ -65,6 +69,7 @@ class UserIntegrationTest {
   @Autowired private TimeCapsuleRepository timeCapsuleRepository;
   @Autowired private CapsuleMemberRepository capsuleMemberRepository;
   @Autowired private UserService userService;
+  @Autowired private LetterRepository letterRepository;
 
   private User me;
 
@@ -133,12 +138,34 @@ class UserIntegrationTest {
   }
 
   @Test
-  @DisplayName("캡슐이 없으면 활동 요약은 모두 0 이다")
+  @DisplayName("쓴 편지 수는 내가 제출하고 삭제하지 않은 편지만 센다")
+  void countsWrittenLetters() throws Exception {
+    TimeCapsule first = saveCapsule(CapsuleStatus.WRITING, null);
+    TimeCapsule second = saveCapsule(CapsuleStatus.OPENED, null);
+    User other = userRepository.save(User.builder().kakaoId("user-other").nickname("모모").build());
+    saveLetter(first, me, LetterStatus.SUBMITTED);
+    saveLetter(second, me, LetterStatus.SUBMITTED);
+    saveLetter(saveCapsule(CapsuleStatus.WRITING, null), me, LetterStatus.DRAFT);
+    Letter deleted =
+        saveLetter(saveCapsule(CapsuleStatus.WRITING, null), me, LetterStatus.SUBMITTED);
+    deleted.delete(LocalDateTime.now());
+    letterRepository.save(deleted);
+    saveLetter(first, other, LetterStatus.SUBMITTED);
+
+    authorized(get("/v1/users/me"))
+        .andExpect(jsonPath("$.data.activity.writtenLetterCount").value(2));
+    patch("{\"nickname\": \"상래2\"}")
+        .andExpect(jsonPath("$.data.activity.writtenLetterCount").value(2));
+  }
+
+  @Test
+  @DisplayName("캡슐 · 편지가 없으면 활동 요약은 모두 0 이다")
   void emptyActivity() throws Exception {
     authorized(get("/v1/users/me"))
         .andExpect(jsonPath("$.data.activity.totalCapsuleCount").value(0))
         .andExpect(jsonPath("$.data.activity.beforeOpenCapsuleCount").value(0))
-        .andExpect(jsonPath("$.data.activity.openedCapsuleCount").value(0));
+        .andExpect(jsonPath("$.data.activity.openedCapsuleCount").value(0))
+        .andExpect(jsonPath("$.data.activity.writtenLetterCount").value(0));
   }
 
   @Test
@@ -202,6 +229,60 @@ class UserIntegrationTest {
         .andExpect(jsonPath("$.data.birthday").value("2001-03-14"));
   }
 
+  @Test
+  @DisplayName("내가 올린 프로필 사진 key 를 보내면 카카오 사진 대신 조회용 presigned URL 이 나간다")
+  void changesProfileImage() throws Exception {
+    String key = profileKey(me);
+
+    patch("{\"profileImageKey\": \"" + key + "\"}")
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.data.profileImageUrl").value(containsString("/" + key + "?")))
+        .andExpect(jsonPath("$.data.profileImageUrl").value(containsString("X-Amz-Signature=")));
+
+    assertThat(userRepository.findById(me.getId()).orElseThrow().getProfileImageKey())
+        .isEqualTo(key);
+    authorized(get("/v1/users/me"))
+        .andExpect(jsonPath("$.data.profileImageUrl").value(containsString("/" + key + "?")));
+  }
+
+  @Test
+  @DisplayName("프로필 사진에 빈 문자열을 보내면 올린 사진과 카카오 사진을 모두 지워 null 이 된다")
+  void blankRemovesProfileImage() throws Exception {
+    patch("{\"profileImageKey\": \"" + profileKey(me) + "\"}").andExpect(status().isOk());
+
+    patch("{\"profileImageKey\": \"\"}")
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.data.profileImageUrl").value(nullValue()));
+
+    User saved = userRepository.findById(me.getId()).orElseThrow();
+    assertThat(saved.getProfileImageKey()).isNull();
+    assertThat(saved.getProfileImageUrl()).isNull();
+  }
+
+  @ParameterizedTest(name = "{0}")
+  @ValueSource(
+      strings = {
+        "memories/{me}/3f2b6c1e-8a4d-4f1b-9c3e-2d7a5b6c8e9f.jpg",
+        "profiles/{other}/3f2b6c1e-8a4d-4f1b-9c3e-2d7a5b6c8e9f.jpg",
+        "profiles/{me}/not-a-uuid.jpg",
+        "https://example.com/a.jpg"
+      })
+  @DisplayName("내가 발급받은 프로필 사진 key 가 아니면 400 이고 아무것도 바꾸지 않는다")
+  void rejectsForeignProfileImageKey(String template) throws Exception {
+    String key =
+        template
+            .replace("{me}", String.valueOf(me.getId()))
+            .replace("{other}", String.valueOf(me.getId() + 1));
+
+    patch("{\"nickname\": \"모모\", \"profileImageKey\": \"" + key + "\"}")
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.code").value("INVALID_PROFILE_IMAGE_KEY"));
+
+    User saved = userRepository.findById(me.getId()).orElseThrow();
+    assertThat(saved.getProfileImageKey()).isNull();
+    assertThat(saved.getNickname()).isEqualTo("상래");
+  }
+
   @ParameterizedTest(name = "{0}")
   @CsvSource(
       delimiter = '|',
@@ -249,7 +330,7 @@ class UserIntegrationTest {
   @DisplayName("두 회원이 동시에 같은 닉네임으로 바꾸면 한 명만 성공하고 나머지는 409 다")
   void concurrentNicknameChange() throws Exception {
     User other = userRepository.save(User.builder().kakaoId("user-other").nickname("유빈").build());
-    UserUpdateRequest request = new UserUpdateRequest("모모", null, null, null);
+    UserUpdateRequest request = new UserUpdateRequest("모모", null, null, null, null);
     CountDownLatch start = new CountDownLatch(1);
     ExecutorService executor = Executors.newFixedThreadPool(2);
 
@@ -349,6 +430,10 @@ class UserIntegrationTest {
         .andExpect(status().isUnauthorized());
   }
 
+  private static String profileKey(User user) {
+    return "profiles/" + user.getId() + "/3f2b6c1e-8a4d-4f1b-9c3e-2d7a5b6c8e9f.jpg";
+  }
+
   private ResultActions patch(String body) throws Exception {
     return authorized(
         MockMvcRequestBuilders.patch("/v1/users/me")
@@ -382,6 +467,11 @@ class UserIntegrationTest {
             .build());
   }
 
+  private Letter saveLetter(TimeCapsule capsule, User author, LetterStatus status) {
+    return letterRepository.save(
+        Letter.builder().timeCapsule(capsule).author(author).content("편지").status(status).build());
+  }
+
   private void join(TimeCapsule capsule, MemberStatus status) {
     capsuleMemberRepository.save(
         CapsuleMember.builder()
@@ -394,6 +484,7 @@ class UserIntegrationTest {
   }
 
   private void cleanUp() {
+    letterRepository.deleteAllInBatch();
     capsuleMemberRepository.deleteAllInBatch();
     timeCapsuleRepository.deleteAllInBatch();
     userRepository.deleteAllInBatch();

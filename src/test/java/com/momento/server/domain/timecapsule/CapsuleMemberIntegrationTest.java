@@ -2,6 +2,7 @@ package com.momento.server.domain.timecapsule;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.contains;
+import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.hasSize;
 import static org.springframework.http.HttpHeaders.AUTHORIZATION;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -423,6 +424,22 @@ class CapsuleMemberIntegrationTest {
             .content("편지")
             .status(letterStatus)
             .build());
+  }
+
+  @Test
+  @DisplayName("멤버 목록의 프로필 사진은 올린 사진이면 presigned URL 이다")
+  void uploadedProfileImage() throws Exception {
+    String key = "profiles/" + owner.getId() + "/3f2b6c1e-8a4d-4f1b-9c3e-2d7a5b6c8e9f.jpg";
+    owner.changeProfileImage(key);
+    userRepository.save(owner);
+
+    getMembers(owner, "PARTICIPANT")
+        .andExpect(status().isOk())
+        .andExpect(
+            jsonPath("$.data.members[0].profileImageUrl").value(containsString("/" + key + "?")))
+        .andExpect(
+            jsonPath("$.data.members[0].profileImageUrl")
+                .value(containsString("X-Amz-Signature=")));
   }
 
   private ResultActions getMembers(User user, String role) throws Exception {
