@@ -91,11 +91,13 @@ class UserUpdateRequestTest {
   @DisplayName("활동 요약은 공개 전 = 작성 중 + 잠김, 전체 = 공개 전 + 공개됨 이고 없는 상태는 0 이다")
   void activityCounts() {
     MyProfileResponse.Activity activity =
-        MyProfileResponse.Activity.of(Map.of(CapsuleStatus.WRITING, 2L, CapsuleStatus.OPENED, 3L));
+        MyProfileResponse.Activity.of(
+            Map.of(CapsuleStatus.WRITING, 2L, CapsuleStatus.OPENED, 3L), 7);
 
     assertThat(activity.beforeOpenCapsuleCount()).isEqualTo(2);
     assertThat(activity.openedCapsuleCount()).isEqualTo(3);
     assertThat(activity.totalCapsuleCount()).isEqualTo(5);
+    assertThat(activity.writtenLetterCount()).isEqualTo(7);
   }
 
   private Set<ConstraintViolation<UserUpdateRequest>> validate(UserUpdateRequest request) {

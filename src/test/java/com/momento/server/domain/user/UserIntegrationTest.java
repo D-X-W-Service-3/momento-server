@@ -8,6 +8,9 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.momento.server.domain.letter.entity.Letter;
+import com.momento.server.domain.letter.entity.LetterStatus;
+import com.momento.server.domain.letter.repository.LetterRepository;
 import com.momento.server.domain.timecapsule.entity.CapsuleMember;
 import com.momento.server.domain.timecapsule.entity.CapsuleStatus;
 import com.momento.server.domain.timecapsule.entity.CapsuleType;
@@ -66,6 +69,7 @@ class UserIntegrationTest {
   @Autowired private TimeCapsuleRepository timeCapsuleRepository;
   @Autowired private CapsuleMemberRepository capsuleMemberRepository;
   @Autowired private UserService userService;
+  @Autowired private LetterRepository letterRepository;
 
   private User me;
 
@@ -134,12 +138,34 @@ class UserIntegrationTest {
   }
 
   @Test
-  @DisplayName("캡슐이 없으면 활동 요약은 모두 0 이다")
+  @DisplayName("쓴 편지 수는 내가 제출하고 삭제하지 않은 편지만 센다")
+  void countsWrittenLetters() throws Exception {
+    TimeCapsule first = saveCapsule(CapsuleStatus.WRITING, null);
+    TimeCapsule second = saveCapsule(CapsuleStatus.OPENED, null);
+    User other = userRepository.save(User.builder().kakaoId("user-other").nickname("모모").build());
+    saveLetter(first, me, LetterStatus.SUBMITTED);
+    saveLetter(second, me, LetterStatus.SUBMITTED);
+    saveLetter(saveCapsule(CapsuleStatus.WRITING, null), me, LetterStatus.DRAFT);
+    Letter deleted =
+        saveLetter(saveCapsule(CapsuleStatus.WRITING, null), me, LetterStatus.SUBMITTED);
+    deleted.delete(LocalDateTime.now());
+    letterRepository.save(deleted);
+    saveLetter(first, other, LetterStatus.SUBMITTED);
+
+    authorized(get("/v1/users/me"))
+        .andExpect(jsonPath("$.data.activity.writtenLetterCount").value(2));
+    patch("{\"nickname\": \"상래2\"}")
+        .andExpect(jsonPath("$.data.activity.writtenLetterCount").value(2));
+  }
+
+  @Test
+  @DisplayName("캡슐 · 편지가 없으면 활동 요약은 모두 0 이다")
   void emptyActivity() throws Exception {
     authorized(get("/v1/users/me"))
         .andExpect(jsonPath("$.data.activity.totalCapsuleCount").value(0))
         .andExpect(jsonPath("$.data.activity.beforeOpenCapsuleCount").value(0))
-        .andExpect(jsonPath("$.data.activity.openedCapsuleCount").value(0));
+        .andExpect(jsonPath("$.data.activity.openedCapsuleCount").value(0))
+        .andExpect(jsonPath("$.data.activity.writtenLetterCount").value(0));
   }
 
   @Test
@@ -441,6 +467,11 @@ class UserIntegrationTest {
             .build());
   }
 
+  private Letter saveLetter(TimeCapsule capsule, User author, LetterStatus status) {
+    return letterRepository.save(
+        Letter.builder().timeCapsule(capsule).author(author).content("편지").status(status).build());
+  }
+
   private void join(TimeCapsule capsule, MemberStatus status) {
     capsuleMemberRepository.save(
         CapsuleMember.builder()
@@ -453,6 +484,7 @@ class UserIntegrationTest {
   }
 
   private void cleanUp() {
+    letterRepository.deleteAllInBatch();
     capsuleMemberRepository.deleteAllInBatch();
     timeCapsuleRepository.deleteAllInBatch();
     userRepository.deleteAllInBatch();

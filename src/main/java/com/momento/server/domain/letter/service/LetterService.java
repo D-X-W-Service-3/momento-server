@@ -87,4 +87,10 @@ public class LetterService {
             .orElseThrow(() -> new ApiException(LetterErrorCode.LETTER_NOT_FOUND));
     return new LetterDetail(letter, capsule.isLetterWritingOpen(LocalDateTime.now(clock)));
   }
+
+  /** 내가 쓴 편지 수. 제출하고 삭제하지 않은 편지만 센다. */
+  public long countMyLetters(Long userId) {
+    return letterRepository.countByAuthorIdAndStatusAndDeletedAtIsNull(
+        userId, LetterStatus.SUBMITTED);
+  }
 }
