@@ -1,6 +1,7 @@
 package com.momento.server.domain.letter.repository;
 
 import com.momento.server.domain.letter.entity.Letter;
+import com.momento.server.domain.letter.entity.LetterStatus;
 import jakarta.persistence.LockModeType;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -47,6 +48,9 @@ public interface LetterRepository extends JpaRepository<Letter, Long> {
    * letterCount} 는 제출된 편지만 세므로 기준이 다르다.
    */
   long countByTimeCapsuleIdAndDeletedAtIsNull(Long capsuleId);
+
+  /** 회원이 쓴 편지 수. 마이페이지 활동 요약에 쓴다. 상세 · 카드의 {@code letterCount} 처럼 제출된 편지만 센다. */
+  long countByAuthorIdAndStatusAndDeletedAtIsNull(Long authorId, LetterStatus status);
 
   /** 캡슐 잠금 이후 호출한다. MySQL REPEATABLE READ에서도 오래된 스냅샷으로 중복을 놓치지 않는 현재 읽기다. */
   @Lock(LockModeType.PESSIMISTIC_WRITE)
