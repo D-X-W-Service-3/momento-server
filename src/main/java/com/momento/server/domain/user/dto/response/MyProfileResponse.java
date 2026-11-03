@@ -21,10 +21,14 @@ public record MyProfileResponse(
     @Schema(description = "활동 요약. 조회할 때 센다.") Activity activity) {
 
   /**
+   * @param writtenLetterCount 내가 쓴 편지 수
    * @param viewUrlOf 올린 프로필 사진의 key 를 조회 주소로 바꾼다
    */
   public static MyProfileResponse of(
-      User user, Map<CapsuleStatus, Long> capsulesByStatus, Function<String, String> viewUrlOf) {
+      User user,
+      Map<CapsuleStatus, Long> capsulesByStatus,
+      long writtenLetterCount,
+      Function<String, String> viewUrlOf) {
     return new MyProfileResponse(
         user.getId(),
         user.getNickname(),
@@ -32,24 +36,29 @@ public record MyProfileResponse(
         user.getEmail(),
         user.getBirthday(),
         user.getPhoneNumber(),
-        Activity.of(capsulesByStatus));
+        Activity.of(capsulesByStatus, writtenLetterCount));
   }
 
-  /** 캡슐 기준은 타임캡슐 목록 조회와 같다(내가 속한, 삭제되지 않은 캡슐). */
+  /**
+   * 캡슐 기준은 타임캡슐 목록 조회와 같다(내가 속한, 삭제되지 않은 캡슐). 편지 기준은 캡슐 상세 · 카드의 {@code letterCount} 와 같다(제출하고 삭제하지
+   * 않은 편지).
+   */
   @Schema(description = "활동 요약")
   public record Activity(
       @Schema(description = "전체 캡슐 수", example = "12") long totalCapsuleCount,
       @Schema(description = "공개 전 캡슐 수 (WRITING + LOCKED)", example = "9")
           long beforeOpenCapsuleCount,
-      @Schema(description = "공개된 캡슐 수", example = "3") long openedCapsuleCount) {
+      @Schema(description = "공개된 캡슐 수", example = "3") long openedCapsuleCount,
+      @Schema(description = "내가 쓴 편지 수. 제출하고 삭제하지 않은 편지만 센다.", example = "7")
+          long writtenLetterCount) {
 
     /** 캡슐이 없는 상태는 0 으로 센다. */
-    public static Activity of(Map<CapsuleStatus, Long> capsulesByStatus) {
+    public static Activity of(Map<CapsuleStatus, Long> capsulesByStatus, long writtenLetterCount) {
       long beforeOpen =
           capsulesByStatus.getOrDefault(CapsuleStatus.WRITING, 0L)
               + capsulesByStatus.getOrDefault(CapsuleStatus.LOCKED, 0L);
       long opened = capsulesByStatus.getOrDefault(CapsuleStatus.OPENED, 0L);
-      return new Activity(beforeOpen + opened, beforeOpen, opened);
+      return new Activity(beforeOpen + opened, beforeOpen, opened, writtenLetterCount);
     }
   }
 }
