@@ -10,6 +10,7 @@ import org.springframework.http.HttpStatus;
 public enum UserErrorCode implements ErrorCode {
   USER_NOT_FOUND("사용자를 찾을 수 없습니다.", HttpStatus.NOT_FOUND),
   NICKNAME_DUPLICATED("이미 사용 중인 닉네임입니다.", HttpStatus.CONFLICT),
+  INVALID_PROFILE_IMAGE_KEY("업로드 URL 을 발급받은 프로필 사진이 아닙니다.", HttpStatus.BAD_REQUEST),
   ;
 
   private final String message;

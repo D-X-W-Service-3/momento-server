@@ -20,6 +20,7 @@ import com.momento.server.domain.user.entity.User;
 import com.momento.server.domain.user.service.UserService;
 import com.momento.server.global.common.code.GlobalErrorCode;
 import com.momento.server.global.common.exception.ApiException;
+import com.momento.server.global.common.storage.PresignedUrlProvider;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.util.List;
@@ -35,6 +36,7 @@ public class TimeCapsuleFacade {
   private final UserService userService;
   private final TimeCapsuleService timeCapsuleService;
   private final TimeCapsuleListService timeCapsuleListService;
+  private final PresignedUrlProvider presignedUrlProvider;
   private final Clock clock;
 
   public TimeCapsuleCreateResponse create(Long userId, TimeCapsuleCreateRequest request) {
@@ -58,7 +60,8 @@ public class TimeCapsuleFacade {
   public TimeCapsuleDetailResponse getDetail(Long capsuleId, Long userId) {
     TimeCapsuleDetail detail = timeCapsuleService.getDetail(capsuleId, userId);
 
-    return TimeCapsuleDetailResponse.of(detail, LocalDate.now(clock));
+    return TimeCapsuleDetailResponse.of(
+        detail, LocalDate.now(clock), presignedUrlProvider::viewUrl);
   }
 
   /**

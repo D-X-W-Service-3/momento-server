@@ -1,6 +1,7 @@
 package com.momento.server.domain.timecapsule;
 
 import static org.hamcrest.Matchers.contains;
+import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.nullValue;
 import static org.mockito.BDDMockito.given;
@@ -253,6 +254,37 @@ class TimeCapsuleDetailIntegrationTest {
         .andExpect(jsonPath("$.data.permissions.canInvite").value(false))
         .andExpect(jsonPath("$.data.permissions.canManage").value(false))
         .andExpect(jsonPath("$.data.permissions.canDelete").value(false));
+  }
+
+  @Test
+  @DisplayName("멤버 미리보기의 프로필 사진은 올린 사진이면 presigned URL, 아니면 카카오 사진 URL 이다")
+  void previewProfileImages() throws Exception {
+    TimeCapsule capsule = saveCapsule(CapsuleStatus.WRITING, VisibilityType.ALL_MEMBERS);
+    String key = "profiles/" + owner.getId() + "/3f2b6c1e-8a4d-4f1b-9c3e-2d7a5b6c8e9f.jpg";
+    owner.changeProfileImage(key);
+    userRepository.save(owner);
+    join(capsule, owner, MemberRole.OWNER, 1);
+    join(
+        capsule,
+        userRepository.save(
+            User.builder()
+                .kakaoId("detail-kakao")
+                .nickname("카카오")
+                .profileImageUrl("https://k.kakaocdn.net/dn/profile.jpg")
+                .build()),
+        MemberRole.PARTICIPANT,
+        0);
+
+    detail(capsule, owner)
+        .andExpect(
+            jsonPath("$.data.participants.previews[0].profileImageUrl")
+                .value(containsString("/" + key + "?")))
+        .andExpect(
+            jsonPath("$.data.participants.previews[0].profileImageUrl")
+                .value(containsString("X-Amz-Signature=")))
+        .andExpect(
+            jsonPath("$.data.participants.previews[1].profileImageUrl")
+                .value("https://k.kakaocdn.net/dn/profile.jpg"));
   }
 
   private ResultActions detail(TimeCapsule capsule, User user) throws Exception {

@@ -1,6 +1,7 @@
 package com.momento.server.domain.user;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.nullValue;
 import static org.springframework.http.HttpHeaders.AUTHORIZATION;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -202,6 +203,60 @@ class UserIntegrationTest {
         .andExpect(jsonPath("$.data.birthday").value("2001-03-14"));
   }
 
+  @Test
+  @DisplayName("내가 올린 프로필 사진 key 를 보내면 카카오 사진 대신 조회용 presigned URL 이 나간다")
+  void changesProfileImage() throws Exception {
+    String key = profileKey(me);
+
+    patch("{\"profileImageKey\": \"" + key + "\"}")
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.data.profileImageUrl").value(containsString("/" + key + "?")))
+        .andExpect(jsonPath("$.data.profileImageUrl").value(containsString("X-Amz-Signature=")));
+
+    assertThat(userRepository.findById(me.getId()).orElseThrow().getProfileImageKey())
+        .isEqualTo(key);
+    authorized(get("/v1/users/me"))
+        .andExpect(jsonPath("$.data.profileImageUrl").value(containsString("/" + key + "?")));
+  }
+
+  @Test
+  @DisplayName("프로필 사진에 빈 문자열을 보내면 올린 사진과 카카오 사진을 모두 지워 null 이 된다")
+  void blankRemovesProfileImage() throws Exception {
+    patch("{\"profileImageKey\": \"" + profileKey(me) + "\"}").andExpect(status().isOk());
+
+    patch("{\"profileImageKey\": \"\"}")
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.data.profileImageUrl").value(nullValue()));
+
+    User saved = userRepository.findById(me.getId()).orElseThrow();
+    assertThat(saved.getProfileImageKey()).isNull();
+    assertThat(saved.getProfileImageUrl()).isNull();
+  }
+
+  @ParameterizedTest(name = "{0}")
+  @ValueSource(
+      strings = {
+        "memories/{me}/3f2b6c1e-8a4d-4f1b-9c3e-2d7a5b6c8e9f.jpg",
+        "profiles/{other}/3f2b6c1e-8a4d-4f1b-9c3e-2d7a5b6c8e9f.jpg",
+        "profiles/{me}/not-a-uuid.jpg",
+        "https://example.com/a.jpg"
+      })
+  @DisplayName("내가 발급받은 프로필 사진 key 가 아니면 400 이고 아무것도 바꾸지 않는다")
+  void rejectsForeignProfileImageKey(String template) throws Exception {
+    String key =
+        template
+            .replace("{me}", String.valueOf(me.getId()))
+            .replace("{other}", String.valueOf(me.getId() + 1));
+
+    patch("{\"nickname\": \"모모\", \"profileImageKey\": \"" + key + "\"}")
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.code").value("INVALID_PROFILE_IMAGE_KEY"));
+
+    User saved = userRepository.findById(me.getId()).orElseThrow();
+    assertThat(saved.getProfileImageKey()).isNull();
+    assertThat(saved.getNickname()).isEqualTo("상래");
+  }
+
   @ParameterizedTest(name = "{0}")
   @CsvSource(
       delimiter = '|',
@@ -249,7 +304,7 @@ class UserIntegrationTest {
   @DisplayName("두 회원이 동시에 같은 닉네임으로 바꾸면 한 명만 성공하고 나머지는 409 다")
   void concurrentNicknameChange() throws Exception {
     User other = userRepository.save(User.builder().kakaoId("user-other").nickname("유빈").build());
-    UserUpdateRequest request = new UserUpdateRequest("모모", null, null, null);
+    UserUpdateRequest request = new UserUpdateRequest("모모", null, null, null, null);
     CountDownLatch start = new CountDownLatch(1);
     ExecutorService executor = Executors.newFixedThreadPool(2);
 
@@ -347,6 +402,10 @@ class UserIntegrationTest {
     mockMvc
         .perform(get("/v1/users/nickname/availability").param("nickname", "모모"))
         .andExpect(status().isUnauthorized());
+  }
+
+  private static String profileKey(User user) {
+    return "profiles/" + user.getId() + "/3f2b6c1e-8a4d-4f1b-9c3e-2d7a5b6c8e9f.jpg";
   }
 
   private ResultActions patch(String body) throws Exception {
