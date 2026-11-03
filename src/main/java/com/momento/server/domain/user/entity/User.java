@@ -10,6 +10,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.function.Function;
 import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -37,8 +38,13 @@ public class User extends BaseTimeEntity {
   @Column(name = "nickname", nullable = false, unique = true, length = 30)
   private String nickname;
 
+  /** 가입할 때 받은 카카오 프로필 사진 URL. */
   @Column(name = "profile_image_url", length = 500)
   private String profileImageUrl;
+
+  /** 회원이 올린 프로필 사진의 S3 key. 있으면 {@link #profileImageUrl} 대신 보인다. */
+  @Column(name = "profile_image_key", length = 255)
+  private String profileImageKey;
 
   @Column(name = "birthday")
   private LocalDate birthday;
@@ -89,5 +95,31 @@ public class User extends BaseTimeEntity {
   /** null 이면 지운다. */
   public void updatePhoneNumber(String phoneNumber) {
     this.phoneNumber = phoneNumber;
+  }
+
+  public void changeProfileImage(String profileImageKey) {
+    this.profileImageKey = profileImageKey;
+  }
+
+  /** 올린 사진과 카카오 사진을 모두 지운다. 화면에는 기본 이미지가 보인다. */
+  public void removeProfileImage() {
+    this.profileImageKey = null;
+    this.profileImageUrl = null;
+  }
+
+  /** 화면에 보일 프로필 사진 주소. {@link #profileImageUrl(String, String, Function)} 과 같다. */
+  public String profileImageUrl(Function<String, String> viewUrlOf) {
+    return profileImageUrl(profileImageKey, profileImageUrl, viewUrlOf);
+  }
+
+  /**
+   * 올린 사진이 있으면 그 조회 주소, 없으면 카카오 사진 URL, 둘 다 없으면 null 이다. 회원 엔티티 없이 두 값만 조회한 경우(멤버 미리보기)에도 같은 규칙을
+   * 쓰려고 static 으로 둔다.
+   *
+   * @param viewUrlOf 올린 사진의 key 를 조회 주소로 바꾼다
+   */
+  public static String profileImageUrl(
+      String profileImageKey, String kakaoProfileImageUrl, Function<String, String> viewUrlOf) {
+    return profileImageKey != null ? viewUrlOf.apply(profileImageKey) : kakaoProfileImageUrl;
   }
 }
