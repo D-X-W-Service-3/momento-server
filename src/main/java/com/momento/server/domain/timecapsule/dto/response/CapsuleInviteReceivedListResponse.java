@@ -14,7 +14,7 @@ public record CapsuleInviteReceivedListResponse(
     return new CapsuleInviteReceivedListResponse(received.stream().map(Item::from).toList());
   }
 
-  @Schema(description = "받은 초대 한 건")
+  @Schema(name = "CapsuleInviteReceivedListItem", description = "받은 초대 한 건")
   public record Item(
       @Schema(description = "초대 토큰. 미리보기·수락·거절에 쓴다", example = "b7d3f1e2a9c84d6f")
           String inviteToken,
