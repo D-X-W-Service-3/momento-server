@@ -20,7 +20,7 @@ public record NotificationListResponse(
     return new NotificationListResponse(unreadCount, items, nextCursor, hasNext);
   }
 
-  @Schema(description = "알림 항목")
+  @Schema(name = "NotificationListItem", description = "알림 항목")
   public record Item(
       @Schema(description = "알림 ID", example = "101") Long notificationId,
       @Schema(description = "알림 유형") NotificationType type,

@@ -16,7 +16,7 @@ public record TimeCapsuleListResponse(
         String nextCursor,
     @Schema(description = "다음 페이지 존재 여부") boolean hasNext) {
 
-  @Schema(description = "탭별 개수")
+  @Schema(name = "TimeCapsuleListCounts", description = "탭별 개수")
   public record Counts(
       @Schema(description = "전체. 세 탭의 합이다.", example = "32") long all,
       @Schema(description = "개봉 가능", example = "8") long opened,

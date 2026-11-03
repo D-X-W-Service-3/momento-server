@@ -14,6 +14,7 @@ public record PublicLetterListResponse(List<Item> letters) {
     return new PublicLetterListResponse(letters.stream().map(Item::from).toList());
   }
 
+  @Schema(name = "PublicLetterListItem", description = "공개된 편지 하나")
   @JsonInclude(JsonInclude.Include.ALWAYS)
   public record Item(
       Long letterId,

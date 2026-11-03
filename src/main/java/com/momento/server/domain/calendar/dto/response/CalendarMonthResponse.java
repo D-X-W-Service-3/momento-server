@@ -26,7 +26,7 @@ public record CalendarMonthResponse(
     return new CalendarMonthResponse(year, month, counts, days);
   }
 
-  @Schema(description = "종류별 개수")
+  @Schema(name = "CalendarMonthCounts", description = "종류별 개수")
   public record Counts(
       @Schema(description = "전체. 세 종류의 합이다.", example = "32") long all,
       @Schema(description = "캡슐. 타임캡슐 목록의 전체 개수와 같다.", example = "8") long capsule,
@@ -38,7 +38,7 @@ public record CalendarMonthResponse(
     }
   }
 
-  @Schema(description = "일정이 있는 날짜")
+  @Schema(name = "CalendarMonthDay", description = "일정이 있는 날짜")
   public record Day(
       @Schema(description = "날짜", example = "2026-08-12") LocalDate date,
       @Schema(description = "그 날 있는 종류. CAPSULE · ANNIVERSARY · MEMORY 순이다.")

@@ -15,7 +15,7 @@ import java.util.function.Function;
 public record ReceivedMemoryListResponse(
     @Schema(description = "받은 아카이브 목록. 받은 순") List<Item> memories) {
 
-  @Schema(description = "받은 아카이브 하나")
+  @Schema(name = "ReceivedMemoryListItem", description = "받은 아카이브 하나")
   public record Item(
       @Schema(description = "받은 아카이브 식별자. 저장 · 닫기에 쓴다.", example = "4") Long receivedMemoryId,
       @Schema(description = "공유한 사람 닉네임", example = "유빈") String senderNickname,
@@ -25,7 +25,7 @@ public record ReceivedMemoryListResponse(
       @Schema(description = "사진 목록. displayOrder 오름차순") List<Image> images) {}
 
   /** 아카이브 상세의 사진에서 imageKey 를 뺀 형태다. 받은 사람은 수정할 수 없어 key 가 필요 없다. */
-  @Schema(description = "받은 아카이브 사진 하나")
+  @Schema(name = "ReceivedMemoryListImage", description = "받은 아카이브 사진 하나")
   public record Image(
       @Schema(description = "사진 식별자", example = "11") Long imageId,
       @Schema(description = "사진 URL(presigned GET, 1시간)") String imageUrl,
