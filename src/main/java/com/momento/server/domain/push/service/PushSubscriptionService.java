@@ -4,6 +4,7 @@ import com.momento.server.domain.push.entity.PushSubscription;
 import com.momento.server.domain.push.repository.PushSubscriptionRepository;
 import com.momento.server.domain.user.entity.User;
 import com.momento.server.domain.user.repository.UserRepository;
+import java.util.Collection;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -45,5 +46,11 @@ public class PushSubscriptionService {
   @Transactional
   public void unsubscribeAll(Long userId) {
     pushSubscriptionRepository.deleteAllByUserId(userId);
+  }
+
+  /** 푸시 서비스가 사라졌다고 응답한 구독(404 · 410)을 지운다. */
+  @Transactional
+  public void removeGone(Collection<String> endpoints) {
+    pushSubscriptionRepository.deleteAllByEndpoints(endpoints);
   }
 }
