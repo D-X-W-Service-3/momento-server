@@ -97,6 +97,16 @@ CREATE TABLE `user_visits` (
 	`created_at`	DATETIME(6)	NOT NULL	COMMENT '그날 처음 방문한 일시'
 );
 
+CREATE TABLE `push_subscriptions` (
+	`id`	BIGINT	NOT NULL	AUTO_INCREMENT	COMMENT '웹 푸시 구독 ID',
+	`user_id`	BIGINT	NOT NULL	COMMENT '구독한 회원 ID',
+	`endpoint`	VARCHAR(768)	NOT NULL	COMMENT '푸시 서비스 주소. 브라우저가 구독마다 발급한다',
+	`p256dh`	VARCHAR(255)	NOT NULL	COMMENT '페이로드 암호화용 브라우저 공개키 (base64url)',
+	`auth`	VARCHAR(255)	NOT NULL	COMMENT '페이로드 암호화용 인증 비밀값 (base64url)',
+	`created_at`	DATETIME(6)	NOT NULL	COMMENT '처음 구독한 일시',
+	`updated_at`	DATETIME(6)	NOT NULL	COMMENT '마지막으로 다시 구독한 일시'
+);
+
 CREATE TABLE `received_memories` (
 	`id`	BIGINT	NOT NULL	AUTO_INCREMENT	COMMENT '받은 아카이브 ID',
 	`memory_id`	BIGINT	NOT NULL	COMMENT '공유된 원본 추억 ID',
@@ -210,6 +220,15 @@ ALTER TABLE `user_visits` ADD CONSTRAINT `PK_USER_VISITS` PRIMARY KEY (
 ALTER TABLE `user_visits` ADD CONSTRAINT `UK_USER_VISITS_USER_DATE` UNIQUE (
 	`user_id`,
 	`visit_date`
+);
+
+ALTER TABLE `push_subscriptions` ADD CONSTRAINT `PK_PUSH_SUBSCRIPTIONS` PRIMARY KEY (
+	`id`
+);
+
+-- 웹 푸시 구독은 endpoint 마다 한 행이다. 다른 계정으로 다시 구독하면 소유자를 바꾼다 (이슈 #106)
+ALTER TABLE `push_subscriptions` ADD CONSTRAINT `UK_PUSH_SUBSCRIPTIONS_ENDPOINT` UNIQUE (
+	`endpoint`
 );
 
 ALTER TABLE `received_memories` ADD CONSTRAINT `PK_RECEIVED_MEMORIES` PRIMARY KEY (
