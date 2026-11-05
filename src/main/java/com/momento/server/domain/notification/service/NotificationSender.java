@@ -13,16 +13,18 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-/** 알림을 저장한다. 받을 회원을 고르는 일(설정 · 탈퇴 확인)은 부르는 쪽의 조회가 이미 했다. */
+/** 알림을 저장하고 {@link NotificationsSavedEvent} 를 발행한다. 받을 회원을 고르는 일(설정 · 탈퇴 확인)은 부르는 쪽의 조회가 이미 했다. */
 @Service
 @RequiredArgsConstructor
 public class NotificationSender {
 
   private final NotificationRepository notificationRepository;
   private final UserRepository userRepository;
+  private final ApplicationEventPublisher eventPublisher;
 
   /**
    * 중복 방지 키가 있는 알림 중 이미 보낸 것은 건너뛰고 나머지를 저장한다. 같은 묶음 안에 같은 (회원, 키)가 둘이면 하나만 남긴다.
@@ -56,6 +58,9 @@ public class NotificationSender {
             .map(draft -> draft.toEntity(userRepository.getReferenceById(draft.userId())))
             .toList();
     notificationRepository.saveAll(notifications);
+    if (!notifications.isEmpty()) {
+      eventPublisher.publishEvent(NotificationsSavedEvent.of(notifications));
+    }
     return notifications.size();
   }
 

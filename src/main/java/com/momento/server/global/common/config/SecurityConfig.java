@@ -23,7 +23,9 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 @RequiredArgsConstructor
 public class SecurityConfig {
 
-  private static final String[] WHITELIST_PATH = {"/health-check", "/v1/auth/kakao"};
+  private static final String[] WHITELIST_PATH = {
+    "/health-check", "/v1/auth/kakao", "/v1/push/vapid-public-key"
+  };
   private static final String[] SWAGGER_API_PATH = {
     "/v3/api-docs/**", "/api-docs/**", "/swagger-ui.html", "/swagger-ui/**"
   };

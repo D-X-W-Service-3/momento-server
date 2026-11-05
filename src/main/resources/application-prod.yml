@@ -17,3 +17,12 @@ spring:
     # NULL 허용 여부·인덱스·FK 는 검사하지 않으므로, 그 부분은 마이그레이션이 유일한 보장 수단이다.
     hibernate:
       ddl-auto: validate
+
+# 웹 푸시 VAPID 키쌍. application.yml 의 개발용 기본값을 운영에서 쓰지 않도록 기본값 없이 다시 선언한다.
+# 환경변수가 빠지면 값이 "${VAPID_...}" 문자열 그대로 남는데, VapidProperties 의 형식 검사가 기동을 막는다.
+# 개발용 개인키는 저장소에 공개돼 있어 운영에 쓰이면 안 된다.
+push:
+  vapid:
+    public-key: ${VAPID_PUBLIC_KEY}
+    private-key: ${VAPID_PRIVATE_KEY}
+    subject: ${VAPID_SUBJECT}

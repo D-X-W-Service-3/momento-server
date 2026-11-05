@@ -23,7 +23,12 @@ public class TokenAuthenticationFilter extends OncePerRequestFilter {
   private static final String HEADER_AUTHORIZATION = "Authorization";
   private static final String BEARER_AUTH = "Bearer ";
   private static final String[] EXCLUDED_PATHS = {
-    "/health-check", "/v1/auth/kakao", "/swagger-ui", "/v3/api-docs", "/api-docs"
+    "/health-check",
+    "/v1/auth/kakao",
+    "/v1/push/vapid-public-key",
+    "/swagger-ui",
+    "/v3/api-docs",
+    "/api-docs"
   };
 
   private final TokenProvider tokenProvider;
