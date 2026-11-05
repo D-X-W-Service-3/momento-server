@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.momento.server.domain.push.entity.PushSubscription;
 import com.momento.server.domain.user.entity.User;
 import com.momento.server.domain.user.repository.UserRepository;
+import java.util.List;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -65,6 +66,34 @@ class PushSubscriptionRepositoryTest {
     assertThat(pushSubscriptionRepository.findAll())
         .extracting(PushSubscription::getEndpoint)
         .containsExactly(OTHER_ENDPOINT);
+  }
+
+  @Test
+  @DisplayName("여러 회원의 구독을 한 번에 찾고, 목록에 없는 회원의 구독은 빠진다")
+  void findAllByUserIds() {
+    User third = userRepository.save(User.builder().kakaoId("push-third").nickname("셋").build());
+    save(me, ENDPOINT);
+    save(other, OTHER_ENDPOINT);
+    save(third, "https://web.push.apple.com/third");
+
+    assertThat(pushSubscriptionRepository.findAllByUserIds(List.of(me.getId(), other.getId())))
+        .extracting(PushSubscription::getEndpoint)
+        .containsExactlyInAnyOrder(ENDPOINT, OTHER_ENDPOINT);
+  }
+
+  @Test
+  @DisplayName("endpoint 목록으로 소유자와 관계없이 지운다")
+  void deleteAllByEndpoints() {
+    save(me, ENDPOINT);
+    save(other, OTHER_ENDPOINT);
+    save(me, "https://web.push.apple.com/kept");
+
+    assertThat(pushSubscriptionRepository.deleteAllByEndpoints(List.of(ENDPOINT, OTHER_ENDPOINT)))
+        .isEqualTo(2);
+
+    assertThat(pushSubscriptionRepository.findAll())
+        .extracting(PushSubscription::getEndpoint)
+        .containsExactly("https://web.push.apple.com/kept");
   }
 
   private void save(User user, String endpoint) {
