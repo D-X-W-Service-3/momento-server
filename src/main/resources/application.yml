@@ -50,6 +50,14 @@ aws:
     access-key: ${S3_ACCESS_KEY:local-access-key}
     secret-key: ${S3_SECRET_KEY:local-secret-key}
 
+push:
+  vapid:
+    # 웹 푸시 VAPID 키쌍 (base64url). 로컬 기본값은 개발용 키라 운영에서는 반드시 환경변수로 덮는다.
+    # 운영 키는 한 번 정하면 바꾸지 않는다. 바꾸면 기존 구독이 모두 무효가 된다.
+    public-key: ${VAPID_PUBLIC_KEY:BIz1ZbTihDTtOZ7Hwpl6OTeDFhMSpCAdp75U_pUqB6448IK0FlMfs-pg6oU1fAcf2RuJ6KQG3yU3L0PsduNLqPU}
+    private-key: ${VAPID_PRIVATE_KEY:YrPXSqB1jAiZeyEiPMJvMIgPQI2UhZjiRhYPXMINsH0}
+    subject: ${VAPID_SUBJECT:mailto:dev@momento.local}
+
 cors:
   allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000}
 
