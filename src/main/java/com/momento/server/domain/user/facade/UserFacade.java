@@ -1,6 +1,7 @@
 package com.momento.server.domain.user.facade;
 
 import com.momento.server.domain.letter.service.LetterService;
+import com.momento.server.domain.push.service.PushSubscriptionService;
 import com.momento.server.domain.timecapsule.service.TimeCapsuleListService;
 import com.momento.server.domain.user.dto.request.NotificationSettingsUpdateRequest;
 import com.momento.server.domain.user.dto.request.UserUpdateRequest;
@@ -21,6 +22,7 @@ public class UserFacade {
   private final TimeCapsuleListService timeCapsuleListService;
   private final LetterService letterService;
   private final PresignedUrlProvider presignedUrlProvider;
+  private final PushSubscriptionService pushSubscriptionService;
 
   /** 활동 요약은 저장하지 않고 조회할 때 센다. 캡슐 기준은 타임캡슐 목록 조회의 탭별 개수, 편지 기준은 캡슐 상세의 편지 수와 같다. */
   public MyProfileResponse getMyProfile(Long userId) {
@@ -58,7 +60,9 @@ public class UserFacade {
     userService.updateNotificationSettings(userId, request);
   }
 
+  /** 탈퇴한 회원의 기기에 푸시가 가지 않도록 웹 푸시 구독도 모두 지운다. */
   public void withdraw(Long userId) {
     userService.withdraw(userId);
+    pushSubscriptionService.unsubscribeAll(userId);
   }
 }

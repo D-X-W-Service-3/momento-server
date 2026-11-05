@@ -166,6 +166,24 @@ class PushIntegrationTest {
         .containsExactly(ENDPOINT);
   }
 
+  @Test
+  @DisplayName("회원이 탈퇴하면 그 회원의 구독이 모두 지워지고 다른 회원의 구독은 남는다")
+  void withdrawRemovesAllSubscriptions() throws Exception {
+    subscribe(myToken, ENDPOINT, "key", "auth").andExpect(status().isOk());
+    subscribe(myToken, "https://web.push.apple.com/QGuQyavXutnMH", "key", "auth")
+        .andExpect(status().isOk());
+    String othersEndpoint = "https://updates.push.services.mozilla.com/wpush/v2/other";
+    subscribe(otherToken, othersEndpoint, "key", "auth").andExpect(status().isOk());
+
+    mockMvc
+        .perform(delete("/v1/users/me").header(HttpHeaders.AUTHORIZATION, bearer(myToken)))
+        .andExpect(status().isOk());
+
+    assertThat(pushSubscriptionRepository.findAll())
+        .extracting(PushSubscription::getEndpoint)
+        .containsExactly(othersEndpoint);
+  }
+
   private ResultActions subscribe(String token, String endpoint, String p256dh, String auth)
       throws Exception {
     return mockMvc.perform(
