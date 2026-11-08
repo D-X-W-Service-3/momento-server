@@ -27,6 +27,15 @@ spring:
     hibernate:
       ddl-auto: validate
 
+  cloud:
+    openfeign:
+      client:
+        config:
+          # AI 이미지 생성은 한 장에 약 2분 30초(서버 시작 후 첫 장은 약 3분)라 읽기 타임아웃을 6분으로 둔다.
+          aiImageClient:
+            connect-timeout: 5000
+            read-timeout: 360000
+
 momento:
   capsule:
     # 상태 전이 스케줄러 주기. 공개 시각 정각에 들어온 사용자가 겪는 지연이 이 값만큼이다.
