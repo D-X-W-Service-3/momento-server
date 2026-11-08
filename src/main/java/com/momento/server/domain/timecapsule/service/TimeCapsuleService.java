@@ -19,7 +19,6 @@ import com.momento.server.domain.timecapsule.repository.TimeCapsuleRepository;
 import com.momento.server.domain.user.entity.User;
 import com.momento.server.global.common.exception.ApiException;
 import java.time.Clock;
-import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -50,8 +49,8 @@ public class TimeCapsuleService {
   @Transactional
   public TimeCapsule create(User creator, TimeCapsuleCreateRequest request) {
     validateVisibility(request.capsuleType(), request.visibilityType());
-    CapsuleSchedule schedule = CapsuleSchedule.of(request.letterDeadlineDate(), request.openDate());
-    if (!schedule.isValidOn(LocalDate.now(clock))) {
+    CapsuleSchedule schedule = CapsuleSchedule.of(request.letterDeadlineAt(), request.openAt());
+    if (!schedule.isValidAt(LocalDateTime.now(clock))) {
       throw new ApiException(CapsuleErrorCode.INVALID_CAPSULE_SCHEDULE);
     }
 

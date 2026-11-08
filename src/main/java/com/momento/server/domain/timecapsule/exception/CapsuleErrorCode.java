@@ -15,7 +15,7 @@ public enum CapsuleErrorCode implements ErrorCode {
   INVALID_SELF_CAPSULE_VISIBILITY("나에게 쓰는 캡슐의 공개 범위는 전체 공개여야 합니다.", HttpStatus.BAD_REQUEST),
 
   /** 편지 수정 마감일은 오늘부터 개봉일 2일 전까지만 고를 수 있다. */
-  INVALID_CAPSULE_SCHEDULE("편지 수정 마감일은 오늘 이후, 개봉일 이전이어야 합니다.", HttpStatus.BAD_REQUEST),
+  INVALID_CAPSULE_SCHEDULE("편지 마감은 현재 이후, 개봉은 마감보다 1시간 이상 뒤여야 합니다.", HttpStatus.BAD_REQUEST),
 
   /** 공개 전(WRITING · LOCKED) 캡슐은 개봉 확인을 기록할 수 없다. */
   CAPSULE_NOT_OPENED("아직 공개되지 않은 타임캡슐입니다.", HttpStatus.CONFLICT),

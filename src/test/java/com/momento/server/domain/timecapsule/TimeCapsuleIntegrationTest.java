@@ -28,7 +28,6 @@ import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.time.LocalTime;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -90,8 +89,8 @@ class TimeCapsuleIntegrationTest {
   void createCapsule() throws Exception {
     Map<String, Object> body = validBody();
     body.put("title", "우리의 졸업 타임캡슐");
-    body.put("letterDeadlineDate", today().plusDays(10).toString());
-    body.put("openDate", today().plusDays(30).toString());
+    body.put("letterDeadlineAt", today().plusDays(10).atTime(15, 0, 37).toString());
+    body.put("openAt", today().plusDays(30).atTime(16, 0).toString());
 
     String response =
         mockMvc
@@ -112,9 +111,8 @@ class TimeCapsuleIntegrationTest {
     assertThat(saved.getIconType()).isEqualTo("ICE_CREAM");
     assertThat(saved.getTitle()).isEqualTo("우리의 졸업 타임캡슐");
     assertThat(saved.getStatus()).isEqualTo(CapsuleStatus.WRITING);
-    assertThat(saved.getLetterDeadlineAt())
-        .isEqualTo(today().plusDays(10).atTime(LocalTime.of(23, 59, 59)));
-    assertThat(saved.getOpenAt()).isEqualTo(today().plusDays(30).atStartOfDay());
+    assertThat(saved.getLetterDeadlineAt()).isEqualTo(today().plusDays(10).atTime(15, 0));
+    assertThat(saved.getOpenAt()).isEqualTo(today().plusDays(30).atTime(16, 0));
   }
 
   @Test
@@ -134,20 +132,21 @@ class TimeCapsuleIntegrationTest {
   }
 
   @Test
-  @DisplayName("오늘을 마감일로, 개봉일 2일 전을 마감일로 고를 수 있다")
+  @DisplayName("오늘 마감하고 정확히 1시간 뒤에 여는 캡슐을 만들 수 있다")
   void deadlineBoundariesAreAccepted() throws Exception {
+    LocalDateTime deadline = now().plusMinutes(10);
     mockMvc
         .perform(
             post("/v1/time-capsules")
                 .header(AUTHORIZATION, bearer(ownerToken))
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(scheduleBody(today(), today().plusDays(2))))
+                .content(scheduleBody(deadline, deadline.plusHours(1))))
         .andExpect(status().isCreated());
   }
 
   @ParameterizedTest(name = "{0}")
   @MethodSource("invalidSchedules")
-  @DisplayName("마감일이 오늘보다 이르거나 개봉일 2일 전보다 늦으면 400 이고 캡슐을 만들지 않는다")
+  @DisplayName("마감이 지났거나 개봉이 마감 1시간 뒤보다 이르면 400 이고 캡슐을 만들지 않는다")
   void invalidScheduleIsRejected(String reason, String body) throws Exception {
     mockMvc
         .perform(
@@ -164,11 +163,11 @@ class TimeCapsuleIntegrationTest {
 
   static Stream<Arguments> invalidSchedules() throws JsonProcessingException {
     return Stream.of(
-        Arguments.of("마감일이 어제", scheduleBody(today().minusDays(1), today().plusDays(10))),
-        Arguments.of("마감일이 개봉일 전날", scheduleBody(today().plusDays(9), today().plusDays(10))),
-        Arguments.of("마감일이 개봉일과 같음", scheduleBody(today().plusDays(10), today().plusDays(10))),
-        Arguments.of("마감일이 개봉일보다 늦음", scheduleBody(today().plusDays(11), today().plusDays(10))),
-        Arguments.of("개봉일이 이미 지남", scheduleBody(today().minusDays(3), today().minusDays(1))));
+        Arguments.of("마감이 이미 지남", scheduleBody(now().minusMinutes(10), now().plusDays(1))),
+        Arguments.of(
+            "개봉이 마감 59분 뒤", scheduleBody(now().plusDays(1), now().plusDays(1).plusMinutes(59))),
+        Arguments.of("개봉이 마감과 같음", scheduleBody(now().plusDays(1), now().plusDays(1))),
+        Arguments.of("개봉이 마감보다 이름", scheduleBody(now().plusDays(2), now().plusDays(1))));
   }
 
   @Test
@@ -279,9 +278,9 @@ class TimeCapsuleIntegrationTest {
         Arguments.of("설명이 45자를 넘음", bodyWith("description", "가".repeat(46))),
         Arguments.of("아이콘이 빠짐", bodyWith("iconType", null)),
         Arguments.of("아이콘이 비어 있음", bodyWith("iconType", " ")),
-        Arguments.of("마감일이 빠짐", bodyWith("letterDeadlineDate", null)),
-        Arguments.of("개봉일이 빠짐", bodyWith("openDate", null)),
-        Arguments.of("개봉일이 날짜 형식이 아님", bodyWith("openDate", "2027/12/12")),
+        Arguments.of("마감 일시가 빠짐", bodyWith("letterDeadlineAt", null)),
+        Arguments.of("개봉 일시가 빠짐", bodyWith("openAt", null)),
+        Arguments.of("개봉 일시가 형식에 맞지 않음", bodyWith("openAt", "2027/12/12 15:00")),
         Arguments.of("캡슐 유형이 빠짐", createBody("캡슐", null, "ALL_MEMBERS")),
         Arguments.of("공개 범위가 빠짐", createBody("캡슐", "GROUP", null)),
         Arguments.of("enum 에 없는 캡슐 유형", createBody("캡슐", "TEAM", "ALL_MEMBERS")),
@@ -457,8 +456,8 @@ class TimeCapsuleIntegrationTest {
     body.put("description", "설명");
     body.put("capsuleType", "GROUP");
     body.put("visibilityType", "ALL_MEMBERS");
-    body.put("letterDeadlineDate", today().plusDays(10).toString());
-    body.put("openDate", today().plusDays(30).toString());
+    body.put("letterDeadlineAt", today().plusDays(10).atTime(15, 0).toString());
+    body.put("openAt", today().plusDays(30).atTime(16, 0).toString());
     return body;
   }
 
@@ -477,17 +476,21 @@ class TimeCapsuleIntegrationTest {
     return JSON.writeValueAsString(body);
   }
 
-  private static String scheduleBody(LocalDate letterDeadlineDate, LocalDate openDate)
+  private static String scheduleBody(LocalDateTime letterDeadlineAt, LocalDateTime openAt)
       throws JsonProcessingException {
     Map<String, Object> body = validBody();
-    body.put("letterDeadlineDate", letterDeadlineDate.toString());
-    body.put("openDate", openDate.toString());
+    body.put("letterDeadlineAt", letterDeadlineAt.toString());
+    body.put("openAt", openAt.toString());
     return JSON.writeValueAsString(body);
   }
 
   /** 서비스는 Clock 빈(시스템 기본 시간대)으로 오늘을 판단하므로 테스트도 같은 기준을 쓴다. */
   private static LocalDate today() {
     return LocalDate.now();
+  }
+
+  private static LocalDateTime now() {
+    return LocalDateTime.now();
   }
 
   private User saveUser(String kakaoId, String nickname) {
