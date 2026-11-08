@@ -6,7 +6,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
-import java.time.LocalDate;
+import java.time.LocalDateTime;
 
 @Schema(description = "타임캡슐 생성 요청")
 public record TimeCapsuleCreateRequest(
@@ -39,14 +39,14 @@ public record TimeCapsuleCreateRequest(
         @NotNull(message = "공개 범위는 필수입니다.")
         VisibilityType visibilityType,
     @Schema(
-            description = "편지 수정 마감일. 이날 23:59:59 에 잠긴다. 오늘부터 개봉일 2일 전까지 고를 수 있다.",
-            example = "2027-12-01",
+            description = "편지 마감 일시(한국 시간). 이 시각에 잠긴다. 현재 시각 이후여야 하고, 초 이하는 버린다.",
+            example = "2027-12-01T15:00",
             requiredMode = Schema.RequiredMode.REQUIRED)
-        @NotNull(message = "편지 수정 마감일은 필수입니다.")
-        LocalDate letterDeadlineDate,
+        @NotNull(message = "편지 마감 일시는 필수입니다.")
+        LocalDateTime letterDeadlineAt,
     @Schema(
-            description = "개봉일. 이날 00:00 에 열린다.",
-            example = "2027-12-12",
+            description = "개봉 일시(한국 시간). 이 시각에 열린다. 마감보다 1시간 이상 뒤여야 하고, 초 이하는 버린다.",
+            example = "2027-12-01T16:00",
             requiredMode = Schema.RequiredMode.REQUIRED)
-        @NotNull(message = "개봉일은 필수입니다.")
-        LocalDate openDate) {}
+        @NotNull(message = "개봉 일시는 필수입니다.")
+        LocalDateTime openAt) {}
