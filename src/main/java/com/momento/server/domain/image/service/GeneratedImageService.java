@@ -4,7 +4,11 @@ import com.momento.server.domain.image.entity.GeneratedImage;
 import com.momento.server.domain.image.external.dto.AiImageRequest;
 import com.momento.server.domain.image.repository.GeneratedImageRepository;
 import com.momento.server.domain.letter.entity.Letter;
+import java.util.Collection;
+import java.util.Map;
 import java.util.Optional;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
@@ -59,6 +63,15 @@ public class GeneratedImageService {
   @Transactional
   public void fail(Long imageId) {
     generatedImageRepository.findById(imageId).ifPresent(GeneratedImage::fail);
+  }
+
+  /** 편지 ID 별 이미지. 이미지가 없는 편지는 맵에 없다. */
+  public Map<Long, GeneratedImage> findByLetterIds(Collection<Long> letterIds) {
+    if (letterIds.isEmpty()) {
+      return Map.of();
+    }
+    return generatedImageRepository.findAllByLetterIds(letterIds).stream()
+        .collect(Collectors.toMap(image -> image.getLetter().getId(), Function.identity()));
   }
 
   /** AI 서버에 보낼 요청 하나. 엔티티 대신 값만 넘겨, 몇 분 걸리는 호출 동안 영속성 컨텍스트를 붙잡지 않는다. */

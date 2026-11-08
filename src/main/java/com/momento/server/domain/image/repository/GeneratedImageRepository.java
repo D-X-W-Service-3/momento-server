@@ -1,9 +1,12 @@
 package com.momento.server.domain.image.repository;
 
 import com.momento.server.domain.image.entity.GeneratedImage;
+import java.util.Collection;
+import java.util.List;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 public interface GeneratedImageRepository extends JpaRepository<GeneratedImage, Long> {
 
@@ -13,4 +16,8 @@ public interface GeneratedImageRepository extends JpaRepository<GeneratedImage, 
           + " where g.generationStatus = com.momento.server.domain.image.entity.GenerationStatus.PENDING"
           + " order by g.id asc limit 1")
   Optional<GeneratedImage> findOldestPending();
+
+  /** 편지 응답에 이미지를 붙이기 위한 조회. 편지 한 통에 이미지는 하나다. */
+  @Query("select g from GeneratedImage g where g.letter.id in :letterIds")
+  List<GeneratedImage> findAllByLetterIds(@Param("letterIds") Collection<Long> letterIds);
 }

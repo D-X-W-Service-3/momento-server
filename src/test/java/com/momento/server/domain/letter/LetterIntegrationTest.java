@@ -152,6 +152,10 @@ class LetterIntegrationTest {
               assertThat(image.getGenerationStatus()).isEqualTo(GenerationStatus.PENDING);
               assertThat(image.getImageUrl()).isNull();
             });
+    read(token)
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.data.imageStatus").value("PENDING"))
+        .andExpect(jsonPath("$.data.imageUrl").isEmpty());
   }
 
   @Test
@@ -644,7 +648,7 @@ class LetterIntegrationTest {
     var response = read(token).andExpect(status().isOk()).andReturn().getResponse();
     var data = objectMapper.readTree(response.getContentAsString()).get("data");
     assertThat(data.isObject()).isTrue();
-    assertThat(data.size()).isEqualTo(7);
+    assertThat(data.size()).isEqualTo(9);
     assertThat(data.get("letterId").longValue()).isEqualTo(saved.getId());
     assertThat(data.get("letterType").textValue()).isEqualTo("BIRTHDAY");
     assertThat(data.get("themeType").textValue()).isEqualTo("WATERCOLOR");
@@ -652,6 +656,8 @@ class LetterIntegrationTest {
     assertThat(data.get("content").textValue()).isEqualTo("내 편지");
     assertThat(data.get("createdAt")).isEqualTo(objectMapper.valueToTree(createdAt));
     assertThat(data.get("canDelete").booleanValue()).isTrue();
+    assertThat(data.get("imageUrl").isNull()).isTrue();
+    assertThat(data.get("imageStatus").textValue()).isEqualTo("PENDING");
     assertThat(data.has("capsuleId")).isFalse();
     assertThat(data.has("status")).isFalse();
   }

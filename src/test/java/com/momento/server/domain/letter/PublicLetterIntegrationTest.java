@@ -1,11 +1,15 @@
 package com.momento.server.domain.letter;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.containsString;
+import static org.hamcrest.Matchers.nullValue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.momento.server.domain.image.entity.GeneratedImage;
+import com.momento.server.domain.image.repository.GeneratedImageRepository;
 import com.momento.server.domain.letter.entity.Letter;
 import com.momento.server.domain.letter.entity.LetterStatus;
 import com.momento.server.domain.letter.entity.LetterThemeType;
@@ -26,6 +30,7 @@ import java.time.Duration;
 import java.time.LocalDateTime;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
@@ -47,6 +52,7 @@ class PublicLetterIntegrationTest {
   @Autowired private TimeCapsuleRepository capsules;
   @Autowired private CapsuleMemberRepository members;
   @Autowired private LetterRepository letters;
+  @Autowired private GeneratedImageRepository generatedImages;
   @Autowired private JdbcTemplate jdbc;
   private User owner;
   private User recipient;
@@ -67,6 +73,7 @@ class PublicLetterIntegrationTest {
 
   @AfterEach
   void clean() {
+    generatedImages.deleteAllInBatch();
     letters.deleteAll();
     members.deleteAll();
     capsules.deleteAll();
@@ -143,9 +150,38 @@ class PublicLetterIntegrationTest {
             .path("data")
             .path("letters")
             .get(1);
-    assertThat(item.size()).isEqualTo(8);
-    assertThat(item.has("imageUrl")).isTrue();
-    assertThat(item.path("imageUrl").isNull()).isTrue();
+    assertThat(item.size()).isEqualTo(9);
+    for (String field : new String[] {"imageUrl", "imageStatus"}) {
+      assertThat(item.has(field)).isTrue();
+      assertThat(item.path(field).isNull()).isTrue();
+    }
+  }
+
+  @Test
+  @DisplayName("AI 이미지는 완료됐으면 조회 주소와 COMPLETED, 생성 중이면 주소 없이 PENDING, 실패면 주소 없이 FAILED 다")
+  void attachesAiImageByStatus() throws Exception {
+    Letter completed = letter(owner, LetterStatus.SUBMITTED);
+    Letter pending = letter(recipient, LetterStatus.SUBMITTED);
+    Letter failed = letter(participant, LetterStatus.SUBMITTED);
+    GeneratedImage done = GeneratedImage.requestFor(completed);
+    done.complete("generated/" + completed.getId() + "/image.jpg");
+    generatedImages.save(done);
+    generatedImages.save(GeneratedImage.requestFor(pending));
+    GeneratedImage broken = GeneratedImage.requestFor(failed);
+    broken.fail();
+    generatedImages.save(broken);
+
+    read(owner)
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.data.letters[0].imageStatus").value("COMPLETED"))
+        .andExpect(
+            jsonPath("$.data.letters[0].imageUrl")
+                .value(containsString("generated/" + completed.getId() + "/image.jpg")))
+        .andExpect(jsonPath("$.data.letters[0].imageUrl").value(containsString("X-Amz-Signature=")))
+        .andExpect(jsonPath("$.data.letters[1].imageStatus").value("PENDING"))
+        .andExpect(jsonPath("$.data.letters[1].imageUrl").value(nullValue()))
+        .andExpect(jsonPath("$.data.letters[2].imageStatus").value("FAILED"))
+        .andExpect(jsonPath("$.data.letters[2].imageUrl").value(nullValue()));
   }
 
   @Test
@@ -191,7 +227,8 @@ class PublicLetterIntegrationTest {
             .path("letters")
             .get(0);
     assertThat(item.path("letterId").asLong()).isEqualTo(legacy.getId());
-    for (String field : new String[] {"title", "letterType", "themeType", "imageUrl"}) {
+    for (String field :
+        new String[] {"title", "letterType", "themeType", "imageUrl", "imageStatus"}) {
       assertThat(item.has(field)).isTrue();
       assertThat(item.path(field).isNull()).isTrue();
     }
