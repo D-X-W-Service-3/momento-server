@@ -1,5 +1,6 @@
 package com.momento.server.domain.letter.service;
 
+import com.momento.server.domain.image.service.GeneratedImageService;
 import com.momento.server.domain.letter.dto.request.LetterCreateRequest;
 import com.momento.server.domain.letter.entity.Letter;
 import com.momento.server.domain.letter.entity.LetterStatus;
@@ -22,6 +23,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class LetterService {
   private final LetterRepository letterRepository;
   private final TimeCapsuleService timeCapsuleService;
+  private final GeneratedImageService generatedImageService;
   private final Clock clock;
 
   @Transactional
@@ -41,17 +43,21 @@ public class LetterService {
         // 작성 가능한 경우에만 아래 저장을 진행한다.
       }
     }
-    return letterRepository.save(
-        Letter.builder()
-            .timeCapsule(capsule)
-            .author(member.getUser())
-            .title(request.title())
-            .content(request.content())
-            .letterType(request.letterType())
-            .themeType(request.themeType())
-            .status(LetterStatus.SUBMITTED)
-            .submittedAt(now)
-            .build());
+    Letter letter =
+        letterRepository.save(
+            Letter.builder()
+                .timeCapsule(capsule)
+                .author(member.getUser())
+                .title(request.title())
+                .content(request.content())
+                .letterType(request.letterType())
+                .themeType(request.themeType())
+                .status(LetterStatus.SUBMITTED)
+                .submittedAt(now)
+                .build());
+    // 제출 즉시 AI 이미지 생성을 요청한다. 실제 생성은 작업자가 순서대로 한다.
+    generatedImageService.requestFor(letter);
+    return letter;
   }
 
   /**

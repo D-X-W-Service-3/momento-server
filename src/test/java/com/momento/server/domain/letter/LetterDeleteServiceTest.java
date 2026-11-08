@@ -6,6 +6,7 @@ import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import com.momento.server.domain.image.service.GeneratedImageService;
 import com.momento.server.domain.letter.entity.Letter;
 import com.momento.server.domain.letter.repository.LetterRepository;
 import com.momento.server.domain.letter.service.LetterService;
@@ -28,6 +29,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 class LetterDeleteServiceTest {
   @Mock private LetterRepository letters;
   @Mock private TimeCapsuleService capsules;
+  @Mock private GeneratedImageService generatedImages;
   private LetterService service;
   private static final LocalDateTime NOW = LocalDateTime.of(2027, 1, 1, 12, 0);
 
@@ -35,7 +37,10 @@ class LetterDeleteServiceTest {
   void setUp() {
     service =
         new LetterService(
-            letters, capsules, Clock.fixed(Instant.parse("2027-01-01T12:00:00Z"), ZoneOffset.UTC));
+            letters,
+            capsules,
+            generatedImages,
+            Clock.fixed(Instant.parse("2027-01-01T12:00:00Z"), ZoneOffset.UTC));
   }
 
   @Test

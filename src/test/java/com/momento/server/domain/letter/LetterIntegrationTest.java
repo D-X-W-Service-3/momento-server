@@ -9,6 +9,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.momento.server.domain.image.entity.GenerationStatus;
+import com.momento.server.domain.image.repository.GeneratedImageRepository;
 import com.momento.server.domain.letter.entity.Letter;
 import com.momento.server.domain.letter.entity.LetterStatus;
 import com.momento.server.domain.letter.entity.LetterThemeType;
@@ -41,6 +43,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
@@ -69,6 +72,7 @@ class LetterIntegrationTest {
   @Autowired private TimeCapsuleRepository capsules;
   @Autowired private CapsuleMemberRepository members;
   @Autowired private LetterRepository letters;
+  @Autowired private GeneratedImageRepository generatedImageRepository;
   @Autowired private JdbcTemplate jdbc;
   @Autowired private ObjectMapper objectMapper;
   @Autowired private PlatformTransactionManager transactionManager;
@@ -101,6 +105,8 @@ class LetterIntegrationTest {
 
   @AfterEach
   void clean() {
+    // 편지를 제출하면 AI 이미지 요청이 같이 저장된다. 편지보다 먼저 지운다.
+    generatedImageRepository.deleteAllInBatch();
     letters.deleteAll();
     members.deleteAll();
     capsules.deleteAll();
@@ -128,6 +134,33 @@ class LetterIntegrationTest {
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.data.letterId").value(saved.getId()))
         .andExpect(jsonPath("$.data.canDelete").value(true));
+  }
+
+  @Test
+  @DisplayName("편지를 제출하면 같은 트랜잭션에서 AI 이미지 생성 요청이 PENDING 으로 생긴다")
+  void submittingLetterRequestsAiImage() throws Exception {
+    create(token, BODY).andExpect(status().isCreated());
+
+    Letter saved = letters.findAll().getFirst();
+    assertThat(generatedImageRepository.findAll())
+        .singleElement()
+        .satisfies(
+            image -> {
+              assertThat(image.getLetter().getId()).isEqualTo(saved.getId());
+              assertThat(image.getTimeCapsule().getId()).isEqualTo(capsule.getId());
+              assertThat(image.getRequester().getId()).isEqualTo(owner.getId());
+              assertThat(image.getGenerationStatus()).isEqualTo(GenerationStatus.PENDING);
+              assertThat(image.getImageUrl()).isNull();
+            });
+  }
+
+  @Test
+  @DisplayName("편지 제출이 거절되면 AI 이미지 요청도 남지 않는다")
+  void rejectedLetterDoesNotRequestAiImage() throws Exception {
+    create(token, BODY).andExpect(status().isCreated());
+    create(token, BODY).andExpect(status().isConflict());
+
+    assertThat(generatedImageRepository.count()).isEqualTo(1);
   }
 
   @Test

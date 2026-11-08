@@ -10,6 +10,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.momento.server.domain.image.repository.GeneratedImageRepository;
 import com.momento.server.domain.letter.entity.Letter;
 import com.momento.server.domain.letter.entity.LetterStatus;
 import com.momento.server.domain.letter.entity.LetterThemeType;
@@ -69,6 +70,7 @@ class LetterDeleteIntegrationTest {
   @Autowired private TimeCapsuleRepository capsules;
   @Autowired private CapsuleMemberRepository members;
   @Autowired private LetterRepository letters;
+  @Autowired private GeneratedImageRepository generatedImageRepository;
   @Autowired private JdbcTemplate jdbc;
   @Autowired private PlatformTransactionManager transactions;
   @Autowired private CapsuleMemberService memberService;
@@ -112,6 +114,8 @@ class LetterDeleteIntegrationTest {
 
   @AfterEach
   void clean() {
+    // 편지를 제출하면 AI 이미지 요청이 같이 저장된다. 편지보다 먼저 지운다.
+    generatedImageRepository.deleteAllInBatch();
     letters.deleteAll();
     members.deleteAll();
     capsules.deleteAll();
