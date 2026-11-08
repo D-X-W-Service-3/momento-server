@@ -73,4 +73,15 @@ class ImageKeysTest {
   void malformedKey(String key) {
     assertThat(ImageKeys.isOwnedBy(ImageTarget.MEMORY, key, 1L)).isFalse();
   }
+
+  @Test
+  @DisplayName("AI 이미지 key 는 generated/{편지 ID}/{UUID}.jpg 이고 만들 때마다 다르다")
+  void generatedKey() {
+    String first = ImageKeys.newGeneratedKey(31L);
+    String second = ImageKeys.newGeneratedKey(31L);
+
+    assertThat(first)
+        .matches("generated/31/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\\.jpg");
+    assertThat(first).isNotEqualTo(second);
+  }
 }

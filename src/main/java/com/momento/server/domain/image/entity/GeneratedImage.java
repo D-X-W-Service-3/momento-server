@@ -66,4 +66,23 @@ public class GeneratedImage extends BaseTimeEntity {
   @JdbcTypeCode(SqlTypes.VARCHAR)
   @Column(name = "generation_status", nullable = false, length = 20)
   private GenerationStatus generationStatus = GenerationStatus.PENDING;
+
+  /** 편지 한 통으로 만들 이미지. 생성 작업자가 PENDING 을 오래된 순서로 하나씩 처리한다. */
+  public static GeneratedImage requestFor(Letter letter) {
+    return GeneratedImage.builder()
+        .timeCapsule(letter.getTimeCapsule())
+        .letter(letter)
+        .requester(letter.getAuthor())
+        .build();
+  }
+
+  /** 저장한 이미지의 S3 key 를 남긴다. 조회할 때 presigned URL 로 바꾼다. */
+  public void complete(String imageKey) {
+    this.imageUrl = imageKey;
+    this.generationStatus = GenerationStatus.COMPLETED;
+  }
+
+  public void fail() {
+    this.generationStatus = GenerationStatus.FAILED;
+  }
 }
