@@ -11,7 +11,7 @@ public enum NotificationType {
   /** 캡슐이 열렸다. 개봉 알림 설정. referenceId 는 캡슐 ID. */
   CAPSULE_OPENED,
 
-  /** 개봉 7일 전부터 하루 전까지 남은 날짜. D-Day 알림 설정. referenceId 는 캡슐 ID. */
+  /** 개봉 7일 전, 5일 전, 1일 전, 당일 알림. referenceId 는 캡슐 ID. */
   CAPSULE_D_DAY,
 
   /** 오늘 편지 수정이 마감된다. 수정 마감 알림 설정. referenceId 는 캡슐 ID (내 편지 화면). */

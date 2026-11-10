@@ -22,7 +22,7 @@ public class NotificationSettings {
   @Column(name = "notify_capsule_opened", nullable = false)
   private boolean capsuleOpened;
 
-  /** 개봉 7일 전부터 남은 날짜. */
+  /** 개봉 7일 전, 5일 전, 1일 전, 당일 알림. */
   @Column(name = "notify_capsule_d_day", nullable = false)
   private boolean capsuleDDay;
 
