@@ -69,9 +69,13 @@ class NotificationDispatchIntegrationTest {
   // ---------- 매일 09:00 ----------
 
   @Test
-  @DisplayName("D-Day 알림은 개봉 7일 전부터 하루 전까지, 남은 일수를 담아 보낸다")
+  @DisplayName("D-Day 알림은 개봉 7일 전, 5일 전, 1일 전, 당일에만 보낸다")
   void capsuleDDay() {
+    TimeCapsule today = saveCapsule(CapsuleStatus.LOCKED, TODAY);
     TimeCapsule tomorrow = saveCapsule(CapsuleStatus.LOCKED, TODAY.plusDays(1));
+    saveCapsule(CapsuleStatus.WRITING, TODAY.plusDays(2));
+    TimeCapsule inFive = saveCapsule(CapsuleStatus.WRITING, TODAY.plusDays(5));
+    saveCapsule(CapsuleStatus.WRITING, TODAY.plusDays(6));
     TimeCapsule inSeven = saveCapsule(CapsuleStatus.WRITING, TODAY.plusDays(7));
     saveCapsule(CapsuleStatus.WRITING, TODAY.plusDays(8));
 
@@ -80,13 +84,16 @@ class NotificationDispatchIntegrationTest {
     assertThat(notifications(NotificationType.CAPSULE_D_DAY))
         .extracting(Notification::getReferenceId, Notification::getTitle)
         .containsExactlyInAnyOrder(
-            tuple(tomorrow.getId(), "캡슐 개봉 1일 전이에요"), tuple(inSeven.getId(), "캡슐 개봉 7일 전이에요"));
+            tuple(today.getId(), "오늘 캡슐이 열려요"),
+            tuple(tomorrow.getId(), "캡슐 개봉 1일 전이에요"),
+            tuple(inFive.getId(), "캡슐 개봉 5일 전이에요"),
+            tuple(inSeven.getId(), "캡슐 개봉 7일 전이에요"));
   }
 
   @Test
   @DisplayName("매일 알림은 09:00 이 구간에 들어올 때만 보내고, 09:00 정각은 그 구간의 끝이면 아직 아니다")
   void dailyTimeBoundary() {
-    saveCapsule(CapsuleStatus.WRITING, TODAY.plusDays(3));
+    saveCapsule(CapsuleStatus.WRITING, TODAY.plusDays(1));
 
     dispatchService.dispatch(MIDNIGHT, TODAY.atTime(9, 0));
     assertThat(notificationRepository.findAll()).isEmpty();
@@ -98,7 +105,7 @@ class NotificationDispatchIntegrationTest {
   @Test
   @DisplayName("같은 구간을 다시 넘겨도(서버 재시작) 같은 날 같은 알림은 한 번만 가고, 다음 날에는 다시 간다")
   void sameDayOnceNextDayAgain() {
-    saveCapsule(CapsuleStatus.WRITING, TODAY.plusDays(3));
+    saveCapsule(CapsuleStatus.WRITING, TODAY.plusDays(1));
 
     dispatchService.dispatch(MIDNIGHT, AFTER_NINE);
     dispatchService.dispatch(MIDNIGHT, TODAY.atTime(15, 0));
@@ -107,7 +114,7 @@ class NotificationDispatchIntegrationTest {
     dispatchService.dispatch(TODAY.atTime(15, 0), AFTER_NINE.plusDays(1));
     assertThat(notifications(NotificationType.CAPSULE_D_DAY))
         .extracting(Notification::getTitle)
-        .containsExactlyInAnyOrder("캡슐 개봉 3일 전이에요", "캡슐 개봉 2일 전이에요");
+        .containsExactlyInAnyOrder("캡슐 개봉 1일 전이에요", "오늘 캡슐이 열려요");
   }
 
   @Test

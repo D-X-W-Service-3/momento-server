@@ -36,7 +36,7 @@ public record NotificationDraft(
         userId,
         NotificationType.CAPSULE_D_DAY,
         capsuleId,
-        "캡슐 개봉 " + daysLeft + "일 전이에요",
+        daysLeft == 0 ? "오늘 캡슐이 열려요" : "캡슐 개봉 " + daysLeft + "일 전이에요",
         "어떤 캡슐인지 확인해보세요",
         key(NotificationType.CAPSULE_D_DAY, capsuleId, today));
   }

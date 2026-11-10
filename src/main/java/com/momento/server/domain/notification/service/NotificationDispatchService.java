@@ -32,8 +32,8 @@ import org.springframework.stereotype.Service;
 @Service
 public class NotificationDispatchService {
 
-  /** "개봉 7일 전부터 남은 날짜" — 알림 설정 화면의 설명이다. */
-  static final int D_DAY_FROM = 7;
+  /** 개봉 알림은 이 날짜에만 보낸다. */
+  static final List<Long> CAPSULE_D_DAY_REMINDERS = List.of(7L, 5L, 1L, 0L);
 
   /**
    * 하루 구간의 끝(제외). {@link LocalTime#MAX} 는 나노초까지 들어가 TIME 컬럼과 비교할 때 다음 날 00:00 으로 반올림돼 아무것도 고르지 않는다
@@ -101,13 +101,16 @@ public class NotificationDispatchService {
     }
   }
 
-  /** 개봉 7일 전부터 하루 전까지 매일. 개봉일 당일은 공개 알림이 간다. */
+  /** 개봉 7일 전, 5일 전, 1일 전, 당일에만 보낸다. */
   void sendCapsuleDDay(LocalDate today) {
     notificationSender.send(
         recipientRepository
-            .findCapsuleDDayRecipients(
-                today.plusDays(1).atStartOfDay(), today.plusDays(D_DAY_FROM + 1L).atStartOfDay())
+            .findCapsuleDDayRecipients(today.atStartOfDay(), today.plusDays(8).atStartOfDay())
             .stream()
+            .filter(
+                recipient ->
+                    CAPSULE_D_DAY_REMINDERS.contains(
+                        ChronoUnit.DAYS.between(today, recipient.openAt().toLocalDate())))
             .map(
                 recipient ->
                     NotificationDraft.capsuleDDay(
