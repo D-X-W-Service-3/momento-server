@@ -124,7 +124,7 @@ class AiImageGeneratorIntegrationTest {
         .verify(aiImageClient)
         .generate(
             new AiImageRequest(
-                "둘째 편지", "anniversary", "josen", String.valueOf(second.getLetter().getId())));
+                "둘째 편지", "basic", "josen", String.valueOf(second.getLetter().getId())));
 
     ArgumentCaptor<byte[]> content = ArgumentCaptor.forClass(byte[].class);
     verify(s3ObjectUploader, times(2)).upload(anyString(), content.capture(), eq("image/jpeg"));

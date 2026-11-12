@@ -18,10 +18,10 @@ class AiImageRequestTest {
     "BIRTHDAY, birthday",
     "CHRISTMAS, christmas",
     "COUPLE_ANNIVERSARY, anniversary",
-    "GENERAL, anniversary",
-    ", anniversary"
+    "GENERAL, basic",
+    ", basic"
   })
-  @DisplayName("편지 유형은 AI 서버의 기념일 값으로 바꾼다. 일반 · 유형 없음은 연인 기념일과 같다")
+  @DisplayName("편지 유형은 AI 서버의 기념일 값으로 바꾼다. 일반 · 유형 없음은 기본(basic)이다")
   void event(LetterType letterType, String expected) {
     assertThat(AiImageRequest.of(1L, "편지", letterType, LetterThemeType.PASTEL).event())
         .isEqualTo(expected);
