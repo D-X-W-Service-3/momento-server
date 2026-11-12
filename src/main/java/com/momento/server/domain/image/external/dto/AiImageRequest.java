@@ -21,17 +21,16 @@ public record AiImageRequest(
         content, event(letterType), style(themeType), String.valueOf(letterId));
   }
 
-  /**
-   * 일반 편지와 유형이 없는 예전 편지는 연인 기념일과 같은 값을 보낸다. 연인 기념일 프롬프트가 특정 행사 없이 따뜻한 장면을 만들어 일반 편지에도 어울린다는 팀 결정이다.
-   */
+  /** 일반 편지와 유형이 없는 예전 편지는 특정 행사가 없는 기본 프롬프트({@code basic})를 쓴다. */
   static String event(LetterType letterType) {
     if (letterType == null) {
-      return "anniversary";
+      return "basic";
     }
     return switch (letterType) {
       case BIRTHDAY -> "birthday";
       case CHRISTMAS -> "christmas";
-      case COUPLE_ANNIVERSARY, GENERAL -> "anniversary";
+      case COUPLE_ANNIVERSARY -> "anniversary";
+      case GENERAL -> "basic";
     };
   }
 
